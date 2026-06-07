@@ -1,6 +1,6 @@
 ---
 name: pbench
-description: Use when the final result is wrong, incomplete, or disproved by verification — capture the imperfect session as a personal benchmark case via `yk pbench`.
+description: Use when a coding agent's final result is wrong, incomplete, or disproved by verification — capture the imperfect session as a personal benchmark case via `yk pbench`.
 ---
 
 # PBench Agent Skill
@@ -38,11 +38,13 @@ When you notice benchmark-worthy outcome mismatch:
 
 After the user approves capture:
 
-1. Run `yk pbench capture --source codex --yes` from the subject Git repository.
+1. Run `yk pbench capture --source codex --yes` from the subject Git repository. If capturing an older or non-current session, pass `--input <jsonl>` or `--session-id <id>`; capture uses the session cwd and Git baseline when Codex recorded them.
 2. Read the printed transaction path, case directory, and `initialValidation` warnings.
+   - Treat empty prompt, empty command observations, or missing failure evidence warnings as capture-quality gaps to fix before finalizing.
 3. Edit the transaction `case/` bundle:
-   - rewrite `public/prompt.md`, `public/context.md`, and `public/environment.md` as the future agent-visible task input;
-   - fill `private/failure.md` with the task/session-level outcome mismatch;
+   - read `public/replay.md` and `public/context.manifest.json` to understand the replay capsule;
+   - refine `public/prompt.md`, `public/context.md`, `public/environment.md`, `public/replay.md`, and public context files as the future agent-visible task input;
+   - read `private/failure-draft.md`, then fill `private/failure.md` with the confirmed task/session-level outcome mismatch;
    - fill `private/success.md` with observable success criteria;
    - fill `private/verification.md` with how completion is checked;
    - implement at least one completion validator under `private/validators/check-completion.mjs`.

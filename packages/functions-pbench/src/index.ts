@@ -2,13 +2,17 @@ import type { FunctionCommand } from "@ya-skills/core";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
-import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 type JsonObject = Record<string, unknown>;
+
+const MAX_PUBLIC_TEXT_FILE_BYTES = 64 * 1024;
+const MAX_PUBLIC_PATCH_BYTES = 512 * 1024;
+const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 export type ValidationResult = {
   ok: boolean;
@@ -48,6 +52,7 @@ export type CaptureResult = {
   caseDir: string;
   caseId: string;
   workspaceRoot: string;
+  warnings: string[];
 };
 
 export type CapturePlan = {
@@ -500,8 +505,14 @@ type ExtractedCodexSession = {
   timeline: string[];
 };
 
+type CaptureSubject = {
+  sourceRepoRoot: string;
+  sourceCwd: string;
+  warnings: string[];
+};
+
 function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
-  const meta = records.find((record) => record.type === "session_meta" || record.type === "session") ?? {};
+  const meta = extractSessionMeta(records);
   const userMessages: string[] = [];
   const assistantMessages: string[] = [];
   const toolCalls: JsonObject[] = [];
@@ -509,31 +520,47 @@ function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
   const approvalSandboxRecords: JsonObject[] = [];
   const touched = new Set<string>();
   const timeline: string[] = [];
+  const callsById = new Map<string, JsonObject>();
 
   for (const [index, record] of records.entries()) {
-    const message = record.message && typeof record.message === "object" ? (record.message as JsonObject) : undefined;
-    const item = record.item && typeof record.item === "object" ? (record.item as JsonObject) : undefined;
-    const role = record.role ?? message?.role;
-    const type = String(record.type ?? "event");
-    const content = valueToText(record.content ?? message?.content ?? item?.content);
-    if (role === "user" && content) {
+    const normalized = normalizeCodexRecord(record);
+    const role = normalized.role;
+    const type = String(normalized.type ?? "event");
+    const content = valueToText(normalized.content);
+    if (role === "user" && content && !isInjectedUserContext(content)) {
       userMessages.push(content);
     }
     if (role === "assistant" && content) {
       assistantMessages.push(content);
     }
-    if (type.includes("tool") || type.includes("call") || record.name || record.arguments) {
-      toolCalls.push(record);
-      const serialized = JSON.stringify(record);
-      for (const match of serialized.matchAll(/(?:path|file|cwd|workdir)"?\s*[:=]\s*"([^"\n]+)"/g)) {
-        touched.add(match[1]);
+    if (isToolCallRecord(normalized)) {
+      toolCalls.push(normalized);
+      const callId = getCallId(normalized);
+      if (callId) callsById.set(callId, normalized);
+      collectTouchedPaths(normalized, touched);
+    } else if (isToolCallOutputRecord(normalized)) {
+      const callId = getCallId(normalized);
+      const target = callId ? callsById.get(callId) : undefined;
+      if (target) {
+        const outputText = valueToText(normalized.output ?? normalized.content);
+        if (outputText) {
+          target.stdout = [String(target.stdout ?? ""), outputText].filter(Boolean).join("\n");
+        }
+        const exitCode = parseProcessExitCode(outputText);
+        if (exitCode !== null) {
+          target.exit_code = exitCode;
+          target.status = exitCode === 0 ? "success" : "failed";
+        }
+        if (isErrorRecord(target) && !errorRecords.includes(target)) {
+          errorRecords.push(target);
+        }
       }
     }
-    if (isErrorRecord(record)) {
-      errorRecords.push(record);
+    if (isErrorRecord(normalized)) {
+      errorRecords.push(normalized);
     }
-    if (isApprovalSandboxRecord(record)) {
-      approvalSandboxRecords.push(record);
+    if (isApprovalSandboxRecord(normalized)) {
+      approvalSandboxRecords.push(normalized);
     }
     const label = role ? String(role) : type;
     timeline.push(`- ${index + 1}. ${label}${content ? `: ${content.slice(0, 200).replace(/\s+/g, " ")}` : ""}`);
@@ -549,6 +576,97 @@ function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
     touchedFiles: [...touched].sort(),
     timeline
   };
+}
+
+function extractSessionMeta(records: JsonObject[]): JsonObject {
+  const record = records.find((item) => item.type === "session_meta" || item.type === "session");
+  if (!record) return {};
+  return asObject(record.payload) ?? record;
+}
+
+function normalizeCodexRecord(record: JsonObject): JsonObject {
+  const payload = asObject(record.payload);
+  const body = payload ?? record;
+  const message = asObject(body.message) ?? asObject(record.message);
+  const item = asObject(body.item) ?? asObject(record.item);
+  const rawArguments = body.arguments ?? record.arguments;
+  const parsedArguments = parseToolArguments(rawArguments);
+  const normalized: JsonObject = {
+    ...body,
+    type: body.type ?? record.type,
+    role: body.role ?? record.role ?? message?.role,
+    content: body.content ?? record.content ?? message?.content ?? item?.content,
+    name: body.name ?? record.name,
+    arguments: parsedArguments ?? rawArguments,
+    call_id: body.call_id ?? record.call_id,
+    status: body.status ?? record.status,
+    output: body.output ?? record.output,
+    stdout: body.stdout ?? record.stdout,
+    stderr: body.stderr ?? record.stderr,
+    exit_code: body.exit_code ?? record.exit_code ?? body.exitCode ?? record.exitCode,
+    cwd: body.cwd ?? record.cwd,
+    workdir: body.workdir ?? record.workdir
+  };
+  if (body.input !== undefined) {
+    normalized.input = body.input;
+  }
+  return normalized;
+}
+
+function parseToolArguments(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function getCallId(record: JsonObject): string | null {
+  return typeof record.call_id === "string" ? record.call_id : typeof record.callId === "string" ? record.callId : null;
+}
+
+function isToolCallRecord(record: JsonObject): boolean {
+  const type = String(record.type ?? "").toLowerCase();
+  return (
+    type === "function_call" ||
+    type === "custom_tool_call" ||
+    type === "local_shell_call" ||
+    type === "exec_command" ||
+    (type.includes("tool") && !type.includes("output")) ||
+    Boolean(record.name && (record.arguments !== undefined || record.input !== undefined)) ||
+    Boolean(record.arguments !== undefined && !type.includes("output"))
+  );
+}
+
+function isToolCallOutputRecord(record: JsonObject): boolean {
+  const type = String(record.type ?? "").toLowerCase();
+  return type === "function_call_output" || type === "custom_tool_call_output" || type.includes("call_output");
+}
+
+function parseProcessExitCode(text: string): number | null {
+  const match = text.match(/Process exited with code\s+(-?\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function isInjectedUserContext(content: string): boolean {
+  const trimmed = content.trimStart();
+  return (
+    trimmed.startsWith("# AGENTS.md instructions") ||
+    trimmed.startsWith("<environment_context>") ||
+    trimmed.startsWith("<turn_aborted>")
+  );
+}
+
+function collectTouchedPaths(record: JsonObject, touched: Set<string>): void {
+  const serialized = JSON.stringify(record);
+  for (const match of serialized.matchAll(/(?:path|file|cwd|workdir)"?\s*[:=]\s*"([^"\n]+)"/g)) {
+    touched.add(match[1]);
+  }
+  const text = [String(record.input ?? ""), commandText(record)].join("\n");
+  for (const match of text.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)) {
+    touched.add(match[1].trim());
+  }
 }
 
 function isErrorRecord(record: JsonObject): boolean {
@@ -569,26 +687,31 @@ function isApprovalSandboxRecord(record: JsonObject): boolean {
 
 async function findSessionFromIndex(options: { cwd: string; sessionId?: string; home: string }): Promise<string> {
   const indexPath = join(options.home, ".codex", "session_index.jsonl");
-  if (!(await pathExists(indexPath))) {
+  if (!(await pathExists(indexPath)) && !options.sessionId) {
     throw new Error(`Codex session index not found: ${indexPath}`);
   }
   const currentRepo = resolveGitRoot(options.cwd);
-  const entries = parseJsonlLines(await readFile(indexPath, "utf8"));
+  const entries = (await pathExists(indexPath)) ? parseJsonlLines(await readFile(indexPath, "utf8")) : [];
   const candidates: { path: string; updatedAt: number }[] = [];
+  const scannedPaths = new Set<string>();
 
-  for (const entry of entries) {
-    const candidatePath = String(entry.path ?? entry.session_path ?? entry.file ?? "");
+  async function considerPath(candidatePath: string, entry: JsonObject = {}): Promise<void> {
     if (!candidatePath) {
-      continue;
+      return;
     }
-    if (options.sessionId && !JSON.stringify(entry).includes(options.sessionId)) {
-      continue;
+    const expandedPath = expandHome(candidatePath, options.home);
+    if (scannedPaths.has(expandedPath)) {
+      return;
     }
+    scannedPaths.add(expandedPath);
     try {
-      const expandedPath = expandHome(candidatePath, options.home);
       const records = parseJsonlLines(await readFile(expandedPath, "utf8"));
       const extracted = extractCodexSession(records);
       const sessionCwd = String(extracted.meta.cwd ?? entry.cwd ?? "");
+      const sessionId = String(extracted.meta.id ?? entry.id ?? "");
+      if (options.sessionId && !sessionId.includes(options.sessionId) && !expandedPath.includes(options.sessionId)) {
+        return;
+      }
       if (options.sessionId || (sessionCwd && resolveGitRoot(sessionCwd) === currentRepo)) {
         const time = Date.parse(
           String(entry.updated_at ?? entry.timestamp ?? extracted.meta.updated_at ?? extracted.meta.timestamp ?? 0)
@@ -596,7 +719,21 @@ async function findSessionFromIndex(options: { cwd: string; sessionId?: string; 
         candidates.push({ path: expandedPath, updatedAt: Number.isFinite(time) ? time : 0 });
       }
     } catch {
+      return;
+    }
+  }
+
+  for (const entry of entries) {
+    const candidatePath = String(entry.path ?? entry.session_path ?? entry.file ?? "");
+    if (options.sessionId && !JSON.stringify(entry).includes(options.sessionId)) {
       continue;
+    }
+    await considerPath(candidatePath, entry);
+  }
+
+  if (options.sessionId && candidates.length === 0) {
+    for (const candidatePath of await findCodexSessionFiles(options.home)) {
+      await considerPath(candidatePath);
     }
   }
 
@@ -605,6 +742,51 @@ async function findSessionFromIndex(options: { cwd: string; sessionId?: string; 
     throw new Error("No matching Codex session found for current Git repository. Use --input <jsonl>.");
   }
   return candidates[0].path;
+}
+
+async function findCodexSessionFiles(home: string): Promise<string[]> {
+  const root = join(home, ".codex", "sessions");
+  if (!(await pathExists(root))) {
+    return [];
+  }
+  const files: string[] = [];
+  async function visit(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+      } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+        files.push(path);
+      }
+    }
+  }
+  await visit(root);
+  return files;
+}
+
+function resolveGitRootOrNull(cwdInput: string): string | null {
+  try {
+    return resolveGitRoot(cwdInput);
+  } catch {
+    return null;
+  }
+}
+
+function resolveCaptureSubject(cwd: string, meta: JsonObject, home: string): CaptureSubject {
+  const warnings: string[] = [];
+  const sessionCwd = typeof meta.cwd === "string" ? absolutePath(meta.cwd, cwd, home) : null;
+  if (sessionCwd) {
+    const sessionRepo = resolveGitRootOrNull(sessionCwd);
+    if (sessionRepo) {
+      return { sourceRepoRoot: sessionRepo, sourceCwd: sessionCwd, warnings };
+    }
+    warnings.push(`Session cwd is not inside a Git repository, using capture cwd instead: ${sessionCwd}`);
+  } else {
+    warnings.push("Session cwd was not captured, using capture cwd for the subject repository.");
+  }
+  const sourceRepoRoot = resolveGitRoot(cwd);
+  return { sourceRepoRoot, sourceCwd: cwd, warnings };
 }
 
 function detectSetupCommands(repoRoot: string): JsonObject[] {
@@ -633,17 +815,19 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     ? absolutePath(options.workspaceRoot, cwd, home)
     : await resolveWorkspaceRoot({ cwd, home, createDefault: options.yes });
   await assertWorkspace(workspaceRoot);
-  const sourceRepoRoot = resolveGitRoot(cwd);
   const inputPath = options.input ? absolutePath(options.input, cwd, home) : await findSessionFromIndex({ cwd, sessionId: options.sessionId, home });
   const rawText = await readFile(inputPath, "utf8");
   const records = parseJsonlLines(rawText);
   const extracted = extractCodexSession(records);
   const meta = extracted.meta;
-  const rawTitle = options.title ?? extracted.userMessages[0]?.split(/\r?\n/)[0]?.slice(0, 80) ?? "codex session capture";
+  const subject = resolveCaptureSubject(cwd, meta, home);
+  const sourceRepoRoot = subject.sourceRepoRoot;
+  const rawTitle = options.title ?? selectedTaskTitle(extracted) ?? "codex session capture";
   const caseId = makeCaseId(rawTitle, options.now);
   const slug = caseId.match(/^case_(.*)_\d{8}T\d{6}Z$/)?.[1] ?? slugify(rawTitle);
   const gitMeta = meta.git && typeof meta.git === "object" ? (meta.git as JsonObject) : undefined;
   const baselineCommit = typeof gitMeta?.commit_hash === "string" ? gitMeta.commit_hash : getHeadCommit(sourceRepoRoot);
+  const branchAtCapture = typeof gitMeta?.branch === "string" ? gitMeta.branch : getBranch(sourceRepoRoot);
   const capturePlan: CapturePlan = {
     inputPath,
     sourceRepoRoot,
@@ -686,7 +870,12 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
       prompt: "public/prompt.md",
       context: "public/context.md",
       environment: "public/environment.md",
+      replay: "public/replay.md",
+      contextManifest: "public/context.manifest.json",
+      agentInstructions: "public/agent-instructions.md",
+      commandObservations: "public/command-observations.md",
       failure: "private/failure.md",
+      failureDraft: "private/failure-draft.md",
       successCriteria: "private/success.md",
       verification: "private/verification.md"
     },
@@ -697,7 +886,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
         repoId,
         sourceRootAtCapture: sourceRepoRoot,
         repositoryUrl: getOrigin(sourceRepoRoot),
-        baseline: { commit: baselineCommit, ref, branchAtCapture: getBranch(sourceRepoRoot) }
+        baseline: { commit: baselineCommit, ref, branchAtCapture }
       }
     ],
     setupCommands: detectSetupCommands(sourceRepoRoot),
@@ -720,7 +909,17 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     `# ${rawTitle}\n\nGenerated by yk pbench capture. Fill public/private docs, write the completion validator, then run strict validation.\n`
   );
   await writeFile(join(caseDir, "public", "prompt.md"), `${extracted.userMessages[0] ?? ""}\n`);
-  await writeFile(join(caseDir, "public", "context.md"), `Subject repo at capture: ${sourceRepoRoot}\nBaseline commit: ${baselineCommit}\n`);
+  await writeFile(
+    join(caseDir, "public", "context.md"),
+    [
+      `Subject repo at capture: ${sourceRepoRoot}`,
+      `Session cwd: ${String(meta.cwd ?? "unknown")}`,
+      `Session id: ${String(meta.id ?? options.sessionId ?? basename(inputPath))}`,
+      `Baseline commit: ${baselineCommit}`,
+      `Branch at capture: ${String(branchAtCapture ?? "unknown")}`,
+      ""
+    ].join("\n")
+  );
   await writeFile(join(caseDir, "public", "environment.md"), `Captured at: ${createdAt}\nModel: ${String(meta.model ?? "unknown")}\n`);
   await writeFile(join(caseDir, "private", "failure.md"), "TODO: Describe the task/session-level outcome mismatch.\n");
   await writeFile(join(caseDir, "private", "success.md"), "TODO: Define observable completion criteria.\n");
@@ -754,6 +953,17 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     records: extracted.approvalSandboxRecords
   });
   await writeJson(join(caseDir, "private", "artifacts", "extracted", "touched-files.json"), extracted.touchedFiles);
+  await writeReplayContext({
+    caseDir,
+    caseId,
+    title: rawTitle,
+    createdAt,
+    sourceRepoRoot,
+    captureCwd: subject.sourceCwd,
+    baselineCommit,
+    setupCommands: manifest.setupCommands,
+    extracted
+  });
   await writeJson(join(transactionPath, "transaction.json"), {
     schemaVersion: 1,
     transactionPath,
@@ -766,7 +976,303 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     strictValidatedAt: null
   });
 
-  return { transactionPath, caseDir, caseId, workspaceRoot };
+  return { transactionPath, caseDir, caseId, workspaceRoot, warnings: subject.warnings };
+}
+
+function selectedTaskTitle(extracted: ExtractedCodexSession): string | null {
+  const first = extracted.userMessages[0]?.split(/\r?\n/)[0]?.trim();
+  return first ? first.slice(0, 80) : null;
+}
+
+type ReplayContextOptions = {
+  caseDir: string;
+  caseId: string;
+  title: string;
+  createdAt: string;
+  sourceRepoRoot: string;
+  captureCwd: string;
+  baselineCommit: string;
+  setupCommands: JsonObject[];
+  extracted: ExtractedCodexSession;
+};
+
+type PublicContextFile = {
+  source: string;
+  publicPath: string;
+  kind: "untracked";
+};
+
+async function writeReplayContext(options: ReplayContextOptions): Promise<void> {
+  const warnings: string[] = [];
+  const agentInstructionsPath = await writeAgentInstructions(options.caseDir, options.sourceRepoRoot, options.captureCwd);
+  const commandObservationsPath = await writeCommandObservations(options.caseDir, options.extracted);
+  const startingPatchPath = await writeStartingPatch(options.caseDir, options.sourceRepoRoot, warnings);
+  const contextFiles = await writeUntrackedContextFiles(options.caseDir, options.sourceRepoRoot, warnings);
+  await writeFailureDraft(options.caseDir, options.extracted);
+
+  const replayFiles = {
+    replay: "public/replay.md",
+    contextManifest: "public/context.manifest.json",
+    agentInstructions: agentInstructionsPath,
+    commandObservations: commandObservationsPath,
+    startingPatch: startingPatchPath
+  };
+  const contextManifest = {
+    schemaVersion: 1,
+    caseId: options.caseId,
+    title: options.title,
+    createdAt: options.createdAt,
+    source: {
+      kind: "codex-session",
+      sessionId: String(options.extracted.meta.id ?? ""),
+      cwd: options.extracted.meta.cwd ?? null,
+      model: options.extracted.meta.model ?? null
+    },
+    baseline: {
+      repoRoot: options.sourceRepoRoot,
+      commit: options.baselineCommit
+    },
+    packageManager: inferPackageManager(options.setupCommands),
+    setupCommands: options.setupCommands,
+    replayFiles,
+    contextFiles,
+    warnings
+  };
+
+  await writeJson(join(options.caseDir, "public", "context.manifest.json"), contextManifest);
+  await writeFile(join(options.caseDir, "public", "replay.md"), renderReplayMarkdown(options, replayFiles, contextFiles, warnings));
+}
+
+function inferPackageManager(setupCommands: JsonObject[]): string | null {
+  const command = String(setupCommands[0]?.command ?? "");
+  if (command.startsWith("bun ")) return "bun";
+  if (command.startsWith("pnpm ")) return "pnpm";
+  if (command.startsWith("npm ")) return "npm";
+  if (command.startsWith("yarn ")) return "yarn";
+  return null;
+}
+
+function renderReplayMarkdown(
+  options: ReplayContextOptions,
+  replayFiles: Record<string, string | null>,
+  contextFiles: PublicContextFile[],
+  warnings: string[]
+): string {
+  const setup = options.setupCommands.map((item) => `- ${String(item.command)} (cwd: ${String(item.cwd ?? ".")})`).join("\n") || "- No setup command detected.";
+  const fileLines = contextFiles.map((file) => `- ${file.publicPath} (from ${file.source})`).join("\n") || "- No untracked context files captured.";
+  const warningLines = warnings.map((warning) => `- ${warning}`).join("\n") || "- No replay warnings.";
+  const patchLine = replayFiles.startingPatch ? `Apply starting patch from \`${replayFiles.startingPatch}\` before attempting the task.` : "No tracked dirty starting patch was captured.";
+  return [
+    `# ${options.title}`,
+    "",
+    "## Task",
+    "",
+    "Read `public/prompt.md` first. Use this replay file as the context index for the benchmark task.",
+    "",
+    "## Baseline",
+    "",
+    `- Repo root at capture: ${options.sourceRepoRoot}`,
+    `- Baseline commit: ${options.baselineCommit}`,
+    `- Context manifest: ${String(replayFiles.contextManifest)}`,
+    "",
+    "## Setup",
+    "",
+    setup,
+    "",
+    "## Starting State",
+    "",
+    patchLine,
+    "",
+    "## Agent Instructions",
+    "",
+    `Read \`${String(replayFiles.agentInstructions)}\` for repo-visible agent instructions and installed skill names.`,
+    "",
+    "## Command Observations",
+    "",
+    `Read \`${String(replayFiles.commandObservations)}\` for bounded command/tool observations captured from the original session.`,
+    "",
+    "## Context Files",
+    "",
+    fileLines,
+    "",
+    "## Warnings",
+    "",
+    warningLines,
+    "",
+    "Do not inspect private evaluator files during replay."
+  ].join("\n");
+}
+
+async function writeAgentInstructions(caseDir: string, repoRoot: string, captureCwd: string): Promise<string> {
+  const lines = ["# Agent Instructions", ""];
+  const instructionFiles = agentInstructionCandidates(repoRoot, captureCwd);
+  for (const file of instructionFiles) {
+    if (!(await pathExists(file))) continue;
+    const relativePath = relativePathFrom(repoRoot, file);
+    lines.push(`## ${relativePath}`, "", await readFile(file, "utf8"), "");
+  }
+  if (instructionFiles.length === 0 || lines.length === 2) {
+    lines.push("No AGENTS.md files found between repo root and capture cwd.", "");
+  }
+
+  for (const root of [".agents/skills", ".claude/skills"]) {
+    const skills = await listSkillNames(join(repoRoot, root));
+    lines.push(`## ${root}`, "", skills.length > 0 ? `${root}: ${skills.join(", ")}` : `${root}: none detected`, "");
+  }
+
+  const publicPath = "public/agent-instructions.md";
+  await writeFile(join(caseDir, publicPath), lines.join("\n"));
+  return publicPath;
+}
+
+function agentInstructionCandidates(repoRoot: string, captureCwd: string): string[] {
+  const resolvedRepo = resolve(repoRoot);
+  const resolvedCwd = resolve(captureCwd);
+  const relativeCwd = relative(resolvedRepo, resolvedCwd);
+  const parts = relativeCwd && !relativeCwd.startsWith("..") ? relativeCwd.split(sep).filter(Boolean) : [];
+  const dirs = [resolvedRepo];
+  for (let index = 1; index <= parts.length; index += 1) {
+    dirs.push(join(resolvedRepo, ...parts.slice(0, index)));
+  }
+  return dirs.map((dir) => join(dir, "AGENTS.md"));
+}
+
+async function listSkillNames(root: string): Promise<string[]> {
+  try {
+    const entries = await readdir(root, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort((a, b) => a.localeCompare(b));
+  } catch (error) {
+    if (isMissingPathError(error)) return [];
+    throw error;
+  }
+}
+
+async function writeCommandObservations(caseDir: string, extracted: ExtractedCodexSession): Promise<string> {
+  const lines = ["# Command Observations", ""];
+  const commandRecords = extracted.toolCalls.filter((record) => commandText(record));
+  if (commandRecords.length === 0) {
+    lines.push("No command-like tool calls captured.", "");
+  }
+  for (const [index, record] of commandRecords.entries()) {
+    const args = asObject(record.arguments) ?? {};
+    lines.push(`## ${index + 1}. ${commandText(record)}`, "");
+    lines.push(`- cwd: ${String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "unknown")}`);
+    lines.push(`- status: ${String(record.status ?? record.outcome ?? "unknown")}`);
+    lines.push(`- exitCode: ${String(record.exit_code ?? record.exitCode ?? "unknown")}`);
+    const stdoutText = excerpt(String(record.stdout ?? ""));
+    const stderrText = excerpt(String(record.stderr ?? ""));
+    if (stdoutText) lines.push("", "stdout:", fenced(stdoutText));
+    if (stderrText) lines.push("", "stderr:", fenced(stderrText));
+    lines.push("");
+  }
+  const publicPath = "public/command-observations.md";
+  await writeFile(join(caseDir, publicPath), lines.join("\n"));
+  return publicPath;
+}
+
+function commandText(record: JsonObject): string {
+  const args = asObject(record.arguments) ?? {};
+  return String(args.cmd ?? args.command ?? record.command ?? "");
+}
+
+function fenced(text: string): string {
+  return ["```text", text, "```"].join("\n");
+}
+
+function excerpt(text: string, maxLength = 2000): string {
+  return text.length > maxLength ? `${text.slice(0, maxLength)}\n[truncated]` : text;
+}
+
+async function writeStartingPatch(caseDir: string, repoRoot: string, warnings: string[]): Promise<string | null> {
+  const patch = execGitOptional(repoRoot, ["diff", "--binary", "HEAD", "--", "."]);
+  if (!patch) return null;
+  if (Buffer.byteLength(patch, "utf8") > MAX_PUBLIC_PATCH_BYTES) {
+    await writeFile(join(caseDir, "private", "artifacts", "extracted", "starting.patch"), patch);
+    warnings.push("Tracked dirty patch exceeded public size limit and was saved as private/artifacts/extracted/starting.patch.");
+    return null;
+  }
+  const publicPath = "public/starting.patch";
+  await writeFile(join(caseDir, publicPath), patch);
+  return publicPath;
+}
+
+async function writeUntrackedContextFiles(caseDir: string, repoRoot: string, warnings: string[]): Promise<PublicContextFile[]> {
+  const files = execGitOptional(repoRoot, ["ls-files", "--others", "--exclude-standard"])
+    .split(/\r?\n/)
+    .map((file) => file.trim())
+    .filter(Boolean);
+  const copied: PublicContextFile[] = [];
+  for (const file of files) {
+    if (!safeRelativePath(file) || file.startsWith(".git/")) {
+      warnings.push(`Skipped unsafe untracked path: ${file}`);
+      continue;
+    }
+    const sourcePath = join(repoRoot, file);
+    const info = await stat(sourcePath).catch(() => null);
+    if (!info?.isFile()) continue;
+    if (info.size > MAX_PUBLIC_TEXT_FILE_BYTES) {
+      warnings.push(`Skipped large untracked file: ${file}`);
+      continue;
+    }
+    const bytes = await readFile(sourcePath);
+    if (!isUtf8Text(bytes)) {
+      warnings.push(`Skipped binary untracked file: ${file}`);
+      continue;
+    }
+    const publicPath = `public/context-files/untracked/${file.replace(/\\/g, "/")}`;
+    await mkdir(dirname(join(caseDir, publicPath)), { recursive: true });
+    await writeFile(join(caseDir, publicPath), bytes);
+    copied.push({ source: file.replace(/\\/g, "/"), publicPath, kind: "untracked" });
+  }
+  return copied;
+}
+
+function isUtf8Text(bytes: Uint8Array): boolean {
+  if (bytes.includes(0)) return false;
+  try {
+    TEXT_DECODER.decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeFailureDraft(caseDir: string, extracted: ExtractedCodexSession): Promise<void> {
+  const laterUserMessages = extracted.userMessages.slice(1);
+  const lines = ["# Failure Draft", "", "This draft is generated from deterministic capture heuristics. Rewrite `private/failure.md` with the final failure statement.", ""];
+  if (laterUserMessages.length > 0) {
+    lines.push("## Later User Corrections", "");
+    for (const message of laterUserMessages) {
+      lines.push(`- ${message.replace(/\s+/g, " ").trim()}`);
+    }
+    lines.push("");
+  }
+  if (extracted.errorRecords.length > 0) {
+    lines.push("## Error Records", "");
+    for (const record of extracted.errorRecords) {
+      const command = commandText(record);
+      const exitCode = record.exit_code ?? record.exitCode ?? "unknown";
+      const stderrText = excerpt(String(record.stderr ?? ""), 500).replace(/\s+/g, " ").trim();
+      lines.push(`- ${command ? `${command}: ` : ""}exitCode=${String(exitCode)}${stderrText ? ` stderr=${stderrText}` : ""}`);
+    }
+    lines.push("");
+  }
+  if (laterUserMessages.length === 0 && extracted.errorRecords.length === 0) {
+    lines.push("No obvious user correction or command failure was detected. Inspect the raw transcript before finalizing the case.", "");
+  }
+  await writeFile(join(caseDir, "private", "failure-draft.md"), lines.join("\n"));
+}
+
+function execGitOptional(cwd: string, args: string[]): string {
+  try {
+    return execGit(cwd, args);
+  } catch {
+    return "";
+  }
+}
+
+function relativePathFrom(root: string, path: string): string {
+  return relative(root, path).replace(/\\/g, "/");
 }
 
 async function confirmCapturePlan(plan: CapturePlan): Promise<boolean> {
@@ -804,6 +1310,18 @@ async function validateAuthoringDraft(caseDir: string): Promise<ValidationResult
 
 async function findAuthoringWarnings(caseDir: string): Promise<string[]> {
   const warnings: string[] = [];
+  const prompt = await readFile(join(caseDir, "public", "prompt.md"), "utf8");
+  if (prompt.trim().length === 0) {
+    warnings.push("public/prompt.md is empty");
+  }
+  const commandObservations = await readFile(join(caseDir, "public", "command-observations.md"), "utf8");
+  if (commandObservations.includes("No command-like tool calls captured.")) {
+    warnings.push("public/command-observations.md has no command-like tool calls");
+  }
+  const failureDraft = await readFile(join(caseDir, "private", "failure-draft.md"), "utf8");
+  if (failureDraft.includes("No obvious user correction or command failure was detected.")) {
+    warnings.push("private/failure-draft.md has no later user correction or command failure evidence");
+  }
   for (const path of [
     "private/failure.md",
     "private/success.md",

@@ -32,7 +32,9 @@ This is a Bun workspace monorepo:
 - `yk pbench validate --transaction <path> --strict` strict-validates a transaction.
 - `yk pbench finalize --transaction <path>` finalizes a strict-validated transaction into the workspace.
 
-Capture extracts Codex prompts, timeline, tool calls, touched files, error records, and approval/sandbox context into private artifacts. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
+Capture supports both legacy and current Codex JSONL shapes. When a session records its own cwd and Git metadata, capture uses that session repository and baseline commit even if `yk pbench capture --input <jsonl>` is launched from another repo. If `--session-id` is used and the Codex index does not include file paths, capture scans `~/.codex/sessions/**/*.jsonl` for the matching session id.
+
+Capture writes a replay context capsule into `public/`: `replay.md`, `context.manifest.json`, repo agent instructions, command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and a failure draft in `private/`. Initial authoring warnings call out empty replay evidence such as missing task prompts, missing command observations, or failure drafts with no correction/error evidence. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
 
 Install the agent-facing workflow with `yk install pbench`.
 
