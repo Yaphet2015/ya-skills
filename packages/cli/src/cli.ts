@@ -4,10 +4,8 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadCatalog } from "./catalog.js";
-import { createFunctionRegistry } from "./functions.js";
-import { installSkills } from "./install.js";
-import type { SkillCatalog } from "./types.js";
+import { installSkills, loadCatalog, uninstallSkills, type SkillCatalog } from "@ya-skills/core";
+import { createCliFunctionRegistry } from "./function-registry.js";
 
 async function main(argv: string[]) {
   const [command, ...args] = argv;
@@ -27,12 +25,17 @@ async function main(argv: string[]) {
     return;
   }
 
+  if (command === "uninstall") {
+    await uninstallCommand(args);
+    return;
+  }
+
   const [action, ...functionArgs] = args;
   if (!action) {
     throw new Error(`Missing action for function domain '${command}'`);
   }
 
-  const registry = createFunctionRegistry();
+  const registry = createCliFunctionRegistry();
   const result = await registry.run(command, action, functionArgs);
   if (result !== undefined) {
     console.log(result);
@@ -61,6 +64,20 @@ async function installCommand(skillNames: string[]) {
   });
 
   console.log(`Installed: ${result.installed.map((skill) => skill.name).join(", ")}`);
+  console.log(`Targets: ${result.targets.join(", ")}`);
+}
+
+async function uninstallCommand(skillNames: string[]) {
+  if (skillNames.length === 0) {
+    throw new Error("yk uninstall requires at least one skill name");
+  }
+
+  const result = await uninstallSkills({
+    projectDir: process.cwd(),
+    skillNames
+  });
+
+  console.log(`Uninstalled: ${result.removed.join(", ")}`);
   console.log(`Targets: ${result.targets.join(", ")}`);
 }
 
@@ -108,7 +125,7 @@ async function loadDefaultCatalog(): Promise<SkillCatalog> {
 
 function catalogCandidates(): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
-  return [join(here, "..", "skills"), join(here, "skills"), join(process.cwd(), "skills")];
+  return [join(here, "..", "..", "..", "skills"), join(process.cwd(), "skills")];
 }
 
 function printHelp() {
@@ -117,6 +134,7 @@ function printHelp() {
 Commands:
   yk list
   yk install [skill...]
+  yk uninstall <skill...>
   yk <domain> <action> [...args]
 `);
 }

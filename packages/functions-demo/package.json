@@ -1,0 +1,12 @@
+{
+  "name": "@ya-skills/functions-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ya-skills/core": "workspace:*"
+  }
+}

@@ -2,8 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadCatalog } from "../src/catalog.js";
-import { installSkills } from "../src/install.js";
+import { loadCatalog, installSkills, uninstallSkills } from "@ya-skills/core";
 
 let rootDir: string;
 let catalogDir: string;
@@ -74,4 +73,50 @@ test("refuses to overwrite an already installed skill", async () => {
       skillNames: ["demo-base"]
     })
   ).rejects.toThrow("Skill 'demo-base' already exists at");
+});
+
+test("uninstalls requested skills from every existing target without removing dependencies", async () => {
+  await mkdir(join(projectDir, ".claude", "skills"), { recursive: true });
+  await mkdir(join(projectDir, ".agents", "skills"), { recursive: true });
+  await writeSkill("demo-base", {
+    name: "demo-base",
+    description: "Base demo skill"
+  });
+  await writeSkill("demo-dependent", {
+    name: "demo-dependent",
+    description: "Dependent demo skill",
+    dependsOn: ["demo-base"]
+  });
+  const catalog = await loadCatalog(catalogDir);
+  await installSkills({
+    catalog,
+    projectDir,
+    skillNames: ["demo-dependent"]
+  });
+
+  const result = await uninstallSkills({
+    projectDir,
+    skillNames: ["demo-dependent"]
+  });
+
+  expect(result.removed).toEqual(["demo-dependent"]);
+  for (const target of [".claude/skills", ".agents/skills"]) {
+    await expect(readFile(join(projectDir, target, "demo-base", "SKILL.md"), "utf8")).resolves.toBe(
+      "# demo-base\n"
+    );
+    await expect(
+      readFile(join(projectDir, target, "demo-dependent", "SKILL.md"), "utf8")
+    ).rejects.toThrow();
+  }
+});
+
+test("fails loudly when uninstalling a skill that is not installed", async () => {
+  await mkdir(join(projectDir, ".agents", "skills"), { recursive: true });
+
+  await expect(
+    uninstallSkills({
+      projectDir,
+      skillNames: ["missing"]
+    })
+  ).rejects.toThrow("Skill 'missing' is not installed in any detected target");
 });

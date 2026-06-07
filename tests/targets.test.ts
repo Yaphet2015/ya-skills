@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { detectSkillTargets } from "../src/targets.js";
+import { detectExistingSkillTargets, detectSkillTargets } from "@ya-skills/core";
 
 let tempDir: string;
 
@@ -46,4 +46,10 @@ test("installs to both known targets when both exist", async () => {
     join(tempDir, ".claude", "skills"),
     join(tempDir, ".agents", "skills")
   ]);
+});
+
+test("detects existing uninstall targets without creating defaults", async () => {
+  const targets = await detectExistingSkillTargets(tempDir);
+
+  expect(targets).toEqual([]);
 });

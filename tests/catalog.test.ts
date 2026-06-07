@@ -2,8 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadCatalog } from "../src/catalog.js";
-import { resolveSkillInstallOrder } from "../src/dependencies.js";
+import { loadCatalog, resolveSkillInstallOrder } from "@ya-skills/core";
 
 let catalogDir: string;
 

@@ -8,7 +8,12 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "types": ["bun"],
-    "outDir": "dist"
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@ya-skills/core": ["packages/core/src/index.ts"],
+      "@ya-skills/functions-demo": ["packages/functions-demo/src/index.ts"]
+    }
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["packages/**/*.ts", "tests/**/*.ts"]
 }

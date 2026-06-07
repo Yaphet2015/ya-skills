@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "packages/*"
+  ],
   "bin": {
-    "yk": "./dist/cli.js"
+    "yk": "./packages/cli/dist/cli.js"
   },
   "scripts": {
-    "dev": "bun src/cli.ts",
-    "build": "bun build --target=node --outfile=dist/cli.js src/cli.ts",
+    "dev": "bun packages/cli/src/cli.ts",
+    "build": "bun build --target=node --outfile=packages/cli/dist/cli.js packages/cli/src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "smoke": "bun src/cli.ts list && bun src/cli.ts demo echo hello && node dist/cli.js list && node dist/cli.js demo echo hello"
+    "smoke": "bun packages/cli/src/cli.ts list && bun packages/cli/src/cli.ts demo echo hello && node packages/cli/dist/cli.js list && node packages/cli/dist/cli.js demo echo hello"
   },
   "devDependencies": {
     "@types/bun": "^1.3.2",

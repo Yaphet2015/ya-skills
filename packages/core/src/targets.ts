@@ -2,6 +2,17 @@ import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 export async function detectSkillTargets(projectDir: string): Promise<string[]> {
+  const targets = await detectExistingSkillTargets(projectDir);
+  if (targets.length > 0) {
+    return targets;
+  }
+
+  const agentsTarget = join(projectDir, ".agents", "skills");
+  await mkdir(agentsTarget, { recursive: true });
+  return [agentsTarget];
+}
+
+export async function detectExistingSkillTargets(projectDir: string): Promise<string[]> {
   const claudeTarget = join(projectDir, ".claude", "skills");
   const agentsTarget = join(projectDir, ".agents", "skills");
 
@@ -10,18 +21,14 @@ export async function detectSkillTargets(projectDir: string): Promise<string[]> 
     directoryExists(agentsTarget)
   ]);
 
-  if (hasClaude && hasAgents) {
-    return [claudeTarget, agentsTarget];
-  }
+  const targets = [];
   if (hasClaude) {
-    return [claudeTarget];
+    targets.push(claudeTarget);
   }
   if (hasAgents) {
-    return [agentsTarget];
+    targets.push(agentsTarget);
   }
-
-  await mkdir(agentsTarget, { recursive: true });
-  return [agentsTarget];
+  return targets;
 }
 
 async function directoryExists(path: string): Promise<boolean> {
