@@ -1,0 +1,11 @@
+{
+  "name": "pbench",
+  "description": "Capture task/session-level outcome mismatch into a local private personal benchmark case.",
+  "functions": [
+    { "domain": "pbench", "action": "capture" },
+    { "domain": "pbench", "action": "validate" },
+    { "domain": "pbench", "action": "finalize" },
+    { "domain": "pbench", "action": "workspace-init" },
+    { "domain": "pbench", "action": "project-link" }
+  ]
+}

@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@ya-skills/core": "workspace:*",
-    "@ya-skills/functions-demo": "workspace:*"
+    "@ya-skills/functions-demo": "workspace:*",
+    "@ya-skills/functions-pbench": "workspace:*"
   }
 }

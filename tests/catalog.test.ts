@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { loadCatalog, resolveSkillInstallOrder } from "@ya-skills/core";
 
@@ -86,4 +86,18 @@ test("fails loudly when dependencies contain a cycle", async () => {
   expect(() => resolveSkillInstallOrder(catalog, ["a"])).toThrow(
     "Skill dependency cycle detected: a -> b -> a"
   );
+});
+
+test("root catalog exposes the pbench skill and its yk function refs", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const pbench = catalog.byName.get("pbench");
+
+  expect(pbench?.description).toContain("benchmark");
+  expect(pbench?.functions).toEqual([
+    { domain: "pbench", action: "capture" },
+    { domain: "pbench", action: "validate" },
+    { domain: "pbench", action: "finalize" },
+    { domain: "pbench", action: "workspace-init" },
+    { domain: "pbench", action: "project-link" }
+  ]);
 });

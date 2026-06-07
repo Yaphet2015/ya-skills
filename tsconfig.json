@@ -12,7 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "@ya-skills/core": ["packages/core/src/index.ts"],
-      "@ya-skills/functions-demo": ["packages/functions-demo/src/index.ts"]
+      "@ya-skills/functions-demo": ["packages/functions-demo/src/index.ts"],
+      "@ya-skills/functions-pbench": ["packages/functions-pbench/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "tests/**/*.ts"]
