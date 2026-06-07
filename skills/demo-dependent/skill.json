@@ -1,0 +1,11 @@
+{
+  "name": "demo-dependent",
+  "description": "Dependent demo skill used to prove based-on skill installation.",
+  "dependsOn": ["demo-base"],
+  "functions": [
+    {
+      "domain": "demo",
+      "action": "echo"
+    }
+  ]
+}
