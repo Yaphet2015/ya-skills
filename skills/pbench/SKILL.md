@@ -1,6 +1,6 @@
 ---
 name: pbench
-description: Capture imperfect coding-agent work into a local private personal benchmark case.
+description: Use when the final result is wrong, incomplete, or disproved by verification — capture the imperfect session as a personal benchmark case via `yk pbench`.
 ---
 
 # PBench Agent Skill
@@ -39,7 +39,7 @@ When you notice benchmark-worthy outcome mismatch:
 After the user approves capture:
 
 1. Run `yk pbench capture --source codex --yes` from the subject Git repository.
-2. Read the printed transaction path and case directory.
+2. Read the printed transaction path, case directory, and `initialValidation` warnings.
 3. Edit the transaction `case/` bundle:
    - rewrite `public/prompt.md`, `public/context.md`, and `public/environment.md` as the future agent-visible task input;
    - fill `private/failure.md` with the task/session-level outcome mismatch;

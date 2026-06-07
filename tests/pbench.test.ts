@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   captureCodexSession,
+  createPbenchCommands,
   finalizeTransaction,
   initWorkspace,
   linkProject,
@@ -43,6 +44,38 @@ async function makeRepo(): Promise<string> {
   git(repo, ["add", "."]);
   git(repo, ["commit", "-m", "baseline"]);
   return repo;
+}
+
+async function writeCodexSession(repo: string, commit: string, records: Record<string, unknown>[] = []): Promise<string> {
+  const sessionJsonl = join(await temp("session"), "session.jsonl");
+  await writeFile(
+    sessionJsonl,
+    [
+      JSON.stringify({
+        type: "session_meta",
+        cwd: repo,
+        git: { commit_hash: commit, branch: "main" },
+        id: "session-1",
+        model: "gpt-test",
+        cli_version: "0.1.0",
+        timestamp: "2026-05-07T09:15:00Z",
+        sandbox_mode: "workspace-write"
+      }),
+      JSON.stringify({
+        type: "message",
+        role: "user",
+        content: "Make tests pass by creating done.txt"
+      }),
+      JSON.stringify({
+        type: "tool_call",
+        name: "terminal",
+        arguments: { command: "touch done.txt" },
+        status: "failed"
+      }),
+      ...records.map((record) => JSON.stringify(record))
+    ].join("\n") + "\n"
+  );
+  return sessionJsonl;
 }
 
 describe("pbench workspace handling", () => {
@@ -127,36 +160,76 @@ describe("pbench case validation", () => {
 });
 
 describe("pbench codex capture flow", () => {
+  test("asks for confirmation with session and baseline details before capture", async () => {
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const gitRoot = git(repo, ["rev-parse", "--show-toplevel"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+    let seenPlan: Record<string, unknown> | undefined;
+
+    await expect(
+      captureCodexSession({
+        cwd: repo,
+        workspaceRoot,
+        input: sessionJsonl,
+        title: "Done file missing",
+        confirm: (plan: Record<string, unknown>) => {
+          seenPlan = plan;
+          return false;
+        }
+      } as Parameters<typeof captureCodexSession>[0] & {
+        confirm: (plan: Record<string, unknown>) => boolean;
+      })
+    ).rejects.toThrow("Capture cancelled");
+
+    expect(seenPlan).toMatchObject({
+      inputPath: sessionJsonl,
+      sourceRepoRoot: gitRoot,
+      baselineCommit: commit,
+      title: "Done file missing"
+    });
+  });
+
+  test("capture command prints initial validation warnings for authoring placeholders", async () => {
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+    const originalCwd = process.cwd();
+    process.chdir(repo);
+    try {
+      const output = await createPbenchCommands()
+        .find((command) => command.action === "capture")
+        ?.run([
+          "--source",
+          "codex",
+          "--workspace",
+          workspaceRoot,
+          "--input",
+          sessionJsonl,
+          "--title",
+          "Done file missing",
+          "--yes"
+        ]);
+      const result = JSON.parse(String(output));
+
+      expect(result.initialValidation.ok).toBe(false);
+      expect(result.initialValidation.warnings).toContain("private/failure.md still contains TODO");
+      expect(result.next).toContain(`Fill ${result.caseDir}`);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test("captures a Codex session, strict-validates the baseline failure, then finalizes the case", async () => {
     const repo = await makeRepo();
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
     const commit = git(repo, ["rev-parse", "HEAD"]);
-    const sessionJsonl = join(await temp("session"), "session.jsonl");
-    await writeFile(
-      sessionJsonl,
-      [
-        JSON.stringify({
-          type: "session_meta",
-          cwd: repo,
-          git: { commit_hash: commit, branch: "main" },
-          id: "session-1",
-          model: "gpt-test",
-          timestamp: "2026-05-07T09:15:00Z"
-        }),
-        JSON.stringify({
-          type: "message",
-          role: "user",
-          content: "Make tests pass by creating done.txt"
-        }),
-        JSON.stringify({
-          type: "tool_call",
-          name: "terminal",
-          arguments: { command: "touch done.txt" },
-          status: "failed"
-        })
-      ].join("\n") + "\n"
-    );
+    const sessionJsonl = await writeCodexSession(repo, commit);
 
     const tx = await captureCodexSession({
       cwd: repo,
@@ -192,5 +265,67 @@ describe("pbench codex capture flow", () => {
     expect(finalized.casePath).toBe(join(workspaceRoot, "cases", manifest.id));
     await expect(stat(finalized.casePath)).resolves.toBeTruthy();
     await expect(stat(tx.transactionPath)).rejects.toThrow();
+  });
+
+  test("extracts Codex errors and approval/sandbox context as private artifacts", async () => {
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit, [
+      {
+        type: "exec_command",
+        arguments: { cmd: "bun test" },
+        exit_code: 1,
+        stderr: "expected failure"
+      },
+      {
+        type: "approval_request",
+        sandbox_permissions: "require_escalated",
+        justification: "Need network"
+      }
+    ]);
+
+    const tx = await captureCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "errors.json"), "utf8")
+    ).resolves.toContain("expected failure");
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "approval-sandbox.json"), "utf8")
+    ).resolves.toContain("workspace-write");
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "approval-sandbox.json"), "utf8")
+    ).resolves.toContain("require_escalated");
+  });
+
+  test("detects Bun setup commands for Bun repositories", async () => {
+    const repo = await makeRepo();
+    await writeFile(join(repo, "bun.lock"), "");
+    git(repo, ["add", "bun.lock"]);
+    git(repo, ["commit", "-m", "add bun lock"]);
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+
+    const tx = await captureCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
+
+    expect(manifest.setupCommands).toEqual([
+      { command: "bun install --frozen-lockfile", cwd: ".", timeoutSeconds: 300 }
+    ]);
   });
 });

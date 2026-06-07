@@ -28,9 +28,11 @@ This is a Bun workspace monorepo:
 
 - `yk pbench workspace-init <path>` initializes a local pbench workspace.
 - `yk pbench project-link --workspace <path>` links the current project to a workspace.
-- `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` creates a temporary authoring transaction.
+- `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` creates a temporary authoring transaction, asks for confirmation unless `--yes` is passed, and prints initial authoring validation warnings.
 - `yk pbench validate --transaction <path> --strict` strict-validates a transaction.
 - `yk pbench finalize --transaction <path>` finalizes a strict-validated transaction into the workspace.
+
+Capture extracts Codex prompts, timeline, tool calls, touched files, error records, and approval/sandbox context into private artifacts. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
 
 Install the agent-facing workflow with `yk install pbench`.
 

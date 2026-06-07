@@ -4,7 +4,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
+import { stdin as input, stdout as output } from "node:process";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { createInterface } from "node:readline/promises";
 
 type JsonObject = Record<string, unknown>;
 
@@ -38,6 +40,7 @@ export type CaptureOptions = {
   title?: string;
   now?: Date;
   home?: string;
+  confirm?: (plan: CapturePlan) => boolean | Promise<boolean>;
 };
 
 export type CaptureResult = {
@@ -45,6 +48,16 @@ export type CaptureResult = {
   caseDir: string;
   caseId: string;
   workspaceRoot: string;
+};
+
+export type CapturePlan = {
+  inputPath: string;
+  sourceRepoRoot: string;
+  baselineCommit: string;
+  title: string;
+  sessionId: string;
+  sessionCwd: string | null;
+  model: string | null;
 };
 
 type ParsedArgs = {
@@ -79,6 +92,7 @@ export function createPbenchCommands(): FunctionCommand[] {
         });
         return printJson({
           ...result,
+          initialValidation: await validateAuthoringDraft(result.caseDir),
           next: [
             `Fill ${result.caseDir}`,
             `yk pbench validate --transaction ${result.transactionPath} --strict`,
@@ -480,6 +494,8 @@ type ExtractedCodexSession = {
   userMessages: string[];
   assistantMessages: string[];
   toolCalls: JsonObject[];
+  errorRecords: JsonObject[];
+  approvalSandboxRecords: JsonObject[];
   touchedFiles: string[];
   timeline: string[];
 };
@@ -489,6 +505,8 @@ function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
   const userMessages: string[] = [];
   const assistantMessages: string[] = [];
   const toolCalls: JsonObject[] = [];
+  const errorRecords: JsonObject[] = [];
+  const approvalSandboxRecords: JsonObject[] = [];
   const touched = new Set<string>();
   const timeline: string[] = [];
 
@@ -511,6 +529,12 @@ function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
         touched.add(match[1]);
       }
     }
+    if (isErrorRecord(record)) {
+      errorRecords.push(record);
+    }
+    if (isApprovalSandboxRecord(record)) {
+      approvalSandboxRecords.push(record);
+    }
     const label = role ? String(role) : type;
     timeline.push(`- ${index + 1}. ${label}${content ? `: ${content.slice(0, 200).replace(/\s+/g, " ")}` : ""}`);
   }
@@ -520,9 +544,27 @@ function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
     userMessages,
     assistantMessages,
     toolCalls,
+    errorRecords,
+    approvalSandboxRecords,
     touchedFiles: [...touched].sort(),
     timeline
   };
+}
+
+function isErrorRecord(record: JsonObject): boolean {
+  const status = String(record.status ?? record.outcome ?? "").toLowerCase();
+  const exitCode = record.exit_code ?? record.exitCode;
+  return (
+    status === "failed" ||
+    status === "error" ||
+    (typeof exitCode === "number" && exitCode !== 0) ||
+    (typeof record.stderr === "string" && record.stderr.length > 0 && status !== "success")
+  );
+}
+
+function isApprovalSandboxRecord(record: JsonObject): boolean {
+  const serialized = JSON.stringify(record).toLowerCase();
+  return serialized.includes("approval") || serialized.includes("sandbox");
 }
 
 async function findSessionFromIndex(options: { cwd: string; sessionId?: string; home: string }): Promise<string> {
@@ -569,6 +611,9 @@ function detectSetupCommands(repoRoot: string): JsonObject[] {
   if (!existsSync(join(repoRoot, "package.json"))) {
     return [];
   }
+  if (existsSync(join(repoRoot, "bun.lock")) || existsSync(join(repoRoot, "bun.lockb"))) {
+    return [{ command: "bun install --frozen-lockfile", cwd: ".", timeoutSeconds: 300 }];
+  }
   if (existsSync(join(repoRoot, "pnpm-lock.yaml"))) {
     return [{ command: "pnpm install --frozen-lockfile", cwd: ".", timeoutSeconds: 300 }];
   }
@@ -599,6 +644,21 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
   const slug = caseId.match(/^case_(.*)_\d{8}T\d{6}Z$/)?.[1] ?? slugify(rawTitle);
   const gitMeta = meta.git && typeof meta.git === "object" ? (meta.git as JsonObject) : undefined;
   const baselineCommit = typeof gitMeta?.commit_hash === "string" ? gitMeta.commit_hash : getHeadCommit(sourceRepoRoot);
+  const capturePlan: CapturePlan = {
+    inputPath,
+    sourceRepoRoot,
+    baselineCommit,
+    title: rawTitle,
+    sessionId: String(meta.id ?? options.sessionId ?? basename(inputPath)),
+    sessionCwd: typeof meta.cwd === "string" ? meta.cwd : null,
+    model: typeof meta.model === "string" ? meta.model : null
+  };
+  if (!options.yes) {
+    const confirmed = options.confirm ? await options.confirm(capturePlan) : await confirmCapturePlan(capturePlan);
+    if (!confirmed) {
+      throw new Error("Capture cancelled");
+    }
+  }
   const { repoId, ref } = syncRepoCache(workspaceRoot, sourceRepoRoot, baselineCommit, caseId);
   const transactionRoot = join(tmpdir(), "personal-bench");
   await mkdir(transactionRoot, { recursive: true });
@@ -677,9 +737,22 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     userMessageCount: extracted.userMessages.length,
     assistantMessageCount: extracted.assistantMessages.length,
     toolCallCount: extracted.toolCalls.length,
+    errorCount: extracted.errorRecords.length,
+    approvalSandboxRecordCount: extracted.approvalSandboxRecords.length,
     touchedFileCount: extracted.touchedFiles.length
   });
   await writeJson(join(caseDir, "private", "artifacts", "extracted", "tool-calls.json"), extracted.toolCalls);
+  await writeJson(join(caseDir, "private", "artifacts", "extracted", "errors.json"), extracted.errorRecords);
+  await writeJson(join(caseDir, "private", "artifacts", "extracted", "approval-sandbox.json"), {
+    metadata: {
+      sandboxMode: meta.sandbox_mode ?? meta.sandboxMode ?? null,
+      approvalPolicy: meta.approval_policy ?? meta.approvalPolicy ?? null,
+      cliVersion: meta.cli_version ?? meta.cliVersion ?? null,
+      timestamp: meta.timestamp ?? meta.created_at ?? meta.createdAt ?? null,
+      updatedAt: meta.updated_at ?? meta.updatedAt ?? null
+    },
+    records: extracted.approvalSandboxRecords
+  });
   await writeJson(join(caseDir, "private", "artifacts", "extracted", "touched-files.json"), extracted.touchedFiles);
   await writeJson(join(transactionPath, "transaction.json"), {
     schemaVersion: 1,
@@ -694,6 +767,55 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
   });
 
   return { transactionPath, caseDir, caseId, workspaceRoot };
+}
+
+async function confirmCapturePlan(plan: CapturePlan): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    throw new Error("Capture requires --yes in non-interactive mode.");
+  }
+  output.write(
+    [
+      "About to capture pbench case:",
+      `  Session: ${plan.inputPath}`,
+      `  Repo: ${plan.sourceRepoRoot}`,
+      `  Baseline: ${plan.baselineCommit}`,
+      `  Title: ${plan.title}`,
+      ""
+    ].join("\n")
+  );
+  const rl = createInterface({ input, output });
+  try {
+    const answer = await rl.question("Capture this session? [y/N] ");
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    rl.close();
+  }
+}
+
+async function validateAuthoringDraft(caseDir: string): Promise<ValidationResult> {
+  const result = await validateCaseBundle(caseDir, { strict: false });
+  const warnings = [...result.warnings, ...(await findAuthoringWarnings(caseDir))];
+  return {
+    ...result,
+    ok: result.ok && warnings.length === 0,
+    warnings
+  };
+}
+
+async function findAuthoringWarnings(caseDir: string): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const path of [
+    "private/failure.md",
+    "private/success.md",
+    "private/verification.md",
+    "private/validators/check-completion.mjs"
+  ]) {
+    const content = await readFile(join(caseDir, path), "utf8");
+    if (content.includes("TODO")) {
+      warnings.push(`${path} still contains TODO`);
+    }
+  }
+  return warnings;
 }
 
 function validatePathField(errors: string[], field: string, value: unknown): string | null {
