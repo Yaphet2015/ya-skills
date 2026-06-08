@@ -13,10 +13,14 @@ This is a Bun workspace monorepo:
 
 ## Installation
 
+The published Homebrew formula currently supports macOS arm64.
+
 ```sh
 brew tap Yaphet2015/tap
 brew install ya-skills
 ```
+
+The tap repository is [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap). The formula installs the compiled `yk` binary and the bundled `skills/` catalog.
 
 ## Commands
 
@@ -56,4 +60,16 @@ bun install
 bun test
 bun run typecheck
 bun run build
+bun run build:binary:macos-arm64
 ```
+
+## Release
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`. The workflow tests the repo, typechecks it, builds the macOS arm64 executable, and publishes:
+
+- `ya-skills-v<version>-macos-arm64.tar.gz`
+- `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
+
+The release tarball contains `yk` and `skills/`. The Homebrew formula wraps `yk` with `YA_SKILLS_CATALOG_DIR` pointing at the installed catalog, so packaged installs do not depend on the source checkout layout.
+
+After publishing a new release, update `Yaphet2015/homebrew-tap` with the new formula `version`, release asset URL, and sha256.

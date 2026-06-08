@@ -23,7 +23,17 @@
 - Typecheck: `bun run typecheck`
 - Test: `bun run test`
 - Build: `bun run build`
+- Build Homebrew binary: `bun run build:binary:macos-arm64`
 - Smoke test: `bun run smoke`
+
+## Homebrew Release Contract
+- Published install path is `brew tap Yaphet2015/tap && brew install ya-skills`.
+- The tap repository is `Yaphet2015/homebrew-tap`.
+- The release workflow publishes macOS arm64 assets named `ya-skills-v<version>-macos-arm64.tar.gz` plus `.sha256`.
+- Release tarballs must contain the compiled `yk` binary and the `skills/` catalog.
+- Packaged installs rely on `YA_SKILLS_CATALOG_DIR` pointing to the installed catalog; keep this env override working before changing catalog lookup.
+- Keep `bun.lock` public-registry compatible for GitHub-hosted release runners.
+- After a release, update the Homebrew formula version, asset URL, and sha256 in the tap.
 
 ## Editing Guidance
 - Use Bun workspace package imports instead of deep relative imports across packages.
