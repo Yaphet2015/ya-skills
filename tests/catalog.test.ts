@@ -101,3 +101,31 @@ test("root catalog exposes the pbench skill and its yk function refs", async () 
     { domain: "pbench", action: "project-link" }
   ]);
 });
+
+test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => {
+  await writeSkill("homebrew-only", {
+    name: "homebrew-only",
+    description: "Packaged catalog skill"
+  });
+
+  const process = Bun.spawn(["bun", "packages/cli/src/cli.ts", "list"], {
+    cwd: resolve("."),
+    env: {
+      ...Bun.env,
+      YA_SKILLS_CATALOG_DIR: catalogDir
+    },
+    stderr: "pipe",
+    stdout: "pipe"
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+    process.exited
+  ]);
+
+  expect(stderr).toBe("");
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain("homebrew-only - Packaged catalog skill");
+  expect(stdout).not.toContain("pbench");
+});

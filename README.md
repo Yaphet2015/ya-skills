@@ -11,6 +11,13 @@ This is a Bun workspace monorepo:
 - `packages/functions-demo` owns the independent `yk demo <action>` command package.
 - `packages/functions-pbench` owns the independent `yk pbench <action>` command package.
 
+## Installation
+
+```sh
+brew tap Yaphet2015/tap
+brew install ya-skills
+```
+
 ## Commands
 
 - `yk list` lists local catalog skills.

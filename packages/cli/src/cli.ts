@@ -125,7 +125,12 @@ async function loadDefaultCatalog(): Promise<SkillCatalog> {
 
 function catalogCandidates(): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
-  return [join(here, "..", "..", "..", "skills"), join(process.cwd(), "skills")];
+  const envCatalogDir = process.env.YA_SKILLS_CATALOG_DIR?.trim();
+  return [
+    ...(envCatalogDir ? [envCatalogDir] : []),
+    join(here, "..", "..", "..", "skills"),
+    join(process.cwd(), "skills")
+  ];
 }
 
 function printHelp() {
