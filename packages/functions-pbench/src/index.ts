@@ -71,12 +71,16 @@ type ParsedArgs = {
   positionals: string[];
 };
 
-export function createPbenchCommands(): FunctionCommand[] {
+type PbenchCommandOptions = {
+  home?: string;
+};
+
+export function createPbenchCommands(options: PbenchCommandOptions = {}): FunctionCommand[] {
   return [
     {
       domain: "pbench",
       action: "capture",
-      description: "Create a temporary pbench authoring transaction from a Codex session.",
+      description: "Create a persistent pbench authoring transaction from a Codex session.",
       run: async (args) => {
         const parsed = parseArgs(args);
         const source = getString(parsed, "source");
@@ -86,15 +90,16 @@ export function createPbenchCommands(): FunctionCommand[] {
         const workspace = getString(parsed, "workspace");
         const yes = getBoolean(parsed, "yes");
         const workspaceRoot = workspace
-          ? await resolveWorkspaceRoot({ workspace, cwd: process.cwd(), createDefault: yes })
-          : await resolveWorkspaceRoot({ cwd: process.cwd(), createDefault: yes });
+          ? await resolveWorkspaceRoot({ workspace, cwd: process.cwd(), home: options.home, createDefault: yes })
+          : await resolveWorkspaceRoot({ cwd: process.cwd(), home: options.home, createDefault: yes });
         const result = await captureCodexSession({
           cwd: process.cwd(),
           workspaceRoot,
           input: getString(parsed, "input"),
           sessionId: getString(parsed, "session-id"),
           yes,
-          title: getString(parsed, "title")
+          title: getString(parsed, "title"),
+          home: options.home
         });
         return printJson({
           ...result,
@@ -230,6 +235,10 @@ function expandHome(path: string, home = homedir()): string {
 function absolutePath(path: string, cwd = process.cwd(), home = homedir()): string {
   const expanded = expandHome(path, home);
   return isAbsolute(expanded) ? resolve(expanded) : resolve(cwd, expanded);
+}
+
+function pbenchCaptureRoot(home = homedir()): string {
+  return join(home, ".ya-skills", "pbench");
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -845,7 +854,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     }
   }
   const { repoId, ref } = syncRepoCache(workspaceRoot, sourceRepoRoot, baselineCommit, caseId);
-  const transactionRoot = join(tmpdir(), "personal-bench");
+  const transactionRoot = pbenchCaptureRoot(home);
   await mkdir(transactionRoot, { recursive: true });
   const transactionPath = await mkdtemp(join(transactionRoot, `tx_${slug}_${stamp(options.now)}_`));
   const caseDir = join(transactionPath, "case");

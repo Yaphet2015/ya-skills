@@ -26,6 +26,13 @@ async function temp(prefix: string): Promise<string> {
   return path;
 }
 
+async function captureTestCodexSession(
+  options: Parameters<typeof captureCodexSession>[0]
+): Promise<Awaited<ReturnType<typeof captureCodexSession>>> {
+  const home = options?.home ?? (await temp("capture-home"));
+  return captureCodexSession({ ...options, home });
+}
+
 function git(cwd: string, args: string[]): string {
   return execFileSync("git", args, {
     cwd,
@@ -292,7 +299,7 @@ describe("pbench codex capture flow", () => {
     let seenPlan: Record<string, unknown> | undefined;
 
     await expect(
-      captureCodexSession({
+      captureTestCodexSession({
         cwd: repo,
         workspaceRoot,
         input: sessionJsonl,
@@ -316,6 +323,7 @@ describe("pbench codex capture flow", () => {
 
   test("capture command pre-fills private docs from session evidence without TODO authoring placeholders", async () => {
     const repo = await makeRepo();
+    const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
     const commit = git(repo, ["rev-parse", "HEAD"]);
@@ -334,7 +342,7 @@ describe("pbench codex capture flow", () => {
     const originalCwd = process.cwd();
     process.chdir(repo);
     try {
-      const output = await createPbenchCommands()
+      const output = await createPbenchCommands({ home })
         .find((command) => command.action === "capture")
         ?.run([
           "--source",
@@ -401,7 +409,7 @@ describe("pbench codex capture flow", () => {
       ]
     });
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -428,6 +436,7 @@ describe("pbench codex capture flow", () => {
 
   test("capture command warns when extracted replay evidence is empty", async () => {
     const repo = await makeRepo();
+    const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
     const commit = git(repo, ["rev-parse", "HEAD"]);
@@ -452,7 +461,7 @@ describe("pbench codex capture flow", () => {
     const originalCwd = process.cwd();
     process.chdir(repo);
     try {
-      const output = await createPbenchCommands()
+      const output = await createPbenchCommands({ home })
         .find((command) => command.action === "capture")
         ?.run(["--source", "codex", "--workspace", workspaceRoot, "--input", sessionJsonl, "--yes"]);
       const result = JSON.parse(String(output));
@@ -490,7 +499,7 @@ describe("pbench codex capture flow", () => {
       }
     ]);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -519,7 +528,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeCodexSession(repo, commit);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -555,6 +564,28 @@ describe("pbench codex capture flow", () => {
     await expect(stat(tx.transactionPath)).rejects.toThrow();
   });
 
+  test("stores capture authoring transactions under the ya-skills home cache", async () => {
+    const repo = await makeRepo();
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      home,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Persistent capture"
+    });
+
+    expect(tx.transactionPath).toContain(join(home, ".ya-skills", "pbench", "tx_persistent-capture_"));
+    await expect(stat(tx.transactionPath)).resolves.toBeTruthy();
+    await expect(stat(tx.caseDir)).resolves.toBeTruthy();
+  });
+
   test("extracts modern Codex payload messages, tool calls, and correction evidence", async () => {
     const repo = await makeRepo();
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
@@ -562,7 +593,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeModernCodexSession({ repo, commit });
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -606,7 +637,7 @@ describe("pbench codex capture flow", () => {
     const subjectGitRoot = git(subjectRepo, ["rev-parse", "--show-toplevel"]);
     const sessionJsonl = await writeModernCodexSession({ repo: subjectRepo, commit: subjectCommit });
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: captureRepo,
       workspaceRoot,
       input: sessionJsonl,
@@ -639,7 +670,7 @@ describe("pbench codex capture flow", () => {
       })}\n`
     );
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       sessionId: "scan-session-1",
@@ -671,7 +702,7 @@ describe("pbench codex capture flow", () => {
       }
     ]);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -700,7 +731,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeCodexSession(repo, commit);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -721,7 +752,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeCodexSession(repo, commit);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -757,7 +788,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeCodexSession(repo, commit);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -779,7 +810,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeCodexSession(repo, commit);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -806,7 +837,7 @@ describe("pbench codex capture flow", () => {
     const commit = git(repo, ["rev-parse", "HEAD"]);
     const sessionJsonl = await writeCodexSession(repo, commit);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
@@ -852,7 +883,7 @@ describe("pbench codex capture flow", () => {
       }
     ]);
 
-    const tx = await captureCodexSession({
+    const tx = await captureTestCodexSession({
       cwd: repo,
       workspaceRoot,
       input: sessionJsonl,
