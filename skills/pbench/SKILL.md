@@ -44,10 +44,10 @@ After the user approves capture:
 3. Edit the transaction `case/` bundle:
    - read `public/replay.md` and `public/context.manifest.json` to understand the replay capsule;
    - refine `public/prompt.md`, `public/context.md`, `public/environment.md`, `public/replay.md`, and public context files as the future agent-visible task input;
-   - read `private/failure-draft.md`, then fill `private/failure.md` with the confirmed task/session-level outcome mismatch;
-   - fill `private/success.md` with observable success criteria;
-   - fill `private/verification.md` with how completion is checked;
-   - implement at least one completion validator under `private/validators/check-completion.mjs`.
+   - review generated `private/failure.md`, `private/success.md`, and `private/verification.md` against `private/failure-draft.md` and the raw session transcript;
+   - fix generated private docs only when the session evidence is missing, ambiguous, or incomplete;
+   - if `private/validators/check-completion.mjs` says `PBENCH_AUTHORING_REQUIRED`, implement the validator from the correction evidence and private transcript;
+   - ask the user for clarification only when the captured session does not identify the failure or does not imply an observable completion check.
 4. Run `yk pbench validate --transaction <tx-path> --strict` until it passes.
 5. Run `yk pbench finalize --transaction <tx-path>`.
 

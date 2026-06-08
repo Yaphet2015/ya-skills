@@ -46,6 +46,21 @@ async function makeRepo(): Promise<string> {
   return repo;
 }
 
+async function makeRepoWithFailingTest(): Promise<string> {
+  const repo = await temp("repo");
+  git(repo, ["init"]);
+  git(repo, ["config", "user.email", "pbench@example.local"]);
+  git(repo, ["config", "user.name", "PBench Test"]);
+  await writeFile(join(repo, "package.json"), "{\"scripts\":{\"test\":\"node check-done.mjs\"}}\n");
+  await writeFile(
+    join(repo, "check-done.mjs"),
+    "import { existsSync } from 'node:fs';\nprocess.exit(existsSync('done.txt') ? 0 : 1);\n"
+  );
+  git(repo, ["add", "."]);
+  git(repo, ["commit", "-m", "baseline"]);
+  return repo;
+}
+
 async function writeCodexSession(repo: string, commit: string, records: Record<string, unknown>[] = []): Promise<string> {
   const sessionJsonl = join(await temp("session"), "session.jsonl");
   await writeFile(
@@ -299,12 +314,23 @@ describe("pbench codex capture flow", () => {
     });
   });
 
-  test("capture command prints initial validation warnings for authoring placeholders", async () => {
+  test("capture command pre-fills private docs from session evidence without TODO authoring placeholders", async () => {
     const repo = await makeRepo();
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
     const commit = git(repo, ["rev-parse", "HEAD"]);
-    const sessionJsonl = await writeCodexSession(repo, commit);
+    const sessionJsonl = await writeCodexSession(repo, commit, [
+      {
+        type: "message",
+        role: "assistant",
+        content: "Done, all checks pass."
+      },
+      {
+        type: "message",
+        role: "user",
+        content: "This is still wrong; done.txt was never created."
+      }
+    ]);
     const originalCwd = process.cwd();
     process.chdir(repo);
     try {
@@ -322,13 +348,82 @@ describe("pbench codex capture flow", () => {
           "--yes"
         ]);
       const result = JSON.parse(String(output));
+      const failure = await readFile(join(result.caseDir, "private", "failure.md"), "utf8");
+      const success = await readFile(join(result.caseDir, "private", "success.md"), "utf8");
+      const verification = await readFile(join(result.caseDir, "private", "verification.md"), "utf8");
+      const validator = await readFile(join(result.caseDir, "private", "validators", "check-completion.mjs"), "utf8");
 
       expect(result.initialValidation.ok).toBe(false);
-      expect(result.initialValidation.warnings).toContain("private/failure.md still contains TODO");
-      expect(result.next).toContain(`Fill ${result.caseDir}`);
+      expect(result.initialValidation.warnings).not.toContain("private/failure.md still contains TODO");
+      expect(result.initialValidation.warnings).not.toContain("private/success.md still contains TODO");
+      expect(result.initialValidation.warnings).not.toContain("private/verification.md still contains TODO");
+      expect(result.initialValidation.warnings).toContain(
+        "private/validators/check-completion.mjs needs completion logic from session correction evidence"
+      );
+      expect(failure).toContain("done.txt was never created");
+      expect(success).toContain("Make tests pass by creating done.txt");
+      expect(success).toContain("done.txt was never created");
+      expect(verification).toContain("completion validator");
+      expect(validator).toContain("PBENCH_AUTHORING_REQUIRED");
+      expect(`${failure}\n${success}\n${verification}`).not.toContain("TODO");
+      expect(result.next).toContain(`Review ${result.caseDir}`);
     } finally {
       process.chdir(originalCwd);
     }
+  });
+
+  test("capture blocks strict validation only for the validator when correction history exists without failed verification evidence", async () => {
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeModernCodexSession({
+      repo,
+      commit,
+      records: [
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "exec_command",
+            call_id: "call_3",
+            arguments: JSON.stringify({ cmd: "bun test", workdir: repo })
+          }
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call_output",
+            call_id: "call_3",
+            output: "Process exited with code 0\nOutput:\nAll tests passed\n"
+          }
+        }
+      ]
+    });
+
+    const tx = await captureCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Suggestion diff still broken"
+    });
+    const warnings = (await createPbenchCommands()
+      .find((command) => command.action === "validate")
+      ?.run(["--case", tx.caseDir])) as string;
+    const validation = JSON.parse(warnings);
+    const failure = await readFile(join(tx.caseDir, "private", "failure.md"), "utf8");
+    const success = await readFile(join(tx.caseDir, "private", "success.md"), "utf8");
+    const verification = await readFile(join(tx.caseDir, "private", "verification.md"), "utf8");
+    const strictValidation = await strictValidateTransaction(tx.transactionPath);
+
+    expect(validation.ok).toBe(true);
+    expect(strictValidation.ok).toBe(false);
+    expect(strictValidation.errors.join("\n")).toContain("Unimplemented completion validator");
+    expect(failure).toContain("suggestionDiff");
+    expect(success).toContain("Fix the CR suggestionDiff parse failure before upload.");
+    expect(verification).toContain("No failed verification command was detected");
+    expect(`${failure}\n${success}\n${verification}`).not.toContain("TODO");
   });
 
   test("capture command warns when extracted replay evidence is empty", async () => {
@@ -367,9 +462,54 @@ describe("pbench codex capture flow", () => {
       expect(result.initialValidation.warnings).toContain(
         "private/failure-draft.md has no later user correction or command failure evidence"
       );
+      expect(result.initialValidation.warnings).toContain("private/failure.md needs failure evidence from session history");
+      expect(result.initialValidation.warnings).toContain(
+        "private/validators/check-completion.mjs needs completion logic from session correction evidence"
+      );
     } finally {
       process.chdir(originalCwd);
     }
+  });
+
+  test("generates a completion validator from a failed replayable verification command", async () => {
+    const repo = await makeRepoWithFailingTest();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit, [
+      {
+        type: "exec_command",
+        arguments: { cmd: "bun run test", workdir: repo },
+        exit_code: 1,
+        stderr: "done.txt is missing"
+      },
+      {
+        type: "message",
+        role: "user",
+        content: "The benchmark should be complete only when done.txt exists and the test passes."
+      }
+    ]);
+
+    const tx = await captureCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+    const validator = await readFile(join(tx.caseDir, "private", "validators", "check-completion.mjs"), "utf8");
+    const verification = await readFile(join(tx.caseDir, "private", "verification.md"), "utf8");
+    const validation = await strictValidateTransaction(tx.transactionPath);
+
+    expect(validator).toContain("bun run test");
+    expect(validator).not.toContain("PBENCH_AUTHORING_REQUIRED");
+    expect(verification).toContain("bun run test");
+    expect(validation.ok).toBe(true);
+    expect(validation.validatorOutcomes?.[0]).toMatchObject({
+      id: "completion",
+      expected: "fail",
+      actual: "fail"
+    });
   });
 
   test("captures a Codex session, strict-validates the baseline failure, then finalizes the case", async () => {

@@ -26,6 +26,10 @@ This is a Bun workspace monorepo:
 
 `yk pbench` captures task/session-level outcome mismatch from Codex work into local private personal benchmark cases. It is a case-authoring workflow, not a benchmark runner.
 
+> I created pbench because public benchmarks and general rules packages cannot answer the question I actually need answered during daily agent work: did this model, skill, rules package, or harness change make my own workflow better? PBench turns real Codex misses into reproducible private cases with explicit success criteria and replay evidence, so failures become regression assets instead of one-off frustration.
+>
+> The important constraint is low-friction capture. When an agent fails, the useful evidence is still in the session: prompts, cwd, Git state, commands, touched files, tool calls, errors, sandbox and approval context, and the user's correction. PBench preserves that context before it disappears, while keeping private material separate from the public replay capsule. Later, those cases can be used to judge whether a workflow change reduced manual intervention, used tools correctly, completed verification, and solved the original task.
+
 - `yk pbench workspace-init <path>` initializes a local pbench workspace.
 - `yk pbench project-link --workspace <path>` links the current project to a workspace.
 - `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` creates a temporary authoring transaction, asks for confirmation unless `--yes` is passed, and prints initial authoring validation warnings.
@@ -34,7 +38,7 @@ This is a Bun workspace monorepo:
 
 Capture supports both legacy and current Codex JSONL shapes. When a session records its own cwd and Git metadata, capture uses that session repository and baseline commit even if `yk pbench capture --input <jsonl>` is launched from another repo. If `--session-id` is used and the Codex index does not include file paths, capture scans `~/.codex/sessions/**/*.jsonl` for the matching session id.
 
-Capture writes a replay context capsule into `public/`: `replay.md`, `context.manifest.json`, repo agent instructions, command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and a failure draft in `private/`. Initial authoring warnings call out empty replay evidence such as missing task prompts, missing command observations, or failure drafts with no correction/error evidence. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
+Capture writes a replay context capsule into `public/`: `replay.md`, `context.manifest.json`, repo agent instructions, command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and generated private authoring docs in `private/`. Private `failure.md`, `success.md`, and `verification.md` are prefilled from session corrections and error evidence; failed replayable verification commands can become completion validators. If the session does not contain enough evidence, initial authoring warnings identify the missing failure or validator work before finalization. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
 
 Install the agent-facing workflow with `yk install pbench`.
 
