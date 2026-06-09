@@ -1,0 +1,4 @@
+{
+  "name": "video-transcript",
+  "description": "Fetch a transcript from a video URL or local caption/audio/video file, using captions first and audio-only Whisper fallback when needed."
+}

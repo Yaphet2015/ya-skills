@@ -3,3 +3,5 @@ dist/
 .DS_Store
 *.log
 SPEC/
+__pycache__/
+*.py[cod]

@@ -102,6 +102,14 @@ test("root catalog exposes the pbench skill and its yk function refs", async () 
   ]);
 });
 
+test("root catalog exposes the video-transcript skill", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const videoTranscript = catalog.byName.get("video-transcript");
+
+  expect(videoTranscript?.description).toContain("transcript");
+  expect(videoTranscript?.functions).toEqual([]);
+});
+
 test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => {
   await writeSkill("homebrew-only", {
     name: "homebrew-only",

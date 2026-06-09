@@ -10,6 +10,7 @@ This is a Bun workspace monorepo:
 - `packages/core` owns shared catalog, install, uninstall, target, dependency, and function-registry logic.
 - `packages/functions-demo` owns the independent `yk demo <action>` command package.
 - `packages/functions-pbench` owns the independent `yk pbench <action>` command package.
+- `skills/video-transcript` owns the agent-facing video URL/file → transcript workflow.
 
 ## Installation
 
@@ -52,6 +53,19 @@ Capture supports both legacy and current Codex JSONL shapes. When a session reco
 Capture writes a replay context capsule into `public/`: `replay.md`, `context.manifest.json`, repo agent instructions, command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and generated private authoring docs in `private/`. Private `failure.md`, `success.md`, and `verification.md` are prefilled from session corrections and error evidence; failed replayable verification commands can become completion validators. If the session does not contain enough evidence, initial authoring warnings identify the missing failure or validator work before finalization. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
 
 Install the agent-facing workflow with `yk install pbench`.
+
+### Video Transcript
+
+`video-transcript` is an agent-facing skill for turning a video URL or local media/caption file into a transcript. It uses captions first, then falls back to audio-only local Whisper transcription when captions are missing.
+
+```sh
+yk install video-transcript
+python3 .agents/skills/video-transcript/scripts/video_transcript.py "https://www.youtube.com/watch?v=..." \
+  --format markdown \
+  --output /absolute/path/transcript.md
+```
+
+The skill intentionally avoids full-video downloads for transcript-only work. URL inputs require `yt-dlp`; ASR fallback requires either `mlx-whisper` or `faster-whisper`.
 
 ## Development
 
