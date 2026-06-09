@@ -31,6 +31,7 @@ test("keeps pbench authoring commands in their own function package", () => {
   expect(commands.map((command) => `${command.domain} ${command.action}`)).toEqual([
     "pbench capture",
     "pbench validate",
+    "pbench export-replay",
     "pbench finalize",
     "pbench workspace-init",
     "pbench project-link"

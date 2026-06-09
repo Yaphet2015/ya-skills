@@ -764,16 +764,117 @@ describe("pbench codex capture flow", () => {
     const contextManifest = JSON.parse(await readFile(join(tx.caseDir, "public", "context.manifest.json"), "utf8"));
 
     expect(manifest.documents.replay).toBe("public/replay.md");
+    expect(manifest.documents.replayManifest).toBe("public/replay.manifest.json");
     expect(manifest.documents.contextManifest).toBe("public/context.manifest.json");
     expect(manifest.documents.agentInstructions).toBe("public/agent-instructions.md");
+    expect(manifest.documents.keyObservations).toBe("public/key-observations.md");
     expect(manifest.documents.commandObservations).toBe("public/command-observations.md");
     expect(manifest.documents.failureDraft).toBe("private/failure-draft.md");
     expect(replay).toContain("Done file missing");
     expect(replay).toContain(commit);
-    expect(replay).toContain("public/context.manifest.json");
+    expect(replay).toContain("public/replay.manifest.json");
     expect(contextManifest.caseId).toBe(tx.caseId);
     expect(contextManifest.baseline.commit).toBe(commit);
+    expect(contextManifest.replayFiles.replayManifest).toBe("public/replay.manifest.json");
+    expect(contextManifest.replayFiles.keyObservations).toBe("public/key-observations.md");
     expect(contextManifest.replayFiles.commandObservations).toBe("public/command-observations.md");
+    expect(contextManifest.replayRequirements).toEqual({
+      profile: "local",
+      network: "unknown",
+      requiredEnv: [],
+      notes: []
+    });
+    await expect(readFile(join(tx.caseDir, "public", "replay.manifest.json"), "utf8")).resolves.toContain(tx.caseId);
+  });
+
+  test("exports a public-only replay capsule without private evaluator files", async () => {
+    const repo = await makeRepo();
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      home,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+    const outDir = join(await temp("export-root"), "replay");
+
+    const output = await createPbenchCommands({ home })
+      .find((command) => command.action === "export-replay")
+      ?.run(["--case", tx.caseDir, "--out", outDir]);
+    const result = JSON.parse(String(output));
+    const publicCase = JSON.parse(await readFile(join(outDir, "case.public.json"), "utf8"));
+
+    expect(result.outDir).toBe(outDir);
+    await expect(stat(join(outDir, "public", "prompt.md"))).resolves.toBeTruthy();
+    await expect(stat(join(outDir, "public", "replay.manifest.json"))).resolves.toBeTruthy();
+    await expect(stat(join(outDir, "case.json"))).rejects.toThrow();
+    await expect(stat(join(outDir, "private", "failure.md"))).rejects.toThrow();
+    expect(Object.values(publicCase.documents).every((value) => typeof value === "string" && value.startsWith("public/"))).toBe(true);
+    expect(JSON.stringify(publicCase)).not.toContain("private/failure");
+    expect(JSON.stringify(publicCase)).not.toContain("private/validators");
+    expect(publicCase.documents.prompt).toBe("public/prompt.md");
+    expect(publicCase.documents.failure).toBeUndefined();
+  });
+
+  test("rejects public replay export when public files reference private evaluator paths", async () => {
+    const repo = await makeRepo();
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      home,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+    await writeFile(join(tx.caseDir, "public", "leak.md"), "Read private/failure.md to pass.\n");
+
+    await expect(
+      createPbenchCommands({ home })
+        .find((command) => command.action === "export-replay")
+        ?.run(["--case", tx.caseDir, "--out", join(await temp("export-root"), "replay")])
+    ).rejects.toThrow("private evaluator path");
+  });
+
+  test("strict validation fails before replay when required replay environment is missing", async () => {
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit);
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+    const manifestPath = join(tx.caseDir, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.replayRequirements = {
+      profile: "live-integration",
+      network: "required",
+      requiredEnv: ["PBENCH_TEST_MISSING_ENV_FOR_STRICT_VALIDATION"],
+      notes: ["test-only required env"]
+    };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    const validation = await strictValidateTransaction(tx.transactionPath);
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors.join("\n")).toContain("Missing required replay environment variables");
+    expect(validation.errors.join("\n")).toContain("PBENCH_TEST_MISSING_ENV_FOR_STRICT_VALIDATION");
+    expect(validation.errors.join("\n")).not.toContain(String(process.env.PBENCH_TEST_MISSING_ENV_FOR_STRICT_VALIDATION));
   });
 
   test("captures repo agent instructions and installed skill names into public replay context", async () => {
@@ -898,5 +999,50 @@ describe("pbench codex capture flow", () => {
     expect(observations).toContain("missing done.txt");
     expect(failureDraft).toContain("This is still wrong");
     expect(failureDraft).toContain("missing done.txt");
+  });
+
+  test("writes key observations for failed and verification commands without skill bootstrap noise", async () => {
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit, [
+      {
+        type: "exec_command",
+        arguments: {
+          cmd: "sed -n '1,120p' /Users/suosuo/.codex/plugins/cache/openai-curated/superpowers/x/skills/using-superpowers/SKILL.md",
+          workdir: repo
+        },
+        exit_code: 0,
+        stdout: "bootstrap skill"
+      },
+      {
+        type: "exec_command",
+        arguments: { cmd: "bun test", workdir: repo },
+        exit_code: 1,
+        stdout: "test output",
+        stderr: "missing done.txt"
+      },
+      {
+        type: "exec_command",
+        arguments: { cmd: "yk pbench capture --source codex --yes", workdir: repo },
+        exit_code: 1,
+        stderr: "No matching Codex session found"
+      }
+    ]);
+
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "Done file missing"
+    });
+    const keyObservations = await readFile(join(tx.caseDir, "public", "key-observations.md"), "utf8");
+
+    expect(keyObservations).toContain("bun test");
+    expect(keyObservations).toContain("missing done.txt");
+    expect(keyObservations).not.toContain("using-superpowers");
+    expect(keyObservations).not.toContain("yk pbench capture");
   });
 });

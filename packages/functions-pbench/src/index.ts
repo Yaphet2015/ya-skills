@@ -14,6 +14,17 @@ const MAX_PUBLIC_TEXT_FILE_BYTES = 64 * 1024;
 const MAX_PUBLIC_PATCH_BYTES = 512 * 1024;
 const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
 const VALIDATOR_AUTHORING_SENTINEL = "PBENCH_AUTHORING_REQUIRED";
+const PUBLIC_REPLAY_MANIFEST_PATH = "public/replay.manifest.json";
+const PUBLIC_CONTEXT_MANIFEST_PATH = "public/context.manifest.json";
+const PUBLIC_KEY_OBSERVATIONS_PATH = "public/key-observations.md";
+const PUBLIC_COMMAND_OBSERVATIONS_PATH = "public/command-observations.md";
+
+type ReplayRequirements = {
+  profile: "local" | "live-integration";
+  network: "none" | "optional" | "required" | "unknown";
+  requiredEnv: string[];
+  notes: string[];
+};
 
 export type ValidationResult = {
   ok: boolean;
@@ -138,6 +149,29 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
     },
     {
       domain: "pbench",
+      action: "export-replay",
+      description: "Export a public-only pbench replay capsule for an agent.",
+      run: async (args) => {
+        const parsed = parseArgs(args);
+        const caseInput = requireString(parsed, "case", "yk pbench export-replay requires --case <case-dir-or-case-id>");
+        const out = requireString(parsed, "out", "yk pbench export-replay requires --out <dir>");
+        const caseDir = await resolveCaseDirInput({
+          caseInput,
+          cwd: process.cwd(),
+          home: options.home,
+          workspace: getString(parsed, "workspace")
+        });
+        return printJson(
+          await exportReplayCapsule({
+            caseDir,
+            outDir: absolutePath(out, process.cwd(), options.home ?? homedir()),
+            force: getBoolean(parsed, "force")
+          })
+        );
+      }
+    },
+    {
+      domain: "pbench",
       action: "finalize",
       description: "Finalize a strict-validated pbench transaction.",
       run: async (args) => {
@@ -239,6 +273,27 @@ function absolutePath(path: string, cwd = process.cwd(), home = homedir()): stri
 
 function pbenchCaptureRoot(home = homedir()): string {
   return join(home, ".ya-skills", "pbench");
+}
+
+function defaultReplayRequirements(): ReplayRequirements {
+  return { profile: "local", network: "unknown", requiredEnv: [], notes: [] };
+}
+
+function normalizeReplayRequirements(value: unknown): ReplayRequirements {
+  const object = asObject(value) ?? {};
+  const profile = object.profile === "live-integration" ? "live-integration" : "local";
+  const networkValues = new Set(["none", "optional", "required", "unknown"]);
+  const network = typeof object.network === "string" && networkValues.has(object.network) ? object.network : "unknown";
+  return {
+    profile,
+    network: network as ReplayRequirements["network"],
+    requiredEnv: Array.isArray(object.requiredEnv)
+      ? object.requiredEnv.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : [],
+    notes: Array.isArray(object.notes)
+      ? object.notes.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : []
+  };
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -386,6 +441,100 @@ export async function resolveWorkspaceRoot(
   throw new Error(
     "No personal-bench workspace found. Run `yk pbench workspace-init ~/.personal-bench/workspace` or pass --workspace."
   );
+}
+
+async function resolveCaseDirInput(options: { caseInput: string; cwd: string; home?: string; workspace?: string }): Promise<string> {
+  const home = options.home ?? homedir();
+  const candidatePath = absolutePath(options.caseInput, options.cwd, home);
+  if (await pathExists(join(candidatePath, "case.json"))) {
+    return candidatePath;
+  }
+  if (isAbsolute(expandHome(options.caseInput, home)) || options.caseInput.includes(sep) || options.caseInput.includes("/")) {
+    throw new Error(`PBench case not found: ${candidatePath}`);
+  }
+  const workspaceRoot = options.workspace
+    ? await resolveWorkspaceRoot({ workspace: options.workspace, cwd: options.cwd, home })
+    : await resolveWorkspaceRoot({ cwd: options.cwd, home });
+  const caseDir = join(workspaceRoot, "cases", options.caseInput);
+  if (!(await pathExists(join(caseDir, "case.json")))) {
+    throw new Error(`PBench case not found: ${caseDir}`);
+  }
+  return caseDir;
+}
+
+async function exportReplayCapsule(options: {
+  caseDir: string;
+  outDir: string;
+  force?: boolean;
+}): Promise<{ outDir: string; caseId: string; exported: string[] }> {
+  const manifest = await readJson(join(options.caseDir, "case.json"));
+  const publicDir = join(options.caseDir, "public");
+  if (!(await pathExists(publicDir))) {
+    throw new Error(`Missing public replay directory: ${publicDir}`);
+  }
+  await assertPublicReplayHasNoPrivateReferences(publicDir);
+  if (await pathExists(options.outDir)) {
+    if (!options.force) {
+      throw new Error(`Output directory already exists: ${options.outDir}. Pass --force to replace it.`);
+    }
+    await rm(options.outDir, { recursive: true, force: true });
+  }
+  await mkdir(options.outDir, { recursive: true });
+  await cp(publicDir, join(options.outDir, "public"), { recursive: true, force: false });
+  await writeJson(join(options.outDir, "case.public.json"), buildPublicCaseManifest(manifest));
+  return { outDir: options.outDir, caseId: String(manifest.id ?? ""), exported: ["case.public.json", "public/"] };
+}
+
+function buildPublicCaseManifest(manifest: JsonObject): JsonObject {
+  const documents = asObject(manifest.documents) ?? {};
+  const publicDocuments = Object.fromEntries(
+    Object.entries(documents).filter(([, value]) => typeof value === "string" && value.startsWith("public/"))
+  );
+  return {
+    $schema: manifest.$schema,
+    schemaVersion: manifest.schemaVersion,
+    id: manifest.id,
+    title: manifest.title,
+    status: manifest.status,
+    privacy: manifest.privacy,
+    metadata: manifest.metadata,
+    documents: publicDocuments,
+    subjects: manifest.subjects,
+    setupCommands: manifest.setupCommands,
+    replayRequirements: normalizeReplayRequirements(manifest.replayRequirements)
+  };
+}
+
+async function assertPublicReplayHasNoPrivateReferences(publicDir: string): Promise<void> {
+  const hits: string[] = [];
+  for (const file of await listFilesRecursively(publicDir)) {
+    let text: string;
+    try {
+      text = await readFile(file, "utf8");
+    } catch {
+      continue;
+    }
+    if (/(^|[\s"'`(])private[\\/]/.test(text)) {
+      hits.push(relativePathFrom(publicDir, file));
+    }
+  }
+  if (hits.length > 0) {
+    throw new Error(`Public replay export contains private evaluator path references: ${hits.join(", ")}`);
+  }
+}
+
+async function listFilesRecursively(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listFilesRecursively(path)));
+    } else if (entry.isFile()) {
+      files.push(path);
+    }
+  }
+  return files;
 }
 
 export function resolveGitRoot(cwdInput: string): string {
@@ -862,6 +1011,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
   await mkdir(join(transactionPath, "replay"), { recursive: true });
 
   const createdAt = nowIso(options.now);
+  const replayRequirements = defaultReplayRequirements();
   const manifest = {
     $schema: "https://personal-bench.local/schemas/case.schema.json",
     schemaVersion: 1,
@@ -881,9 +1031,11 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
       context: "public/context.md",
       environment: "public/environment.md",
       replay: "public/replay.md",
-      contextManifest: "public/context.manifest.json",
+      replayManifest: PUBLIC_REPLAY_MANIFEST_PATH,
+      contextManifest: PUBLIC_CONTEXT_MANIFEST_PATH,
       agentInstructions: "public/agent-instructions.md",
-      commandObservations: "public/command-observations.md",
+      keyObservations: PUBLIC_KEY_OBSERVATIONS_PATH,
+      commandObservations: PUBLIC_COMMAND_OBSERVATIONS_PATH,
       failure: "private/failure.md",
       failureDraft: "private/failure-draft.md",
       successCriteria: "private/success.md",
@@ -910,7 +1062,8 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
         timeoutSeconds: 120,
         baselineExpected: "fail"
       }
-    ]
+    ],
+    replayRequirements
   };
   const authoring = buildAuthoringArtifacts(rawTitle, extracted);
 
@@ -970,7 +1123,8 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     captureCwd: subject.sourceCwd,
     baselineCommit,
     setupCommands: manifest.setupCommands,
-    extracted
+    extracted,
+    replayRequirements
   });
   await writeJson(join(transactionPath, "transaction.json"), {
     schemaVersion: 1,
@@ -1160,6 +1314,7 @@ type ReplayContextOptions = {
   baselineCommit: string;
   setupCommands: JsonObject[];
   extracted: ExtractedCodexSession;
+  replayRequirements: ReplayRequirements;
 };
 
 type PublicContextFile = {
@@ -1171,6 +1326,7 @@ type PublicContextFile = {
 async function writeReplayContext(options: ReplayContextOptions): Promise<void> {
   const warnings: string[] = [];
   const agentInstructionsPath = await writeAgentInstructions(options.caseDir, options.sourceRepoRoot, options.captureCwd);
+  const keyObservationsPath = await writeKeyObservations(options.caseDir, options.extracted);
   const commandObservationsPath = await writeCommandObservations(options.caseDir, options.extracted);
   const startingPatchPath = await writeStartingPatch(options.caseDir, options.sourceRepoRoot, warnings);
   const contextFiles = await writeUntrackedContextFiles(options.caseDir, options.sourceRepoRoot, warnings);
@@ -1178,8 +1334,10 @@ async function writeReplayContext(options: ReplayContextOptions): Promise<void> 
 
   const replayFiles = {
     replay: "public/replay.md",
-    contextManifest: "public/context.manifest.json",
+    replayManifest: PUBLIC_REPLAY_MANIFEST_PATH,
+    contextManifest: PUBLIC_CONTEXT_MANIFEST_PATH,
     agentInstructions: agentInstructionsPath,
+    keyObservations: keyObservationsPath,
     commandObservations: commandObservationsPath,
     startingPatch: startingPatchPath
   };
@@ -1202,10 +1360,12 @@ async function writeReplayContext(options: ReplayContextOptions): Promise<void> 
     setupCommands: options.setupCommands,
     replayFiles,
     contextFiles,
+    replayRequirements: options.replayRequirements,
     warnings
   };
 
-  await writeJson(join(options.caseDir, "public", "context.manifest.json"), contextManifest);
+  await writeJson(join(options.caseDir, PUBLIC_CONTEXT_MANIFEST_PATH), contextManifest);
+  await writeJson(join(options.caseDir, PUBLIC_REPLAY_MANIFEST_PATH), contextManifest);
   await writeFile(join(options.caseDir, "public", "replay.md"), renderReplayMarkdown(options, replayFiles, contextFiles, warnings));
 }
 
@@ -1239,7 +1399,7 @@ function renderReplayMarkdown(
     "",
     `- Repo root at capture: ${options.sourceRepoRoot}`,
     `- Baseline commit: ${options.baselineCommit}`,
-    `- Context manifest: ${String(replayFiles.contextManifest)}`,
+    `- Replay manifest: ${String(replayFiles.replayManifest)}`,
     "",
     "## Setup",
     "",
@@ -1253,9 +1413,10 @@ function renderReplayMarkdown(
     "",
     `Read \`${String(replayFiles.agentInstructions)}\` for repo-visible agent instructions and installed skill names.`,
     "",
-    "## Command Observations",
+    "## Key Observations",
     "",
-    `Read \`${String(replayFiles.commandObservations)}\` for bounded command/tool observations captured from the original session.`,
+    `Read \`${String(replayFiles.keyObservations)}\` first for filtered failure and verification evidence.`,
+    `Use \`${String(replayFiles.commandObservations)}\` only as supporting command/tool context.`,
     "",
     "## Context Files",
     "",
@@ -1265,7 +1426,7 @@ function renderReplayMarkdown(
     "",
     warningLines,
     "",
-    "Do not inspect private evaluator files during replay."
+    "Use only files listed in the public replay capsule while working the replay task."
   ].join("\n");
 }
 
@@ -1313,6 +1474,60 @@ async function listSkillNames(root: string): Promise<string[]> {
   }
 }
 
+async function writeKeyObservations(caseDir: string, extracted: ExtractedCodexSession): Promise<string> {
+  const lines = ["# Key Observations", ""];
+  const commandRecords = extracted.toolCalls.filter((record) => commandText(record)).filter(isKeyObservationRecord);
+  if (commandRecords.length === 0) {
+    lines.push("No key command observations captured.", "");
+  }
+  for (const [index, record] of commandRecords.entries()) {
+    const args = asObject(record.arguments) ?? {};
+    lines.push(`## ${index + 1}. ${commandText(record)}`, "");
+    lines.push(`- cwd: ${String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "unknown")}`);
+    lines.push(`- status: ${String(record.status ?? record.outcome ?? "unknown")}`);
+    lines.push(`- exitCode: ${String(record.exit_code ?? record.exitCode ?? "unknown")}`);
+    const stdoutText = excerpt(String(record.stdout ?? ""));
+    const stderrText = excerpt(String(record.stderr ?? ""));
+    if (stdoutText) lines.push("", "stdout:", fenced(stdoutText));
+    if (stderrText) lines.push("", "stderr:", fenced(stderrText));
+    lines.push("");
+  }
+  await writeFile(join(caseDir, PUBLIC_KEY_OBSERVATIONS_PATH), lines.join("\n"));
+  return PUBLIC_KEY_OBSERVATIONS_PATH;
+}
+
+function isKeyObservationRecord(record: JsonObject): boolean {
+  const command = commandText(record).trim();
+  if (!command || isSkippedObservationCommand(command)) {
+    return false;
+  }
+  const status = String(record.status ?? record.outcome ?? "").toLowerCase();
+  const exitCode = record.exit_code ?? record.exitCode;
+  const failed =
+    status === "failed" ||
+    status === "error" ||
+    (typeof exitCode === "number" && exitCode !== 0) ||
+    (typeof exitCode === "string" && exitCode.length > 0 && exitCode !== "0" && exitCode !== "unknown");
+  return failed || isReplayableVerificationCommand(command);
+}
+
+function isSkippedObservationCommand(command: string): boolean {
+  const lower = command.toLowerCase();
+  if (lower.includes("yk pbench capture") || lower.includes("yk pbench validate") || lower.includes("yk pbench finalize")) {
+    return true;
+  }
+  if (lower.includes("yk pbench export-replay")) {
+    return true;
+  }
+  if (lower.includes("superpowers") && (lower.includes("use-skill") || lower.includes("bootstrap") || lower.includes("/skills/"))) {
+    return true;
+  }
+  if (lower.includes("/skills/") && lower.includes("skill.md") && /^(sed|cat|bat|less)\b/.test(lower)) {
+    return true;
+  }
+  return false;
+}
+
 async function writeCommandObservations(caseDir: string, extracted: ExtractedCodexSession): Promise<string> {
   const lines = ["# Command Observations", ""];
   const commandRecords = extracted.toolCalls.filter((record) => commandText(record));
@@ -1331,9 +1546,8 @@ async function writeCommandObservations(caseDir: string, extracted: ExtractedCod
     if (stderrText) lines.push("", "stderr:", fenced(stderrText));
     lines.push("");
   }
-  const publicPath = "public/command-observations.md";
-  await writeFile(join(caseDir, publicPath), lines.join("\n"));
-  return publicPath;
+  await writeFile(join(caseDir, PUBLIC_COMMAND_OBSERVATIONS_PATH), lines.join("\n"));
+  return PUBLIC_COMMAND_OBSERVATIONS_PATH;
 }
 
 function commandText(record: JsonObject): string {
@@ -1559,6 +1773,30 @@ function validateManifestShape(manifest: JsonObject, errors: string[]): void {
   }
 }
 
+function requiredReplayEnv(manifest: JsonObject): string[] {
+  const names = new Set<string>();
+  for (const name of normalizeReplayRequirements(manifest.replayRequirements).requiredEnv) {
+    names.add(name);
+  }
+  for (const validator of asArray(manifest.validators)) {
+    if (Array.isArray(validator.requiredEnv)) {
+      for (const name of validator.requiredEnv) {
+        if (typeof name === "string" && name.length > 0) {
+          names.add(name);
+        }
+      }
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+function validateRequiredReplayEnv(manifest: JsonObject, errors: string[]): void {
+  const missing = requiredReplayEnv(manifest).filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    errors.push(`Missing required replay environment variables: ${missing.join(", ")}`);
+  }
+}
+
 async function validateCasePaths(caseDir: string, manifest: JsonObject, strict: boolean, errors: string[]): Promise<void> {
   const documents = asObject(manifest.documents) ?? {};
   for (const [key, value] of Object.entries(documents)) {
@@ -1748,6 +1986,9 @@ export async function validateCaseBundle(
   }
 
   validateManifestShape(manifest, errors);
+  if (options.strict) {
+    validateRequiredReplayEnv(manifest, errors);
+  }
   await validateCasePaths(caseDir, manifest, Boolean(options.strict), errors);
 
   let validatorOutcomes: ValidatorOutcome[] | undefined;

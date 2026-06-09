@@ -43,12 +43,14 @@ After the user approves capture:
    - Treat empty prompt, empty command observations, or missing failure evidence warnings as capture-quality gaps to fix before finalizing.
 3. Edit the transaction `case/` bundle:
    - read `public/replay.md` and `public/context.manifest.json` to understand the replay capsule;
+   - keep all future agent-visible task input inside `public/`; use `public/key-observations.md` for filtered failure/verification evidence and `public/command-observations.md` only as supporting context;
    - refine `public/prompt.md`, `public/context.md`, `public/environment.md`, `public/replay.md`, and public context files as the future agent-visible task input;
    - review generated `private/failure.md`, `private/success.md`, and `private/verification.md` against `private/failure-draft.md` and the raw session transcript;
    - fix generated private docs only when the session evidence is missing, ambiguous, or incomplete;
    - if `private/validators/check-completion.mjs` says `PBENCH_AUTHORING_REQUIRED`, implement the validator from the correction evidence and private transcript;
+   - if strict validation needs live services or secrets, record the required environment variable names in `replayRequirements.requiredEnv` and on the validator instead of putting secret values in docs;
    - ask the user for clarification only when the captured session does not identify the failure or does not imply an observable completion check.
 4. Run `yk pbench validate --transaction <tx-path> --strict` until it passes.
 5. Run `yk pbench finalize --transaction <tx-path>`.
 
-Never expose `private/` contents to a future benchmarked agent. Only `public/` should be visible during replay.
+Never expose `private/` contents to a future benchmarked agent. Use `yk pbench export-replay --case <case-dir-or-case-id> --out <dir>` when preparing replay input for an agent; the export contains only `public/` plus `case.public.json`.
