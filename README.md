@@ -79,10 +79,21 @@ bun run build:binary:macos-arm64
 
 ## Release
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`. The workflow tests the repo, typechecks it, builds the macOS arm64 executable, and publishes:
+Releases are automated with Release Please plus the existing tag-based packaging workflow.
 
-- `ya-skills-v<version>-macos-arm64.tar.gz`
-- `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
+### Automated release flow
+
+1. Land normal changes on `main` using Conventional Commit messages or PR titles:
+   - `fix: ...` creates a patch release.
+   - `feat: ...` creates a minor release.
+   - `BREAKING CHANGE:` creates a major release.
+2. `.github/workflows/release-please.yml` opens or updates a Release PR that bumps `package.json`, maintains `CHANGELOG.md`, and prepares the next `v*` tag.
+3. Merge the Release PR when ready.
+4. The same workflow creates the GitHub Release and uploads:
+   - `ya-skills-v<version>-macos-arm64.tar.gz`
+   - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
+
+The asset upload runs in the Release Please workflow because tags created by the default `GITHUB_TOKEN` do not trigger other workflows. `.github/workflows/release.yml` remains available for manual `v*` tag pushes.
 
 The release tarball contains `yk` and `skills/`. The Homebrew formula wraps `yk` with `YA_SKILLS_CATALOG_DIR` pointing at the installed catalog, so packaged installs do not depend on the source checkout layout.
 
