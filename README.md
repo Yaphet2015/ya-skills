@@ -42,6 +42,28 @@ The tap repository is [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/ho
 >
 > The important constraint is low-friction capture. When an agent fails, the useful evidence is still in the session: prompts, cwd, Git state, commands, touched files, tool calls, errors, sandbox and approval context, and the user's correction. PBench preserves that context before it disappears, while keeping private material separate from the public replay capsule. Later, those cases can be used to judge whether a workflow change reduced manual intervention, used tools correctly, completed verification, and solved the original task.
 
+Basic workflow:
+
+```mermaid
+flowchart TD
+  init["Initialize workspace<br/>yk pbench workspace-init &lt;path&gt;"]
+  link["Link project<br/>yk pbench project-link --workspace &lt;path&gt;"]
+  capture["Capture session<br/>yk pbench capture --source codex"]
+  validate["Strict authoring validation<br/>yk pbench validate --transaction &lt;tx&gt; --strict"]
+  finalize["Finalize case<br/>yk pbench finalize --transaction &lt;tx&gt;"]
+  export["Public replay capsule<br/>yk pbench export-replay --case &lt;case&gt; --out &lt;dir&gt;"]
+  autorun["Automatic benchmark<br/>yk pbench run --case &lt;case&gt; --agent codex"]
+  start["Skill-mediated benchmark<br/>yk pbench start --case &lt;case&gt;"]
+  agent["Agent works from .pbench/public<br/>and pbench-runner skill"]
+  finish["One-shot private validation<br/>yk pbench finish --run &lt;run-id&gt;"]
+  results["Private run artifacts<br/>&lt;workspace&gt;/runs/&lt;run-id&gt;/"]
+
+  init --> link --> capture --> validate --> finalize
+  finalize --> export
+  finalize --> autorun --> results
+  finalize --> start --> agent --> finish --> results
+```
+
 - `yk pbench workspace-init <path>` initializes a local pbench workspace.
 - `yk pbench project-link --workspace <path>` links the current project to a workspace.
 - `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` creates an authoring transaction under `~/.ya-skills/pbench`, asks for confirmation unless `--yes` is passed, and prints initial authoring validation warnings.
