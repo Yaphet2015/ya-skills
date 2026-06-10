@@ -36,7 +36,7 @@ The tap repository is [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/ho
 
 ### PBench
 
-`yk pbench` captures task/session-level outcome mismatch from Codex work into local private personal benchmark cases. It is a case-authoring workflow, not a benchmark runner.
+`yk pbench` captures task/session-level outcome mismatch from Codex work into local private personal benchmark cases, then replays finalized cases through a harness-managed runner.
 
 > I created pbench because public benchmarks and general rules packages cannot answer the question I actually need answered during daily agent work: did this model, skill, rules package, or harness change make my own workflow better? PBench turns real Codex misses into reproducible private cases with explicit success criteria and replay evidence, so failures become regression assets instead of one-off frustration.
 >
@@ -48,14 +48,19 @@ The tap repository is [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/ho
 - `yk pbench validate --transaction <path> --strict` strict-validates a transaction.
 - `yk pbench finalize --transaction <path>` finalizes a strict-validated transaction into the workspace.
 - `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` exports a public-only replay capsule for an agent. It copies only `public/` plus `case.public.json`; it never exports private evaluator docs, validators, or the raw transcript.
+- `yk pbench run --case <case-dir-or-case-id> --agent codex [--workspace <path>]` runs a finalized case through Codex in a temporary worktree, then runs private validators and records the result under the workspace `runs/` directory.
+- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>]` prepares a skill-mediated benchmark worktree for agents that cannot be launched by CLI. The prepared worktree contains `.pbench/public/`, `.pbench/case.public.json`, `.pbench/run.json`, and an installed `pbench-runner` skill.
+- `yk pbench finish --run <run-id>` performs the one-shot private validation for a skill-mediated run and prints only the run id, status, and summary path.
 
 Capture supports both legacy and current Codex JSONL shapes. When a session records its own cwd and Git metadata, capture uses that session repository and baseline commit even if `yk pbench capture --input <jsonl>` is launched from another repo. If `--session-id` is used and the Codex index does not include file paths, capture scans `~/.codex/sessions/**/*.jsonl` for the matching session id.
 
 Capture writes a replay context capsule into `public/`: `prompt.md`, `replay.md`, `replay.manifest.json`, `context.manifest.json`, repo agent instructions, filtered key observations, bounded command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and generated private authoring docs in `private/`. Private `failure.md`, `success.md`, and `verification.md` are prefilled from session corrections and error evidence; failed replayable verification commands can become completion validators. If the session does not contain enough evidence, initial authoring warnings identify the missing failure or validator work before finalization. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
 
-Full case bundles are for authoring and harness validation. Agent-facing replay should use `public/replay.manifest.json` or `yk pbench export-replay`, which gives the agent only public inputs and a `case.public.json` view. Cases can declare replay requirements such as `live-integration`, network needs, and required environment variable names; strict validation fails before replay when required variables are missing, without printing secret values.
+Full case bundles are for authoring and harness validation. Agent-facing replay should use `public/replay.manifest.json`, `yk pbench export-replay`, `yk pbench run`, or a `yk pbench start` worktree, all of which give the agent only public inputs and a `case.public.json` view. Cases can declare replay requirements such as `live-integration`, network needs, and required environment variable names; strict validation and runner startup fail before replay when required variables are missing, without printing secret values.
 
-Install the agent-facing workflow with `yk install pbench`.
+Runner artifacts are private local benchmark records. Automatic Codex runs and skill-mediated runs write status, duration, redacted logs, diffs, and validator outcomes to `<workspace>/runs/<run-id>/`. Skill-mediated runs are one-shot: after `yk pbench finish --run <run-id>`, the agent sees only pass/fail-level output while private validator details remain in the workspace artifact directory.
+
+Install the capture workflow with `yk install pbench`. `yk pbench start` installs `pbench-runner` into each prepared benchmark worktree automatically.
 
 ### Video Transcript
 

@@ -4,6 +4,10 @@
   "functions": [
     { "domain": "pbench", "action": "capture" },
     { "domain": "pbench", "action": "validate" },
+    { "domain": "pbench", "action": "export-replay" },
+    { "domain": "pbench", "action": "run" },
+    { "domain": "pbench", "action": "start" },
+    { "domain": "pbench", "action": "finish" },
     { "domain": "pbench", "action": "finalize" },
     { "domain": "pbench", "action": "workspace-init" },
     { "domain": "pbench", "action": "project-link" }

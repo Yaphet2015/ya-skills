@@ -32,6 +32,9 @@ test("keeps pbench authoring commands in their own function package", () => {
     "pbench capture",
     "pbench validate",
     "pbench export-replay",
+    "pbench run",
+    "pbench start",
+    "pbench finish",
     "pbench finalize",
     "pbench workspace-init",
     "pbench project-link"

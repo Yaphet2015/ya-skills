@@ -96,10 +96,22 @@ test("root catalog exposes the pbench skill and its yk function refs", async () 
   expect(pbench?.functions).toEqual([
     { domain: "pbench", action: "capture" },
     { domain: "pbench", action: "validate" },
+    { domain: "pbench", action: "export-replay" },
+    { domain: "pbench", action: "run" },
+    { domain: "pbench", action: "start" },
+    { domain: "pbench", action: "finish" },
     { domain: "pbench", action: "finalize" },
     { domain: "pbench", action: "workspace-init" },
     { domain: "pbench", action: "project-link" }
   ]);
+});
+
+test("root catalog exposes the pbench runner skill", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const runner = catalog.byName.get("pbench-runner");
+
+  expect(runner?.description).toContain("pbench");
+  expect(runner?.functions).toEqual([]);
 });
 
 test("root catalog exposes the video-transcript skill", async () => {

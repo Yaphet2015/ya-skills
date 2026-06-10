@@ -54,3 +54,12 @@ After the user approves capture:
 5. Run `yk pbench finalize --transaction <tx-path>`.
 
 Never expose `private/` contents to a future benchmarked agent. Use `yk pbench export-replay --case <case-dir-or-case-id> --out <dir>` when preparing replay input for an agent; the export contains only `public/` plus `case.public.json`.
+
+## Replay Flow
+
+Use finalized cases through the harness when comparing agents, models, rules, or skills:
+
+- For Codex CLI automation, run `yk pbench run --case <case-id-or-dir> --agent codex`.
+- For agents that cannot be launched by CLI, run `yk pbench start --case <case-id-or-dir>`, open the printed worktree with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
+
+Do not give a benchmarked agent the full case bundle. The runner prepares `.pbench/public/`, `.pbench/case.public.json`, and `.pbench/run.json` as the agent-visible surface, then runs private validators outside the public replay capsule.

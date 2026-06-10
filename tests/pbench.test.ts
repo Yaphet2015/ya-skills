@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -66,6 +66,107 @@ async function makeRepoWithFailingTest(): Promise<string> {
   git(repo, ["add", "."]);
   git(repo, ["commit", "-m", "baseline"]);
   return repo;
+}
+
+async function finalizedRunnableCase(options: {
+  requiredEnv?: string[];
+  dirtyStart?: boolean;
+} = {}): Promise<{ repo: string; home: string; workspaceRoot: string; casePath: string; caseId: string }> {
+  const repo = await makeRepoWithFailingTest();
+  if (options.dirtyStart) {
+    await writeFile(
+      join(repo, "check-done.mjs"),
+      "import { existsSync } from 'node:fs';\n// dirty starting point\nprocess.exit(existsSync('done.txt') ? 0 : 1);\n"
+    );
+  }
+  const home = await temp("home");
+  const workspaceRoot = join(await temp("workspace-root"), "workspace");
+  await initWorkspace(workspaceRoot);
+  const commit = git(repo, ["rev-parse", "HEAD"]);
+  const sessionJsonl = await writeCodexSession(repo, commit, [
+    {
+      type: "exec_command",
+      arguments: { cmd: "bun run test", workdir: repo },
+      exit_code: 1,
+      stderr: "done.txt is missing"
+    },
+    {
+      type: "message",
+      role: "user",
+      content: "The benchmark should be complete only when done.txt exists and the test passes."
+    }
+  ]);
+  const tx = await captureTestCodexSession({
+    cwd: repo,
+    home,
+    workspaceRoot,
+    input: sessionJsonl,
+    yes: true,
+    title: "Done file missing"
+  });
+  if (options.requiredEnv?.length) {
+    const manifestPath = join(tx.caseDir, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.replayRequirements = {
+      profile: "live-integration",
+      network: "required",
+      requiredEnv: options.requiredEnv,
+      notes: ["test required env"]
+    };
+    manifest.validators[0].requiredEnv = options.requiredEnv;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  const validation = await strictValidateTransaction(tx.transactionPath);
+  expect(validation.ok).toBe(true);
+  const finalized = await finalizeTransaction(tx.transactionPath);
+  return { repo, home, workspaceRoot, casePath: finalized.casePath, caseId: finalized.caseId };
+}
+
+async function writeFakeCodex(options: {
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  body?: string;
+} = {}): Promise<{ binDir: string; commandPath: string }> {
+  const binDir = await temp("fake-codex-bin");
+  const commandPath = join(binDir, "codex");
+  await writeFile(
+    commandPath,
+    [
+      "#!/usr/bin/env node",
+      "import { writeFileSync } from 'node:fs';",
+      "import { join } from 'node:path';",
+      "",
+      "let stdin = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { stdin += chunk; });",
+      "process.stdin.on('end', () => {",
+      "  const cdIndex = process.argv.indexOf('--cd');",
+      "  const root = cdIndex >= 0 ? process.argv[cdIndex + 1] : process.cwd();",
+      "  writeFileSync(join(root, '.pbench', 'fake-codex-argv.json'), JSON.stringify(process.argv.slice(2), null, 2));",
+      "  const execIndex = process.argv.indexOf('exec');",
+      "  const approvalIndex = process.argv.indexOf('--ask-for-approval');",
+      "  if (execIndex >= 0 && approvalIndex > execIndex) {",
+      "    process.stderr.write(\"unexpected argument '--ask-for-approval' found\\n\");",
+      "    process.exit(2);",
+      "  }",
+      "  writeFileSync(join(root, '.pbench', 'fake-codex-stdin.txt'), stdin);",
+      "  writeFileSync(join(root, '.pbench', 'fake-codex-env.json'), JSON.stringify({",
+      "    PB_CASE_DIR: process.env.PB_CASE_DIR ?? null,",
+      "    PB_PRIVATE_DIR: process.env.PB_PRIVATE_DIR ?? null,",
+      "    PB_PUBLIC_DIR: process.env.PB_PUBLIC_DIR ?? null,",
+      "    PBENCH_TEST_SECRET: process.env.PBENCH_TEST_SECRET ?? null",
+      "  }, null, 2));",
+      options.body ?? "  writeFileSync(join(root, 'done.txt'), 'done\\n');",
+      `  if (${JSON.stringify(options.stdout ?? '{"type":"message","role":"assistant","content":"done"}\\n')}) process.stdout.write(${JSON.stringify(options.stdout ?? '{"type":"message","role":"assistant","content":"done"}\\n')});`,
+      `  if (${JSON.stringify(options.stderr ?? "")}) process.stderr.write(${JSON.stringify(options.stderr ?? "")});`,
+      `  process.exit(${options.exitCode ?? 0});`,
+      "});",
+      ""
+    ].join("\n")
+  );
+  await chmod(commandPath, 0o755);
+  return { binDir, commandPath };
 }
 
 async function writeCodexSession(repo: string, commit: string, records: Record<string, unknown>[] = []): Promise<string> {
@@ -1044,5 +1145,204 @@ describe("pbench codex capture flow", () => {
     expect(keyObservations).toContain("missing done.txt");
     expect(keyObservations).not.toContain("using-superpowers");
     expect(keyObservations).not.toContain("yk pbench capture");
+  });
+
+  test("runs a finalized case with codex while keeping private evaluator paths away from the agent", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const fake = await writeFakeCodex({
+      stdout:
+        '{"type":"message","role":"assistant","content":"done"}\n{"type":"usage","usage":{"input_tokens":11,"output_tokens":7}}\n'
+    });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await createPbenchCommands({ home })
+        .find((command) => command.action === "run")
+        ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
+      const result = JSON.parse(String(output));
+      const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
+      const stdin = await readFile(join(result.artifactDir, "agent-stdin.txt"), "utf8");
+      const agentEnv = await readFile(join(result.artifactDir, "agent-env.json"), "utf8");
+
+      expect(result.status).toBe("passed");
+      expect(runJson.status).toBe("passed");
+      expect(runJson.agentMode).toBe("codex");
+      expect(runJson.manualIntervention).toBe(false);
+      expect(runJson.tokenUsage).toEqual({ input_tokens: 11, output_tokens: 7 });
+      expect(stdin).toContain(".pbench/public/prompt.md");
+      expect(stdin).toContain(".pbench/case.public.json");
+      expect(stdin).not.toContain("private/validators");
+      expect(agentEnv).toContain('"PB_PRIVATE_DIR": null');
+      expect(agentEnv).toContain('"PB_CASE_DIR": null');
+      await expect(readFile(join(result.artifactDir, "validator-outcomes.json"), "utf8")).resolves.toContain('"actual": "pass"');
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  test("starts a skill-mediated run with public capsule, runner skill, and one-shot finish", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const startOutput = await createPbenchCommands({ home })
+      .find((command) => command.action === "start")
+      ?.run(["--case", caseId, "--workspace", workspaceRoot]);
+    const started = JSON.parse(String(startOutput));
+    const publicRun = JSON.parse(await readFile(join(started.worktree, ".pbench", "run.json"), "utf8"));
+
+    expect(publicRun.runId).toBe(started.runId);
+    expect(publicRun.finishCommand).toContain(`yk pbench finish --run ${started.runId}`);
+    await expect(readFile(join(started.worktree, ".pbench", "public", "prompt.md"), "utf8")).resolves.toContain("done.txt");
+    await expect(readFile(join(started.worktree, ".pbench", "case.public.json"), "utf8")).resolves.not.toContain("private/validators");
+    await expect(readFile(join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md"), "utf8")).resolves.toContain(
+      ".pbench/public/prompt.md"
+    );
+
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+    const finishOutput = await createPbenchCommands({ home })
+      .find((command) => command.action === "finish")
+      ?.run(["--run", started.runId]);
+    const finished = JSON.parse(String(finishOutput));
+    const summary = await readFile(finished.summaryPath, "utf8");
+
+    expect(finished.status).toBe("passed");
+    expect(String(finishOutput)).not.toContain("private/validators");
+    expect(String(finishOutput)).not.toContain("done.txt is missing");
+    expect(summary).toContain("passed");
+    await expect(
+      createPbenchCommands({ home })
+        .find((command) => command.action === "finish")
+        ?.run(["--run", started.runId])
+    ).rejects.toThrow("already finished");
+  });
+
+  test("fails before agent execution when required replay env is missing", async () => {
+    const missingEnv = "PBENCH_TEST_REQUIRED_BUT_MISSING";
+    const original = process.env[missingEnv];
+    process.env[missingEnv] = "available-during-authoring";
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase({ requiredEnv: [missingEnv] });
+    delete process.env[missingEnv];
+    const fake = await writeFakeCodex();
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      await expect(
+        createPbenchCommands({ home })
+          .find((command) => command.action === "run")
+          ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"])
+      ).rejects.toThrow(missingEnv);
+      await expect(stat(join(workspaceRoot, "runs"))).rejects.toThrow();
+    } finally {
+      process.env.PATH = originalPath;
+      if (original === undefined) {
+        delete process.env[missingEnv];
+      } else {
+        process.env[missingEnv] = original;
+      }
+    }
+  });
+
+  test("applies the public starting patch before a skill-mediated agent works", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase({ dirtyStart: true });
+    const startOutput = await createPbenchCommands({ home })
+      .find((command) => command.action === "start")
+      ?.run(["--case", caseId, "--workspace", workspaceRoot]);
+    const started = JSON.parse(String(startOutput));
+
+    await expect(readFile(join(started.worktree, "check-done.mjs"), "utf8")).resolves.toContain("dirty starting point");
+  });
+
+  test("records agent failure without running private validators", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const fake = await writeFakeCodex({ exitCode: 7, stderr: "agent failed before edit\n", body: "  // no edit" });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await createPbenchCommands({ home })
+        .find((command) => command.action === "run")
+        ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
+      const result = JSON.parse(String(output));
+      const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
+
+      expect(result.status).toBe("agent_failed");
+      expect(runJson.agentExitCode).toBe(7);
+      await expect(stat(join(result.artifactDir, "validator-outcomes.json"))).rejects.toThrow();
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  test("records setup failure before invoking the agent", async () => {
+    const { home, workspaceRoot, caseId, casePath } = await finalizedRunnableCase();
+    const manifestPath = join(casePath, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.setupCommands = [{ command: "node -e \"process.exit(9)\"", cwd: ".", timeoutSeconds: 10 }];
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const fake = await writeFakeCodex();
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await createPbenchCommands({ home })
+        .find((command) => command.action === "run")
+        ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
+      const result = JSON.parse(String(output));
+
+      expect(result.status).toBe("setup_failed");
+      await expect(readFile(join(result.artifactDir, "setup-outcomes.json"), "utf8")).resolves.toContain('"actual": "fail"');
+      await expect(stat(join(result.artifactDir, "agent.stdout.log"))).rejects.toThrow();
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  test("records validator failure and the agent diff", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const fake = await writeFakeCodex({ body: "  writeFileSync(join(root, 'wrong.txt'), 'wrong\\n');" });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await createPbenchCommands({ home })
+        .find((command) => command.action === "run")
+        ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
+      const result = JSON.parse(String(output));
+      const diff = await readFile(join(result.artifactDir, "agent.diff"), "utf8");
+
+      expect(result.status).toBe("validator_failed");
+      expect(diff).toContain("wrong.txt");
+      await expect(readFile(join(result.artifactDir, "validator-outcomes.json"), "utf8")).resolves.toContain('"actual": "fail"');
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  test("redacts required environment values from persisted runner logs", async () => {
+    const secretName = "PBENCH_TEST_SECRET";
+    const secretValue = "super-secret-pbench-value";
+    const originalSecret = process.env[secretName];
+    process.env[secretName] = secretValue;
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase({ requiredEnv: [secretName] });
+    const fake = await writeFakeCodex({
+      stdout: `agent saw ${secretValue}\n`,
+      stderr: `stderr saw ${secretValue}\n`
+    });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await createPbenchCommands({ home })
+        .find((command) => command.action === "run")
+        ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
+      const result = JSON.parse(String(output));
+      const runJson = await readFile(join(result.artifactDir, "run.json"), "utf8");
+      const stdout = await readFile(join(result.artifactDir, "agent.stdout.log"), "utf8");
+      const stderr = await readFile(join(result.artifactDir, "agent.stderr.log"), "utf8");
+
+      expect(`${runJson}\n${stdout}\n${stderr}`).not.toContain(secretValue);
+      expect(`${runJson}\n${stdout}\n${stderr}`).toContain("[REDACTED:PBENCH_TEST_SECRET]");
+    } finally {
+      process.env.PATH = originalPath;
+      if (originalSecret === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = originalSecret;
+      }
+    }
   });
 });
