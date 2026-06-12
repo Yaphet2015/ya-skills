@@ -42,45 +42,48 @@ The tap repository is [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/ho
 >
 > The important constraint is low-friction capture. When an agent fails, the useful evidence is still in the session: prompts, cwd, Git state, commands, touched files, tool calls, errors, sandbox and approval context, and the user's correction. PBench preserves that context before it disappears, while keeping private material separate from the public replay capsule. Later, those cases can be used to judge whether a workflow change reduced manual intervention, used tools correctly, completed verification, and solved the original task.
 
-Basic workflow:
+Daily workflow:
+
+Most usage should feel like two actions: capture the bad session, then later trigger a benchmark runner. The other commands are either one-time setup or harness internals.
 
 ```mermaid
 flowchart TD
-  init["Initialize workspace<br/>yk pbench workspace-init &lt;path&gt;"]
-  link["Link project<br/>yk pbench project-link --workspace &lt;path&gt;"]
-  capture["Capture session<br/>yk pbench capture --source codex"]
-  validate["Strict authoring validation<br/>yk pbench validate --transaction &lt;tx&gt; --strict"]
-  finalize["Finalize case<br/>yk pbench finalize --transaction &lt;tx&gt;"]
-  export["Public replay capsule<br/>yk pbench export-replay --case &lt;case&gt; --out &lt;dir&gt;"]
-  autorun["Automatic benchmark<br/>yk pbench run --case &lt;case&gt; --agent codex"]
-  start["Skill-mediated benchmark<br/>yk pbench start --case &lt;case&gt;"]
-  agent["Agent works from .pbench/public<br/>and pbench-runner skill"]
-  finish["One-shot private validation<br/>yk pbench finish --run &lt;run-id&gt;"]
-  results["Private run artifacts<br/>&lt;workspace&gt;/runs/&lt;run-id&gt;/"]
+  setup["One-time setup<br/>workspace-init + project-link"]:::support
+  capture["1. Capture failed session<br/>yk pbench capture --source codex<br/>or the pbench skill recognizes the mismatch"]
+  authoring["Harness authoring gate<br/>validate + finalize<br/>fails loud if evidence or validators are incomplete"]:::internal
+  trigger["2. Trigger benchmark<br/>use the pbench skill in an agent<br/>or yk pbench run --case <case> --agent codex"]
+  capsule["Runner exposes only public input<br/>.pbench/public + case.public.json"]:::internal
+  validate["One-shot private validation<br/>private validators stay outside agent view"]:::internal
+  results["Private run artifacts<br/><workspace>/runs/<run-id>/"]
 
-  init --> link --> capture --> validate --> finalize
-  finalize --> export
-  finalize --> autorun --> results
-  finalize --> start --> agent --> finish --> results
+  setup -.-> capture
+  capture --> authoring --> trigger --> capsule --> validate --> results
+
+  classDef support fill:#eef6ff,stroke:#6b8bb8,color:#111,stroke-dasharray: 4 3
+  classDef internal fill:#f7f7f7,stroke:#777,color:#111,stroke-dasharray: 4 3
 ```
+
+
 
 - `yk pbench workspace-init <path>` initializes a local pbench workspace.
 - `yk pbench project-link --workspace <path>` links the current project to a workspace.
 - `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` creates an authoring transaction under `~/.ya-skills/pbench`, asks for confirmation unless `--yes` is passed, and prints initial authoring validation warnings.
 - `yk pbench validate --transaction <path> --strict` strict-validates a transaction.
 - `yk pbench finalize --transaction <path>` finalizes a strict-validated transaction into the workspace.
-- `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` exports a public-only replay capsule for an agent. It copies only `public/` plus `case.public.json`; it never exports private evaluator docs, validators, or the raw transcript.
-- `yk pbench run --case <case-dir-or-case-id> --agent codex [--workspace <path>]` runs a finalized case through Codex in a temporary worktree, then runs private validators and records the result under the workspace `runs/` directory.
-- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>]` prepares a skill-mediated benchmark worktree for agents that cannot be launched by CLI. The prepared worktree contains `.pbench/public/`, `.pbench/case.public.json`, `.pbench/run.json`, and an installed `pbench-runner` skill.
+- `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` exports a public-only replay capsule for an agent. It copies only sanitized `public/` files plus `case.public.json`; it never exports private evaluator docs, validators, raw transcripts, or capture-only source paths.
+- `yk pbench run --case <case-dir-or-case-id> --agent codex [--workspace <path>] [--profile <name>]` runs a finalized case through Codex in `<workspace>/.personal-bench/replays/<run-id>/worktree`, then runs private validators and records the result under the workspace `runs/` directory. Profiles are user-supplied comparison labels such as `baseline`, `current-model`, or `current-skills`; omitted profiles are recorded as `default`.
+- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` prepares a skill-mediated benchmark worktree at `<workspace>/.personal-bench/replays/<run-id>/worktree` for agents that cannot be launched by CLI. The prepared worktree contains `.pbench/public/`, `.pbench/case.public.json`, `.pbench/run.json`, and an installed `pbench-runner` skill.
 - `yk pbench finish --run <run-id>` performs the one-shot private validation for a skill-mediated run and prints only the run id, status, and summary path.
+- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` aggregates existing run artifacts into status, case, profile, duration, and token summaries. JSON is the default; Markdown is for human review.
+- `yk pbench audit --case <case-dir-or-case-id> [--workspace <path>]` checks case quality without running private validators. It reports invalid case shape, authoring warnings, and public replay references to private evaluator paths.
 
 Capture supports both legacy and current Codex JSONL shapes. When a session records its own cwd and Git metadata, capture uses that session repository and baseline commit even if `yk pbench capture --input <jsonl>` is launched from another repo. If `--session-id` is used and the Codex index does not include file paths, capture scans `~/.codex/sessions/**/*.jsonl` for the matching session id.
 
 Capture writes a replay context capsule into `public/`: `prompt.md`, `replay.md`, `replay.manifest.json`, `context.manifest.json`, repo agent instructions, filtered key observations, bounded command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and generated private authoring docs in `private/`. Private `failure.md`, `success.md`, and `verification.md` are prefilled from session corrections and error evidence; failed replayable verification commands can become completion validators. If the session does not contain enough evidence, initial authoring warnings identify the missing failure or validator work before finalization. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
 
-Full case bundles are for authoring and harness validation. Agent-facing replay should use `public/replay.manifest.json`, `yk pbench export-replay`, `yk pbench run`, or a `yk pbench start` worktree, all of which give the agent only public inputs and a `case.public.json` view. Cases can declare replay requirements such as `live-integration`, network needs, and required environment variable names; strict validation and runner startup fail before replay when required variables are missing, without printing secret values.
+Full case bundles are for authoring and harness validation. Agent-facing replay should use `public/replay.manifest.json`, `yk pbench export-replay`, `yk pbench run`, or a `yk pbench start` worktree, all of which give the agent only sanitized public inputs and a `case.public.json` view. Replay startup fails closed if agent-visible pbench inputs expose `/private`, `private/...`, `PB_PRIVATE_DIR`, `PB_CASE_DIR`, raw transcript paths, validator paths, or the original case directory. Cases can declare replay requirements such as `live-integration`, network needs, and required environment variable names; strict validation and runner startup fail before replay when required variables are missing, without printing secret values.
 
-Runner artifacts are private local benchmark records. Automatic Codex runs and skill-mediated runs write status, duration, redacted logs, diffs, and validator outcomes to `<workspace>/runs/<run-id>/`. Skill-mediated runs are one-shot: after `yk pbench finish --run <run-id>`, the agent sees only pass/fail-level output while private validator details remain in the workspace artifact directory.
+Runner artifacts are private local benchmark records. Automatic Codex runs and skill-mediated runs write status, duration, normalized `metrics.json`, normalized `events.json`, redacted logs, diffs, and validator outcomes to `<workspace>/runs/<run-id>/`. Skill-mediated runs are one-shot: after `yk pbench finish --run <run-id>`, the agent sees only pass/fail-level output while private validator details remain in the workspace artifact directory.
 
 Install the capture workflow with `yk install pbench`. `yk pbench start` installs `pbench-runner` into each prepared benchmark worktree automatically.
 
@@ -114,14 +117,14 @@ Releases are automated with Release Please plus the existing tag-based packaging
 ### Automated release flow
 
 1. Land normal changes on `main` using Conventional Commit messages or PR titles:
-   - `fix: ...` creates a patch release.
-   - `feat: ...` creates a minor release.
-   - `BREAKING CHANGE:` creates a major release.
+  - `fix: ...` creates a patch release.
+  - `feat: ...` creates a minor release.
+  - `BREAKING CHANGE:` creates a major release.
 2. `.github/workflows/release-please.yml` opens or updates a Release PR that bumps `package.json`, maintains `CHANGELOG.md`, and prepares the next `v*` tag.
 3. Merge the Release PR when ready.
 4. The same workflow creates the GitHub Release and uploads:
-   - `ya-skills-v<version>-macos-arm64.tar.gz`
-   - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
+  - `ya-skills-v<version>-macos-arm64.tar.gz`
+  - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
 
 The asset upload runs in the Release Please workflow because tags created by the default `GITHUB_TOKEN` do not trigger other workflows. `.github/workflows/release.yml` remains available for manual `v*` tag pushes.
 

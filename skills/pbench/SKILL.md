@@ -53,13 +53,15 @@ After the user approves capture:
 4. Run `yk pbench validate --transaction <tx-path> --strict` until it passes.
 5. Run `yk pbench finalize --transaction <tx-path>`.
 
-Never expose `private/` contents to a future benchmarked agent. Use `yk pbench export-replay --case <case-dir-or-case-id> --out <dir>` when preparing replay input for an agent; the export contains only `public/` plus `case.public.json`.
+Never expose `private/` contents to a future benchmarked agent. Use `yk pbench export-replay --case <case-dir-or-case-id> --out <dir>` when preparing replay input for an agent; the export contains only sanitized `public/` files plus `case.public.json`. Replay startup fails closed if agent-visible pbench inputs expose `/private`, `private/...`, `PB_PRIVATE_DIR`, `PB_CASE_DIR`, raw transcript paths, validator paths, or the original case directory.
 
 ## Replay Flow
 
 Use finalized cases through the harness when comparing agents, models, rules, or skills:
 
-- For Codex CLI automation, run `yk pbench run --case <case-id-or-dir> --agent codex`.
-- For agents that cannot be launched by CLI, run `yk pbench start --case <case-id-or-dir>`, open the printed worktree with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
+- For Codex CLI automation, run `yk pbench run --case <case-id-or-dir> --agent codex --profile <comparison-label>`.
+- For agents that cannot be launched by CLI, run `yk pbench start --case <case-id-or-dir> --profile <comparison-label>`, open the printed `<workspace>/.personal-bench/replays/<run-id>/worktree` with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
+- Use stable profile labels such as `baseline`, `current-model`, `current-skills`, or `new-harness` when comparing model, skill, rules, or harness changes.
+- After runs finish, use `yk pbench report --profile <comparison-label>` or `yk pbench report --format markdown` to summarize status, manual-intervention, duration, and token results.
 
-Do not give a benchmarked agent the full case bundle. The runner prepares `.pbench/public/`, `.pbench/case.public.json`, and `.pbench/run.json` as the agent-visible surface, then runs private validators outside the public replay capsule.
+Do not give a benchmarked agent the full case bundle. The runner prepares `.pbench/public/`, `.pbench/case.public.json`, and `.pbench/run.json` as the agent-visible surface inside the workspace-owned replay worktree, then runs private validators outside the public replay capsule.

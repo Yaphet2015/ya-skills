@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -19,6 +19,8 @@ const PUBLIC_CONTEXT_MANIFEST_PATH = "public/context.manifest.json";
 const PUBLIC_KEY_OBSERVATIONS_PATH = "public/key-observations.md";
 const PUBLIC_COMMAND_OBSERVATIONS_PATH = "public/command-observations.md";
 const PBENCH_RUNNER_SKILL_NAME = "pbench-runner";
+const PRIVATE_PATH_PLACEHOLDER = "<private-path>";
+const SUBJECT_REPO_PLACEHOLDER = "<subject-repo>";
 
 type ReplayRequirements = {
   profile: "local" | "live-integration";
@@ -39,10 +41,12 @@ type RunState = JsonObject & {
   worktree: string;
   repoCache: string;
   agentMode: "codex" | "skill";
+  profile: string;
   status: PbenchRunStatus;
   terminal: boolean;
   manualIntervention: boolean;
   requiredEnv: string[];
+  events?: RunEvent[];
   createdAt: string;
   updatedAt: string;
 };
@@ -105,6 +109,29 @@ type ParsedArgs = {
 
 type PbenchCommandOptions = {
   home?: string;
+};
+
+type RunEvent = {
+  phase: "setup" | "agent" | "validator" | "finish";
+  status: string;
+  at: string;
+  message?: string;
+  exitCode?: number | null;
+};
+
+type PbenchReportRun = {
+  runId: string;
+  caseId: string;
+  profile: string;
+  status: string;
+  artifactDir: string;
+  summaryPath: string;
+  agentMode: string;
+  manualIntervention: boolean;
+  durationMs: number | null;
+  tokenUsage: JsonObject;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export function createPbenchCommands(options: PbenchCommandOptions = {}): FunctionCommand[] {
@@ -213,7 +240,14 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
           home: options.home,
           workspace: workspaceRoot
         });
-        return printJson(await runPbenchCase({ caseDir, workspaceRoot, home: options.home }));
+        return printJson(
+          await runPbenchCase({
+            caseDir,
+            workspaceRoot,
+            home: options.home,
+            profile: normalizeRunProfile(getString(parsed, "profile"))
+          })
+        );
       }
     },
     {
@@ -234,7 +268,14 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
           home: options.home,
           workspace: workspaceRoot
         });
-        return printJson(await startSkillMediatedRun({ caseDir, workspaceRoot, home: options.home }));
+        return printJson(
+          await startSkillMediatedRun({
+            caseDir,
+            workspaceRoot,
+            home: options.home,
+            profile: normalizeRunProfile(getString(parsed, "profile"))
+          })
+        );
       }
     },
     {
@@ -255,6 +296,52 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
         const parsed = parseArgs(args);
         const transaction = requireString(parsed, "transaction", "yk pbench finalize requires --transaction <path>");
         return printJson(await finalizeTransaction(transaction));
+      }
+    },
+    {
+      domain: "pbench",
+      action: "report",
+      description: "Aggregate pbench run artifacts into a benchmark report.",
+      run: async (args) => {
+        const parsed = parseArgs(args);
+        const workspaceRoot = await resolveWorkspaceRoot({
+          workspace: getString(parsed, "workspace"),
+          cwd: process.cwd(),
+          home: options.home
+        });
+        const report = await buildPbenchReport({
+          workspaceRoot,
+          caseFilter: await resolveReportCaseFilter({
+            caseInput: getString(parsed, "case"),
+            cwd: process.cwd(),
+            home: options.home
+          }),
+          profileFilter: getString(parsed, "profile") ? normalizeRunProfile(getString(parsed, "profile")) : undefined
+        });
+        const format = getString(parsed, "format") ?? "json";
+        if (format === "markdown") {
+          return renderPbenchReportMarkdown(report);
+        }
+        if (format !== "json") {
+          throw new Error(`Unsupported pbench report format: ${format}`);
+        }
+        return printJson(report);
+      }
+    },
+    {
+      domain: "pbench",
+      action: "audit",
+      description: "Audit pbench case quality without running private validators.",
+      run: async (args) => {
+        const parsed = parseArgs(args);
+        const caseInput = requireString(parsed, "case", "yk pbench audit requires --case <case-dir-or-case-id>");
+        const caseDir = await resolveCaseDirInput({
+          caseInput,
+          cwd: process.cwd(),
+          home: options.home,
+          workspace: getString(parsed, "workspace")
+        });
+        return printJson(await auditPbenchCase(caseDir));
       }
     },
     {
@@ -371,6 +458,11 @@ function normalizeReplayRequirements(value: unknown): ReplayRequirements {
       ? object.notes.filter((item): item is string => typeof item === "string" && item.length > 0)
       : []
   };
+}
+
+function normalizeRunProfile(value: string | undefined): string {
+  const profile = value?.trim();
+  return profile ? profile : "default";
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -539,6 +631,24 @@ async function resolveCaseDirInput(options: { caseInput: string; cwd: string; ho
   return caseDir;
 }
 
+async function resolveReportCaseFilter(options: {
+  caseInput?: string;
+  cwd: string;
+  home?: string;
+}): Promise<string | undefined> {
+  if (!options.caseInput) {
+    return undefined;
+  }
+  const home = options.home ?? homedir();
+  const expanded = expandHome(options.caseInput, home);
+  if (isAbsolute(expanded) || options.caseInput.includes(sep) || options.caseInput.includes("/")) {
+    const caseDir = absolutePath(options.caseInput, options.cwd, home);
+    const manifest = await readJson(join(caseDir, "case.json"));
+    return typeof manifest.id === "string" ? manifest.id : options.caseInput;
+  }
+  return options.caseInput;
+}
+
 async function exportReplayCapsule(options: {
   caseDir: string;
   outDir: string;
@@ -549,7 +659,11 @@ async function exportReplayCapsule(options: {
   if (!(await pathExists(publicDir))) {
     throw new Error(`Missing public replay directory: ${publicDir}`);
   }
-  await assertPublicReplayHasNoPrivateReferences(publicDir);
+  const publicCaseManifest = buildPublicCaseManifest(manifest);
+  await assertPublicReplayHasNoPrivateReferences(publicDir, {
+    caseDir: options.caseDir,
+    extraSurfaces: [{ label: "case.public.json", text: JSON.stringify(publicCaseManifest, null, 2) }]
+  });
   if (await pathExists(options.outDir)) {
     if (!options.force) {
       throw new Error(`Output directory already exists: ${options.outDir}. Pass --force to replace it.`);
@@ -558,7 +672,7 @@ async function exportReplayCapsule(options: {
   }
   await mkdir(options.outDir, { recursive: true });
   await cp(publicDir, join(options.outDir, "public"), { recursive: true, force: false });
-  await writeJson(join(options.outDir, "case.public.json"), buildPublicCaseManifest(manifest));
+  await writeJson(join(options.outDir, "case.public.json"), publicCaseManifest);
   return { outDir: options.outDir, caseId: String(manifest.id ?? ""), exported: ["case.public.json", "public/"] };
 }
 
@@ -567,6 +681,11 @@ function buildPublicCaseManifest(manifest: JsonObject): JsonObject {
   const publicDocuments = Object.fromEntries(
     Object.entries(documents).filter(([, value]) => typeof value === "string" && value.startsWith("public/"))
   );
+  const publicSubjects = asArray(manifest.subjects).map((subject) => {
+    const publicSubject = { ...subject };
+    delete publicSubject.sourceRootAtCapture;
+    return publicSubject;
+  });
   return {
     $schema: manifest.$schema,
     schemaVersion: manifest.schemaVersion,
@@ -576,14 +695,64 @@ function buildPublicCaseManifest(manifest: JsonObject): JsonObject {
     privacy: manifest.privacy,
     metadata: manifest.metadata,
     documents: publicDocuments,
-    subjects: manifest.subjects,
+    subjects: publicSubjects,
     setupCommands: manifest.setupCommands,
     replayRequirements: normalizeReplayRequirements(manifest.replayRequirements)
   };
 }
 
-async function assertPublicReplayHasNoPrivateReferences(publicDir: string): Promise<void> {
+type AgentVisibleSurface = {
+  label: string;
+  text: string;
+};
+
+function forbiddenAgentVisibleHits(text: string, forbiddenPaths: string[]): string[] {
   const hits: string[] = [];
+  if (/(^|[\s"'`(=:[{])\/private(?:\/[^\s"'`)<>\]}]*)?/.test(text)) {
+    hits.push("absolute /private path");
+  }
+  if (/(^|[\s"'`(=:[{])(?:\.\/)?private[\\/][^\s"'`)<>\]}]*/.test(text)) {
+    hits.push("private evaluator path");
+  }
+  if (/\bPB_PRIVATE_DIR\b/.test(text)) {
+    hits.push("PB_PRIVATE_DIR");
+  }
+  if (/\bPB_CASE_DIR\b/.test(text)) {
+    hits.push("PB_CASE_DIR");
+  }
+  if (/(^|[\s"'`(=:[{])codex-session\.jsonl\b/.test(text)) {
+    hits.push("raw transcript path");
+  }
+  for (const path of forbiddenPaths) {
+    if (path && text.includes(path)) {
+      hits.push("original case directory");
+    }
+  }
+  return [...new Set(hits)];
+}
+
+function assertNoAgentVisiblePrivateReferences(
+  surfaces: AgentVisibleSurface[],
+  options: { forbiddenPaths?: string[] } = {}
+): void {
+  const labels = new Set<string>();
+  const forbiddenPaths = (options.forbiddenPaths ?? []).filter((path) => path.length > 0);
+  for (const surface of surfaces) {
+    const hits = forbiddenAgentVisibleHits(surface.text, forbiddenPaths);
+    if (hits.length > 0) {
+      labels.add(`${surface.label} (${hits.join(", ")})`);
+    }
+  }
+  if (labels.size > 0) {
+    throw new Error(`Agent-visible pbench replay input contains private evaluator path references: ${[...labels].join(", ")}`);
+  }
+}
+
+async function assertPublicReplayHasNoPrivateReferences(
+  publicDir: string,
+  options: { caseDir?: string; extraSurfaces?: AgentVisibleSurface[] } = {}
+): Promise<void> {
+  const surfaces: AgentVisibleSurface[] = [];
   for (const file of await listFilesRecursively(publicDir)) {
     let text: string;
     try {
@@ -591,13 +760,10 @@ async function assertPublicReplayHasNoPrivateReferences(publicDir: string): Prom
     } catch {
       continue;
     }
-    if (/(^|[\s"'`(])private[\\/]/.test(text)) {
-      hits.push(relativePathFrom(publicDir, file));
-    }
+    surfaces.push({ label: `public/${relativePathFrom(publicDir, file)}`, text });
   }
-  if (hits.length > 0) {
-    throw new Error(`Public replay export contains private evaluator path references: ${hits.join(", ")}`);
-  }
+  surfaces.push(...(options.extraSurfaces ?? []));
+  assertNoAgentVisiblePrivateReferences(surfaces, { forbiddenPaths: options.caseDir ? [options.caseDir] : [] });
 }
 
 async function listFilesRecursively(root: string): Promise<string[]> {
@@ -694,7 +860,10 @@ async function loadRunnableCase(caseDir: string, workspaceRoot: string): Promise
   }
   const manifest = await readJson(join(caseDir, "case.json"));
   const requiredEnv = ensureRequiredReplayEnv(manifest);
-  await assertPublicReplayHasNoPrivateReferences(join(caseDir, "public"));
+  await assertPublicReplayHasNoPrivateReferences(join(caseDir, "public"), {
+    caseDir,
+    extraSurfaces: [{ label: "case.public.json", text: JSON.stringify(buildPublicCaseManifest(manifest), null, 2) }]
+  });
   const subject = asArray(manifest.subjects)[0];
   const baseline = asObject(subject?.baseline);
   const commit = String(baseline?.commit ?? "");
@@ -769,13 +938,104 @@ async function writeRunSummary(state: RunState, details: string[] = []): Promise
   return path;
 }
 
+function runEvent(phase: RunEvent["phase"], status: string, fields: Omit<RunEvent, "phase" | "status" | "at"> = {}): RunEvent {
+  return { phase, status, at: nowIso(), ...fields };
+}
+
+function setupRunEvent(setupOutcomes: ValidatorOutcome[]): RunEvent {
+  if (setupOutcomes.length === 0) {
+    return runEvent("setup", "skipped", { message: "No setup commands configured." });
+  }
+  const failed = setupOutcomes.find((outcome) => outcome.actual !== "pass");
+  if (failed) {
+    return runEvent("setup", "failed", { message: failed.id, exitCode: failed.exitCode });
+  }
+  return runEvent("setup", "passed", { message: `${setupOutcomes.length} setup command(s) passed.` });
+}
+
+function validatorRunEvent(outcomes: ValidatorOutcome[]): RunEvent {
+  const failed = outcomes.find((outcome) => outcome.actual !== outcome.expected);
+  if (failed) {
+    return runEvent("validator", "failed", { message: failed.id, exitCode: failed.exitCode });
+  }
+  return runEvent("validator", "passed", { message: `${outcomes.length} validator(s) passed.` });
+}
+
+function validatorCounts(outcomes: ValidatorOutcome[] = []): { total: number; passed: number; failed: number } {
+  const passed = outcomes.filter((outcome) => outcome.actual === outcome.expected).length;
+  return { total: outcomes.length, passed, failed: outcomes.length - passed };
+}
+
+function tokenUsageFromState(state: RunState): JsonObject {
+  return asObject(state.tokenUsage) ?? {};
+}
+
+async function writeRunMetrics(state: RunState, options: { validatorOutcomes?: ValidatorOutcome[] } = {}): Promise<void> {
+  await writeJson(join(state.artifactDir, "metrics.json"), {
+    schemaVersion: 1,
+    runId: state.runId,
+    caseId: state.caseId,
+    profile: state.profile ?? "default",
+    status: state.status,
+    agentMode: state.agentMode,
+    manualIntervention: state.manualIntervention,
+    durationMs: typeof state.durationMs === "number" ? state.durationMs : null,
+    tokenUsage: tokenUsageFromState(state),
+    validator: validatorCounts(options.validatorOutcomes),
+    createdAt: state.createdAt,
+    updatedAt: state.updatedAt,
+    finishedAt: typeof state.finishedAt === "string" ? state.finishedAt : null
+  });
+}
+
+async function writeRunEvents(state: RunState, events: RunEvent[]): Promise<void> {
+  await writeJson(join(state.artifactDir, "events.json"), {
+    schemaVersion: 1,
+    runId: state.runId,
+    caseId: state.caseId,
+    profile: state.profile ?? "default",
+    events
+  });
+}
+
+async function writeTerminalRunArtifacts(
+  state: RunState,
+  options: { events: RunEvent[]; validatorOutcomes?: ValidatorOutcome[] }
+): Promise<void> {
+  state.events = options.events;
+  await writeRunMetrics(state, { validatorOutcomes: options.validatorOutcomes });
+  await writeRunEvents(state, options.events);
+}
+
 async function preparePublicCapsule(caseDir: string, manifest: JsonObject, worktree: string, runId: string): Promise<void> {
   const pbenchDir = join(worktree, ".pbench");
+  const publicCaseManifest = buildPublicCaseManifest(manifest);
   await rm(pbenchDir, { recursive: true, force: true });
   await mkdir(pbenchDir, { recursive: true });
   await cp(join(caseDir, "public"), join(pbenchDir, "public"), { recursive: true, force: false });
-  await writeJson(join(pbenchDir, "case.public.json"), buildPublicCaseManifest(manifest));
+  await writeJson(join(pbenchDir, "case.public.json"), publicCaseManifest);
   await writeJson(join(pbenchDir, "run.json"), publicRunFile(runId));
+}
+
+async function assertPreparedAgentVisibleInputs(options: {
+  worktree: string;
+  caseDir: string;
+  agentPrompt: string;
+}): Promise<void> {
+  const pbenchDir = join(options.worktree, ".pbench");
+  const surfaces: AgentVisibleSurface[] = [
+    { label: ".pbench/case.public.json", text: await readFile(join(pbenchDir, "case.public.json"), "utf8") },
+    { label: ".pbench/run.json", text: await readFile(join(pbenchDir, "run.json"), "utf8") },
+    { label: "codex prompt", text: options.agentPrompt }
+  ];
+  const runnerSkillPath = join(options.worktree, ".agents", "skills", PBENCH_RUNNER_SKILL_NAME, "SKILL.md");
+  if (await pathExists(runnerSkillPath)) {
+    surfaces.push({ label: ".agents/skills/pbench-runner/SKILL.md", text: await readFile(runnerSkillPath, "utf8") });
+  }
+  await assertPublicReplayHasNoPrivateReferences(join(pbenchDir, "public"), {
+    caseDir: options.caseDir,
+    extraSurfaces: surfaces
+  });
 }
 
 async function applyStartingPatch(caseDir: string, worktree: string): Promise<void> {
@@ -890,7 +1150,8 @@ function parseCodexJsonlSummary(stdoutText: string): { lastMessage: string | nul
 async function copyAgentProbeFiles(worktree: string, artifactDir: string, redactor: (text: string) => string): Promise<void> {
   for (const [source, destination] of [
     [join(worktree, ".pbench", "fake-codex-stdin.txt"), join(artifactDir, "agent-stdin.txt")],
-    [join(worktree, ".pbench", "fake-codex-env.json"), join(artifactDir, "agent-env.json")]
+    [join(worktree, ".pbench", "fake-codex-env.json"), join(artifactDir, "agent-env.json")],
+    [join(worktree, ".pbench", "fake-codex-visible.txt"), join(artifactDir, "agent-visible.txt")]
   ]) {
     if (await pathExists(source)) {
       await writeFile(destination, redactor(await readFile(source, "utf8")));
@@ -922,12 +1183,13 @@ async function createStartedRun(options: {
   workspaceRoot: string;
   home?: string;
   agentMode: "codex" | "skill";
+  profile: string;
 }): Promise<{ state: RunState; manifest: JsonObject; redactor: (text: string) => string }> {
   const { manifest, caseId, repoCache, commit, requiredEnv } = await loadRunnableCase(options.caseDir, options.workspaceRoot);
   const runId = makeRunId(caseId);
   const artifactDir = join(options.workspaceRoot, "runs", runId);
   await mkdir(artifactDir, { recursive: true });
-  const worktree = createReplayWorktree(repoCache, commit);
+  const worktree = await createReplayWorktree(repoCache, commit, options.workspaceRoot, runId);
   const redactor = makeRedactor(requiredEnv);
   const state: RunState = {
     schemaVersion: 1,
@@ -939,6 +1201,7 @@ async function createStartedRun(options: {
     worktree,
     repoCache,
     agentMode: options.agentMode,
+    profile: options.profile,
     status: "running",
     terminal: false,
     manualIntervention: options.agentMode === "skill",
@@ -947,27 +1210,38 @@ async function createStartedRun(options: {
     updatedAt: nowIso()
   };
 
-  await preparePublicCapsule(options.caseDir, manifest, worktree, runId);
-  await applyStartingPatch(options.caseDir, worktree);
-  if (options.agentMode === "skill") {
-    await installRunnerSkill(worktree);
-  }
-  const setupOutcomes = runSetupCommands(manifest, worktree, publicRunnerEnv(worktree));
-  if (setupOutcomes.length > 0) {
-    await writeFile(join(artifactDir, "setup-outcomes.json"), redactor(JSON.stringify(setupOutcomes, null, 2)));
-    const failed = setupOutcomes.find((outcome) => outcome.actual !== "pass");
-    if (failed) {
-      state.status = "setup_failed";
-      state.terminal = true;
-      await writeAgentDiff(worktree, artifactDir, redactor);
-      await writeRunSummary(state, ["Setup failed before agent execution."]);
-      await saveRunState(state, options.home);
-      await cleanupReplayWorktree(repoCache, worktree);
-      return { state, manifest, redactor };
+  try {
+    await preparePublicCapsule(options.caseDir, manifest, worktree, runId);
+    await applyStartingPatch(options.caseDir, worktree);
+    if (options.agentMode === "skill") {
+      await installRunnerSkill(worktree);
     }
+    await assertPreparedAgentVisibleInputs({ worktree, caseDir: options.caseDir, agentPrompt: renderAgentPrompt() });
+    const setupOutcomes = runSetupCommands(manifest, worktree, publicRunnerEnv(worktree));
+    state.events = [setupRunEvent(setupOutcomes)];
+    if (setupOutcomes.length > 0) {
+      await writeFile(join(artifactDir, "setup-outcomes.json"), redactor(JSON.stringify(setupOutcomes, null, 2)));
+      const failed = setupOutcomes.find((outcome) => outcome.actual !== "pass");
+      if (failed) {
+        state.status = "setup_failed";
+        state.terminal = true;
+        state.finishedAt = nowIso();
+        await writeAgentDiff(worktree, artifactDir, redactor);
+        await writeRunSummary(state, ["Setup failed before agent execution."]);
+        await writeTerminalRunArtifacts(state, {
+          events: [...(state.events ?? []), runEvent("finish", "setup_failed", { message: "Setup failed before agent execution." })]
+        });
+        await saveRunState(state, options.home);
+        await cleanupReplayWorktree(repoCache, worktree);
+        return { state, manifest, redactor };
+      }
+    }
+    await saveRunState(state, options.home);
+    return { state, manifest, redactor };
+  } catch (error) {
+    await cleanupReplayWorktree(repoCache, worktree);
+    throw error;
   }
-  await saveRunState(state, options.home);
-  return { state, manifest, redactor };
 }
 
 async function completeRunWithValidators(state: RunState, manifest: JsonObject, home?: string): Promise<RunState> {
@@ -987,6 +1261,14 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
   state.terminal = true;
   state.finishedAt = nowIso();
   await writeRunSummary(state, errors.length === 0 ? ["Private validators passed."] : ["Private validators failed."]);
+  await writeTerminalRunArtifacts(state, {
+    events: [
+      ...(state.events ?? []),
+      validatorRunEvent(outcomes),
+      runEvent("finish", state.status, { message: errors.length === 0 ? "Private validators passed." : "Private validators failed." })
+    ],
+    validatorOutcomes: outcomes
+  });
   await saveRunState(state, home);
   await cleanupReplayWorktree(state.repoCache, state.worktree);
   return state;
@@ -996,6 +1278,7 @@ async function runPbenchCase(options: {
   caseDir: string;
   workspaceRoot: string;
   home?: string;
+  profile: string;
 }): Promise<JsonObject> {
   const { state, manifest, redactor } = await createStartedRun({ ...options, agentMode: "codex" });
   if (state.terminal) {
@@ -1018,12 +1301,22 @@ async function runPbenchCase(options: {
   state.durationMs = durationMs;
   state.cost = null;
   state.tokenUsage = agentSummary.tokenUsage;
+  state.events = [
+    ...(state.events ?? []),
+    runEvent("agent", agent.exitCode === 0 ? "passed" : "failed", {
+      exitCode: agent.exitCode,
+      message: agent.exitCode === 0 ? "Agent completed." : "Agent failed before private validation."
+    })
+  ];
   if (agent.exitCode !== 0) {
     state.status = "agent_failed";
     state.terminal = true;
     state.finishedAt = nowIso();
     await writeAgentDiff(state.worktree, state.artifactDir, redactor);
     await writeRunSummary(state, ["Agent failed before private validation."]);
+    await writeTerminalRunArtifacts(state, {
+      events: [...(state.events ?? []), runEvent("finish", "agent_failed", { message: "Agent failed before private validation." })]
+    });
     await saveRunState(state, options.home);
     await cleanupReplayWorktree(state.repoCache, state.worktree);
   } else {
@@ -1036,6 +1329,7 @@ async function startSkillMediatedRun(options: {
   caseDir: string;
   workspaceRoot: string;
   home?: string;
+  profile: string;
 }): Promise<JsonObject> {
   const { state } = await createStartedRun({ ...options, agentMode: "skill" });
   return {
@@ -1055,6 +1349,252 @@ async function finishPbenchRun(options: { runId: string; home?: string }): Promi
   const manifest = await readJson(join(state.caseDir, "case.json"));
   const finished = await completeRunWithValidators(state, manifest, options.home);
   return { runId: finished.runId, status: finished.status, summaryPath: join(finished.artifactDir, "summary.md") };
+}
+
+async function readRunArtifact(path: string): Promise<JsonObject> {
+  try {
+    return await readJson(path);
+  } catch (error) {
+    throw new Error(`Malformed pbench run artifact: ${path}: ${(error as Error).message}`);
+  }
+}
+
+function normalizeReportRun(run: JsonObject): PbenchReportRun {
+  const artifactDir = typeof run.artifactDir === "string" ? run.artifactDir : "";
+  return {
+    runId: String(run.runId ?? ""),
+    caseId: String(run.caseId ?? ""),
+    profile: normalizeRunProfile(typeof run.profile === "string" ? run.profile : undefined),
+    status: String(run.status ?? "unknown"),
+    artifactDir,
+    summaryPath: join(artifactDir, "summary.md"),
+    agentMode: String(run.agentMode ?? "unknown"),
+    manualIntervention: run.manualIntervention === true,
+    durationMs: typeof run.durationMs === "number" ? run.durationMs : null,
+    tokenUsage: asObject(run.tokenUsage) ?? {},
+    createdAt: typeof run.createdAt === "string" ? run.createdAt : null,
+    updatedAt: typeof run.updatedAt === "string" ? run.updatedAt : null
+  };
+}
+
+function incrementCount(record: Record<string, number>, key: string, amount = 1): void {
+  record[key] = (record[key] ?? 0) + amount;
+}
+
+function addTokenUsage(target: Record<string, number>, tokenUsage: JsonObject): void {
+  for (const [key, value] of Object.entries(tokenUsage)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      incrementCount(target, key, value);
+    }
+  }
+}
+
+function sortObjectValues<T>(input: Record<string, T>): Record<string, T> {
+  return Object.fromEntries(Object.entries(input).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+async function listReportRuns(workspaceRoot: string): Promise<PbenchReportRun[]> {
+  const runsRoot = join(workspaceRoot, "runs");
+  if (!(await pathExists(runsRoot))) {
+    return [];
+  }
+  const entries = await readdir(runsRoot, { withFileTypes: true });
+  const runs: PbenchReportRun[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const runJsonPath = join(runsRoot, entry.name, "run.json");
+    if (!(await pathExists(runJsonPath))) {
+      continue;
+    }
+    runs.push(normalizeReportRun(await readRunArtifact(runJsonPath)));
+  }
+  return runs;
+}
+
+async function buildPbenchReport(options: {
+  workspaceRoot: string;
+  caseFilter?: string;
+  profileFilter?: string;
+}): Promise<JsonObject> {
+  const filters: JsonObject = {};
+  if (options.caseFilter) filters.caseId = options.caseFilter;
+  if (options.profileFilter) filters.profile = options.profileFilter;
+  const runs = (await listReportRuns(options.workspaceRoot)).filter((run) => {
+    if (options.caseFilter && run.caseId !== options.caseFilter) return false;
+    if (options.profileFilter && run.profile !== options.profileFilter) return false;
+    return true;
+  });
+
+  const statusCounts: Record<string, number> = {};
+  const caseIds = new Set<string>();
+  const profiles: Record<
+    string,
+    { runs: number; passed: number; passRate: number; averageDurationMs: number | null; tokenUsage: Record<string, number>; durationTotal: number; durationCount: number }
+  > = {};
+  const cases: Record<string, { runs: number; profiles: Record<string, number>; statusCounts: Record<string, number> }> = {};
+  let manualIntervention = 0;
+
+  for (const run of runs) {
+    caseIds.add(run.caseId);
+    incrementCount(statusCounts, run.status);
+    if (run.manualIntervention) manualIntervention += 1;
+
+    profiles[run.profile] ??= {
+      runs: 0,
+      passed: 0,
+      passRate: 0,
+      averageDurationMs: null,
+      tokenUsage: {},
+      durationTotal: 0,
+      durationCount: 0
+    };
+    const profile = profiles[run.profile];
+    profile.runs += 1;
+    if (run.status === "passed") profile.passed += 1;
+    if (typeof run.durationMs === "number") {
+      profile.durationTotal += run.durationMs;
+      profile.durationCount += 1;
+    }
+    addTokenUsage(profile.tokenUsage, run.tokenUsage);
+
+    cases[run.caseId] ??= { runs: 0, profiles: {}, statusCounts: {} };
+    cases[run.caseId].runs += 1;
+    incrementCount(cases[run.caseId].profiles, run.profile);
+    incrementCount(cases[run.caseId].statusCounts, run.status);
+  }
+
+  const renderedProfiles = sortObjectValues(
+    Object.fromEntries(
+      Object.entries(profiles).map(([name, profile]) => [
+        name,
+        {
+          runs: profile.runs,
+          passed: profile.passed,
+          passRate: profile.runs === 0 ? 0 : profile.passed / profile.runs,
+          averageDurationMs: profile.durationCount === 0 ? null : profile.durationTotal / profile.durationCount,
+          tokenUsage: sortObjectValues(profile.tokenUsage)
+        }
+      ])
+    )
+  );
+
+  const renderedCases = sortObjectValues(
+    Object.fromEntries(
+      Object.entries(cases).map(([caseId, value]) => [
+        caseId,
+        {
+          runs: value.runs,
+          profiles: sortObjectValues(value.profiles),
+          statusCounts: sortObjectValues(value.statusCounts)
+        }
+      ])
+    )
+  );
+
+  const recentRuns = [...runs]
+    .sort((left, right) => String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")) || right.runId.localeCompare(left.runId))
+    .slice(0, 20);
+
+  return {
+    schemaVersion: 1,
+    workspaceRoot: options.workspaceRoot,
+    filters,
+    totals: {
+      runs: runs.length,
+      cases: caseIds.size,
+      manualIntervention,
+      statusCounts: sortObjectValues(statusCounts)
+    },
+    profiles: renderedProfiles,
+    cases: renderedCases,
+    recentRuns
+  };
+}
+
+function formatPercent(value: unknown): string {
+  return `${((typeof value === "number" ? value : 0) * 100).toFixed(1)}%`;
+}
+
+function formatNullableNumber(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? String(Math.round(value)) : "";
+}
+
+function renderPbenchReportMarkdown(report: JsonObject): string {
+  const totals = asObject(report.totals) ?? {};
+  const statusCounts = asObject(totals.statusCounts) ?? {};
+  const profiles = asObject(report.profiles) ?? {};
+  const lines = [
+    "# PBench Report",
+    "",
+    `Workspace: ${String(report.workspaceRoot ?? "")}`,
+    "",
+    "## Totals",
+    "",
+    `Runs: ${String(totals.runs ?? 0)}`,
+    `Cases: ${String(totals.cases ?? 0)}`,
+    `Manual intervention: ${String(totals.manualIntervention ?? 0)}`,
+    "",
+    "## Status",
+    "",
+    "| Status | Runs |",
+    "| --- | ---: |"
+  ];
+  for (const [status, count] of Object.entries(statusCounts)) {
+    lines.push(`| ${status} | ${String(count)} |`);
+  }
+  if (Object.keys(statusCounts).length === 0) {
+    lines.push("| none | 0 |");
+  }
+
+  lines.push(
+    "",
+    "## Profiles",
+    "",
+    "| Profile | Runs | Passed | Pass Rate | Avg Duration (ms) | Input Tokens | Output Tokens |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+  );
+  for (const [name, rawProfile] of Object.entries(profiles)) {
+    const profile = asObject(rawProfile) ?? {};
+    const tokenUsage = asObject(profile.tokenUsage) ?? {};
+    lines.push(
+      `| ${name} | ${String(profile.runs ?? 0)} | ${String(profile.passed ?? 0)} | ${formatPercent(profile.passRate)} | ${formatNullableNumber(profile.averageDurationMs)} | ${String(tokenUsage.input_tokens ?? 0)} | ${String(tokenUsage.output_tokens ?? 0)} |`
+    );
+  }
+  if (Object.keys(profiles).length === 0) {
+    lines.push("| none | 0 | 0 | 0.0% |  | 0 | 0 |");
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function auditPbenchCase(caseDir: string): Promise<JsonObject> {
+  const validation = await validateCaseBundle(caseDir, { strict: false });
+  const warnings = [...validation.warnings, ...(await findAuthoringWarnings(caseDir))];
+  const errors = [...validation.errors];
+  try {
+    const manifest = await readJson(join(caseDir, "case.json"));
+    await assertPublicReplayHasNoPrivateReferences(join(caseDir, "public"), {
+      caseDir,
+      extraSurfaces: [{ label: "case.public.json", text: JSON.stringify(buildPublicCaseManifest(manifest), null, 2) }]
+    });
+  } catch (error) {
+    errors.push((error as Error).message);
+  }
+  let caseId = "";
+  try {
+    const manifest = await readJson(join(caseDir, "case.json"));
+    caseId = typeof manifest.id === "string" ? manifest.id : "";
+  } catch {
+    // validateCaseBundle already reports unreadable manifests.
+  }
+  return {
+    schemaVersion: 1,
+    caseId,
+    ok: errors.length === 0 && warnings.length === 0,
+    errors,
+    warnings
+  };
 }
 
 export function resolveGitRoot(cwdInput: string): string {
@@ -1586,23 +2126,31 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     replayRequirements
   };
   const authoring = buildAuthoringArtifacts(rawTitle, extracted);
+  const sanitizePublicText = makePublicReplaySanitizer({
+    sourceRepoRoot,
+    captureCwd: subject.sourceCwd,
+    caseDir,
+    inputPath
+  });
 
   await writeJson(join(caseDir, "case.json"), manifest);
   await writeFile(
     join(caseDir, "README.md"),
     `# ${rawTitle}\n\nGenerated by yk pbench capture. Review generated authoring docs, finish the completion validator if needed, then run strict validation.\n`
   );
-  await writeFile(join(caseDir, "public", "prompt.md"), `${extracted.userMessages[0] ?? ""}\n`);
+  await writeFile(join(caseDir, "public", "prompt.md"), sanitizePublicText(`${extracted.userMessages[0] ?? ""}\n`));
   await writeFile(
     join(caseDir, "public", "context.md"),
-    [
-      `Subject repo at capture: ${sourceRepoRoot}`,
-      `Session cwd: ${String(meta.cwd ?? "unknown")}`,
-      `Session id: ${String(meta.id ?? options.sessionId ?? basename(inputPath))}`,
-      `Baseline commit: ${baselineCommit}`,
-      `Branch at capture: ${String(branchAtCapture ?? "unknown")}`,
-      ""
-    ].join("\n")
+    sanitizePublicText(
+      [
+        `Subject repo at capture: ${sourceRepoRoot}`,
+        `Session cwd: ${String(meta.cwd ?? "unknown")}`,
+        `Session id: ${String(meta.id ?? options.sessionId ?? basename(inputPath))}`,
+        `Baseline commit: ${baselineCommit}`,
+        `Branch at capture: ${String(branchAtCapture ?? "unknown")}`,
+        ""
+      ].join("\n")
+    )
   );
   await writeFile(join(caseDir, "public", "environment.md"), `Captured at: ${createdAt}\nModel: ${String(meta.model ?? "unknown")}\n`);
   await writeFile(join(caseDir, "private", "failure.md"), authoring.failure);
@@ -1644,7 +2192,8 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     baselineCommit,
     setupCommands: manifest.setupCommands,
     extracted,
-    replayRequirements
+    replayRequirements,
+    sanitizePublicText
   });
   await writeJson(join(transactionPath, "transaction.json"), {
     schemaVersion: 1,
@@ -1835,6 +2384,7 @@ type ReplayContextOptions = {
   setupCommands: JsonObject[];
   extracted: ExtractedCodexSession;
   replayRequirements: ReplayRequirements;
+  sanitizePublicText: (text: string) => string;
 };
 
 type PublicContextFile = {
@@ -1845,9 +2395,14 @@ type PublicContextFile = {
 
 async function writeReplayContext(options: ReplayContextOptions): Promise<void> {
   const warnings: string[] = [];
-  const agentInstructionsPath = await writeAgentInstructions(options.caseDir, options.sourceRepoRoot, options.captureCwd);
-  const keyObservationsPath = await writeKeyObservations(options.caseDir, options.extracted);
-  const commandObservationsPath = await writeCommandObservations(options.caseDir, options.extracted);
+  const agentInstructionsPath = await writeAgentInstructions(
+    options.caseDir,
+    options.sourceRepoRoot,
+    options.captureCwd,
+    options.sanitizePublicText
+  );
+  const keyObservationsPath = await writeKeyObservations(options.caseDir, options.extracted, options.sanitizePublicText);
+  const commandObservationsPath = await writeCommandObservations(options.caseDir, options.extracted, options.sanitizePublicText);
   const startingPatchPath = await writeStartingPatch(options.caseDir, options.sourceRepoRoot, warnings);
   const contextFiles = await writeUntrackedContextFiles(options.caseDir, options.sourceRepoRoot, warnings);
   await writeFailureDraft(options.caseDir, options.extracted);
@@ -1869,11 +2424,11 @@ async function writeReplayContext(options: ReplayContextOptions): Promise<void> 
     source: {
       kind: "codex-session",
       sessionId: String(options.extracted.meta.id ?? ""),
-      cwd: options.extracted.meta.cwd ?? null,
+      cwd: typeof options.extracted.meta.cwd === "string" ? options.sanitizePublicText(options.extracted.meta.cwd) : null,
       model: options.extracted.meta.model ?? null
     },
     baseline: {
-      repoRoot: options.sourceRepoRoot,
+      repoRoot: SUBJECT_REPO_PLACEHOLDER,
       commit: options.baselineCommit
     },
     packageManager: inferPackageManager(options.setupCommands),
@@ -1886,7 +2441,10 @@ async function writeReplayContext(options: ReplayContextOptions): Promise<void> 
 
   await writeJson(join(options.caseDir, PUBLIC_CONTEXT_MANIFEST_PATH), contextManifest);
   await writeJson(join(options.caseDir, PUBLIC_REPLAY_MANIFEST_PATH), contextManifest);
-  await writeFile(join(options.caseDir, "public", "replay.md"), renderReplayMarkdown(options, replayFiles, contextFiles, warnings));
+  await writeFile(
+    join(options.caseDir, "public", "replay.md"),
+    options.sanitizePublicText(renderReplayMarkdown(options, replayFiles, contextFiles, warnings))
+  );
 }
 
 function inferPackageManager(setupCommands: JsonObject[]): string | null {
@@ -1950,7 +2508,12 @@ function renderReplayMarkdown(
   ].join("\n");
 }
 
-async function writeAgentInstructions(caseDir: string, repoRoot: string, captureCwd: string): Promise<string> {
+async function writeAgentInstructions(
+  caseDir: string,
+  repoRoot: string,
+  captureCwd: string,
+  sanitizePublicText: (text: string) => string
+): Promise<string> {
   const lines = ["# Agent Instructions", ""];
   const instructionFiles = agentInstructionCandidates(repoRoot, captureCwd);
   for (const file of instructionFiles) {
@@ -1968,7 +2531,7 @@ async function writeAgentInstructions(caseDir: string, repoRoot: string, capture
   }
 
   const publicPath = "public/agent-instructions.md";
-  await writeFile(join(caseDir, publicPath), lines.join("\n"));
+  await writeFile(join(caseDir, publicPath), sanitizePublicText(lines.join("\n")));
   return publicPath;
 }
 
@@ -1994,7 +2557,11 @@ async function listSkillNames(root: string): Promise<string[]> {
   }
 }
 
-async function writeKeyObservations(caseDir: string, extracted: ExtractedCodexSession): Promise<string> {
+async function writeKeyObservations(
+  caseDir: string,
+  extracted: ExtractedCodexSession,
+  sanitizePublicText: (text: string) => string
+): Promise<string> {
   const lines = ["# Key Observations", ""];
   const commandRecords = extracted.toolCalls.filter((record) => commandText(record)).filter(isKeyObservationRecord);
   if (commandRecords.length === 0) {
@@ -2002,12 +2569,12 @@ async function writeKeyObservations(caseDir: string, extracted: ExtractedCodexSe
   }
   for (const [index, record] of commandRecords.entries()) {
     const args = asObject(record.arguments) ?? {};
-    lines.push(`## ${index + 1}. ${commandText(record)}`, "");
-    lines.push(`- cwd: ${String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "unknown")}`);
+    lines.push(`## ${index + 1}. ${sanitizePublicText(commandText(record))}`, "");
+    lines.push(`- cwd: ${sanitizePublicText(String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "unknown"))}`);
     lines.push(`- status: ${String(record.status ?? record.outcome ?? "unknown")}`);
     lines.push(`- exitCode: ${String(record.exit_code ?? record.exitCode ?? "unknown")}`);
-    const stdoutText = excerpt(String(record.stdout ?? ""));
-    const stderrText = excerpt(String(record.stderr ?? ""));
+    const stdoutText = excerpt(sanitizePublicText(String(record.stdout ?? "")));
+    const stderrText = excerpt(sanitizePublicText(String(record.stderr ?? "")));
     if (stdoutText) lines.push("", "stdout:", fenced(stdoutText));
     if (stderrText) lines.push("", "stderr:", fenced(stderrText));
     lines.push("");
@@ -2048,7 +2615,11 @@ function isSkippedObservationCommand(command: string): boolean {
   return false;
 }
 
-async function writeCommandObservations(caseDir: string, extracted: ExtractedCodexSession): Promise<string> {
+async function writeCommandObservations(
+  caseDir: string,
+  extracted: ExtractedCodexSession,
+  sanitizePublicText: (text: string) => string
+): Promise<string> {
   const lines = ["# Command Observations", ""];
   const commandRecords = extracted.toolCalls.filter((record) => commandText(record));
   if (commandRecords.length === 0) {
@@ -2056,12 +2627,12 @@ async function writeCommandObservations(caseDir: string, extracted: ExtractedCod
   }
   for (const [index, record] of commandRecords.entries()) {
     const args = asObject(record.arguments) ?? {};
-    lines.push(`## ${index + 1}. ${commandText(record)}`, "");
-    lines.push(`- cwd: ${String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "unknown")}`);
+    lines.push(`## ${index + 1}. ${sanitizePublicText(commandText(record))}`, "");
+    lines.push(`- cwd: ${sanitizePublicText(String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "unknown"))}`);
     lines.push(`- status: ${String(record.status ?? record.outcome ?? "unknown")}`);
     lines.push(`- exitCode: ${String(record.exit_code ?? record.exitCode ?? "unknown")}`);
-    const stdoutText = excerpt(String(record.stdout ?? ""));
-    const stderrText = excerpt(String(record.stderr ?? ""));
+    const stdoutText = excerpt(sanitizePublicText(String(record.stdout ?? "")));
+    const stderrText = excerpt(sanitizePublicText(String(record.stderr ?? "")));
     if (stdoutText) lines.push("", "stdout:", fenced(stdoutText));
     if (stderrText) lines.push("", "stderr:", fenced(stderrText));
     lines.push("");
@@ -2181,6 +2752,48 @@ function execGitRawOptional(cwd: string, args: string[]): string {
 
 function relativePathFrom(root: string, path: string): string {
   return relative(root, path).replace(/\\/g, "/");
+}
+
+function publicRepoPath(path: string, repoRoot: string): string {
+  const relativePath = relative(repoRoot, path).replace(/\\/g, "/");
+  if (!relativePath) {
+    return SUBJECT_REPO_PLACEHOLDER;
+  }
+  if (!relativePath.startsWith("../") && relativePath !== ".." && !isAbsolute(relativePath)) {
+    return `${SUBJECT_REPO_PLACEHOLDER}/${relativePath}`;
+  }
+  return PRIVATE_PATH_PLACEHOLDER;
+}
+
+function makePublicReplaySanitizer(options: {
+  sourceRepoRoot: string;
+  captureCwd?: string | null;
+  caseDir?: string;
+  inputPath?: string;
+}): (text: string) => string {
+  const replacements = [
+    { value: options.inputPath, replacement: PRIVATE_PATH_PLACEHOLDER },
+    { value: options.caseDir, replacement: PRIVATE_PATH_PLACEHOLDER },
+    {
+      value: options.captureCwd,
+      replacement: options.captureCwd ? publicRepoPath(options.captureCwd, options.sourceRepoRoot) : undefined
+    },
+    { value: options.sourceRepoRoot, replacement: SUBJECT_REPO_PLACEHOLDER }
+  ]
+    .filter((item): item is { value: string; replacement: string } => Boolean(item.value && item.replacement))
+    .sort((left, right) => right.value.length - left.value.length);
+
+  return (text: string) => {
+    let outputText = text;
+    for (const { value, replacement } of replacements) {
+      outputText = outputText.split(value).join(replacement);
+    }
+    outputText = outputText.replace(/(^|[\s"'`(=:[{])\/private(?:\/[^\s"'`)<>\]}]*)?/g, `$1${PRIVATE_PATH_PLACEHOLDER}`);
+    outputText = outputText.replace(/(^|[\s"'`(=:[{])(?:\.\/)?private[\\/][^\s"'`)<>\]}]*/g, `$1${PRIVATE_PATH_PLACEHOLDER}`);
+    outputText = outputText.replace(/\bPB_PRIVATE_DIR\b/g, "PB_PRIVATE_ENV");
+    outputText = outputText.replace(/\bPB_CASE_DIR\b/g, "PB_CASE_ENV");
+    return outputText;
+  };
 }
 
 async function confirmCapturePlan(plan: CapturePlan): Promise<boolean> {
@@ -2356,10 +2969,11 @@ function repoCacheForSubject(workspaceRoot: string, subject: JsonObject): string
   return join(workspaceRoot, "repos", `${String(subject.repoId)}.git`);
 }
 
-function createReplayWorktree(repoCache: string, commit: string): string {
-  const replayRoot = execFileSync("mktemp", ["-d", join(tmpdir(), "personal-bench-replay-XXXXXX")], {
-    encoding: "utf8"
-  }).trim();
+async function createReplayWorktree(repoCache: string, commit: string, workspaceRoot: string, runId: string): Promise<string> {
+  const replayRunRoot = join(workspaceRoot, ".personal-bench", "replays", runId);
+  const replayRoot = join(replayRunRoot, "worktree");
+  await rm(replayRunRoot, { recursive: true, force: true });
+  await mkdir(replayRunRoot, { recursive: true });
   execGitDir(repoCache, ["worktree", "add", "--detach", replayRoot, commit]);
   return replayRoot;
 }
@@ -2368,9 +2982,10 @@ async function cleanupReplayWorktree(repoCache: string, replayRoot: string): Pro
   try {
     execGitDir(repoCache, ["worktree", "remove", "--force", replayRoot]);
   } catch {
-    // The tmp directory removal below handles partially-created worktrees.
+    // The directory removal below handles partially-created worktrees.
   }
-  await rm(replayRoot, { recursive: true, force: true });
+  const rootToRemove = basename(replayRoot) === "worktree" ? dirname(replayRoot) : replayRoot;
+  await rm(rootToRemove, { recursive: true, force: true });
 }
 
 function runShell(command: string, cwd: string, timeoutSeconds: number, env: NodeJS.ProcessEnv): ValidatorOutcome {
@@ -2482,7 +3097,12 @@ async function runStrictValidation(
     return [];
   }
 
-  const replayRoot = createReplayWorktree(repoCache, commit);
+  const replayRoot = await createReplayWorktree(
+    repoCache,
+    commit,
+    workspaceRoot,
+    `strict_${slugify(String(manifest.id ?? "case"))}_${stamp()}_${randomBytes(4).toString("hex")}`
+  );
   const outcomes: ValidatorOutcome[] = [];
   try {
     const env = privateValidatorEnv(caseDir, replayRoot);
