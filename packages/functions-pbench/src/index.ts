@@ -334,14 +334,22 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
       description: "Audit pbench case quality without running private validators.",
       run: async (args) => {
         const parsed = parseArgs(args);
-        const caseInput = requireString(parsed, "case", "yk pbench audit requires --case <case-dir-or-case-id>");
-        const caseDir = await resolveCaseDirInput({
-          caseInput,
+        const caseInput = getString(parsed, "case");
+        if (caseInput) {
+          const caseDir = await resolveCaseDirInput({
+            caseInput,
+            cwd: process.cwd(),
+            home: options.home,
+            workspace: getString(parsed, "workspace")
+          });
+          return printJson(await auditPbenchCase(caseDir));
+        }
+        const workspaceRoot = await resolveWorkspaceRoot({
+          workspace: getString(parsed, "workspace"),
           cwd: process.cwd(),
-          home: options.home,
-          workspace: getString(parsed, "workspace")
+          home: options.home
         });
-        return printJson(await auditPbenchCase(caseDir));
+        return printJson(await auditPbenchWorkspace(workspaceRoot));
       }
     },
     {
@@ -1521,10 +1529,25 @@ function formatNullableNumber(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value) ? String(Math.round(value)) : "";
 }
 
+function markdownCell(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\r?\n/g, " ")
+    .replace(/\|/g, "\\|");
+}
+
+function formatCountRecord(value: unknown): string {
+  const record = asObject(value) ?? {};
+  return Object.entries(record)
+    .map(([key, count]) => `${key}: ${String(count)}`)
+    .join(", ");
+}
+
 function renderPbenchReportMarkdown(report: JsonObject): string {
   const totals = asObject(report.totals) ?? {};
   const statusCounts = asObject(totals.statusCounts) ?? {};
   const profiles = asObject(report.profiles) ?? {};
+  const cases = asObject(report.cases) ?? {};
+  const recentRuns = asArray(report.recentRuns);
   const lines = [
     "# PBench Report",
     "",
@@ -1565,6 +1588,33 @@ function renderPbenchReportMarkdown(report: JsonObject): string {
   if (Object.keys(profiles).length === 0) {
     lines.push("| none | 0 | 0 | 0.0% |  | 0 | 0 |");
   }
+
+  lines.push("", "## Cases", "", "| Case | Runs | Profiles | Statuses |", "| --- | ---: | --- | --- |");
+  for (const [caseId, rawCase] of Object.entries(cases)) {
+    const caseSummary = asObject(rawCase) ?? {};
+    lines.push(
+      `| ${markdownCell(caseId)} | ${markdownCell(caseSummary.runs ?? 0)} | ${markdownCell(formatCountRecord(caseSummary.profiles))} | ${markdownCell(formatCountRecord(caseSummary.statusCounts))} |`
+    );
+  }
+  if (Object.keys(cases).length === 0) {
+    lines.push("| none | 0 |  |  |");
+  }
+
+  lines.push(
+    "",
+    "## Recent Runs",
+    "",
+    "| Run | Case | Profile | Status | Duration (ms) | Summary |",
+    "| --- | --- | --- | --- | ---: | --- |"
+  );
+  for (const run of recentRuns) {
+    lines.push(
+      `| ${markdownCell(run.runId)} | ${markdownCell(run.caseId)} | ${markdownCell(run.profile)} | ${markdownCell(run.status)} | ${markdownCell(formatNullableNumber(run.durationMs))} | ${markdownCell(run.summaryPath)} |`
+    );
+  }
+  if (recentRuns.length === 0) {
+    lines.push("| none |  |  |  |  |  |");
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -1594,6 +1644,42 @@ async function auditPbenchCase(caseDir: string): Promise<JsonObject> {
     ok: errors.length === 0 && warnings.length === 0,
     errors,
     warnings
+  };
+}
+
+async function auditPbenchWorkspace(workspaceRoot: string): Promise<JsonObject> {
+  const casesRoot = join(workspaceRoot, "cases");
+  if (!(await pathExists(casesRoot))) {
+    return {
+      schemaVersion: 1,
+      workspaceRoot,
+      ok: true,
+      totals: { cases: 0, passed: 0, failed: 0, warnings: 0 },
+      cases: []
+    };
+  }
+
+  const entries = (await readdir(casesRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const cases: JsonObject[] = [];
+  for (const entry of entries) {
+    const audit = await auditPbenchCase(join(casesRoot, entry.name));
+    cases.push({ ...audit, caseId: audit.caseId || entry.name });
+  }
+  const failed = cases.filter((audit) => audit.ok !== true).length;
+  const warnings = cases.reduce((total, audit) => total + (Array.isArray(audit.warnings) ? audit.warnings.length : 0), 0);
+  return {
+    schemaVersion: 1,
+    workspaceRoot,
+    ok: failed === 0,
+    totals: {
+      cases: cases.length,
+      passed: cases.length - failed,
+      failed,
+      warnings
+    },
+    cases
   };
 }
 

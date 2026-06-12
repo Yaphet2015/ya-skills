@@ -62,6 +62,7 @@ Use finalized cases through the harness when comparing agents, models, rules, or
 - For Codex CLI automation, run `yk pbench run --case <case-id-or-dir> --agent codex --profile <comparison-label>`.
 - For agents that cannot be launched by CLI, run `yk pbench start --case <case-id-or-dir> --profile <comparison-label>`, open the printed `<workspace>/.personal-bench/replays/<run-id>/worktree` with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
 - Use stable profile labels such as `baseline`, `current-model`, `current-skills`, or `new-harness` when comparing model, skill, rules, or harness changes.
-- After runs finish, use `yk pbench report --profile <comparison-label>` or `yk pbench report --format markdown` to summarize status, manual-intervention, duration, and token results.
+- Use `yk pbench audit` before a comparison pass when you want a quick quality check across finalized cases.
+- After runs finish, use `yk pbench report --profile <comparison-label>` or `yk pbench report --format markdown` to summarize status, manual-intervention, duration, token, case, and recent-run results.
 
 Do not give a benchmarked agent the full case bundle. The runner prepares `.pbench/public/`, `.pbench/case.public.json`, and `.pbench/run.json` as the agent-visible surface inside the workspace-owned replay worktree, then runs private validators outside the public replay capsule.

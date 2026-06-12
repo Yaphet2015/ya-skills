@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -1664,11 +1664,11 @@ describe("pbench codex capture flow", () => {
     expect(Object.keys(oneCase.cases)).toEqual(["case_one_20260612T000000Z"]);
   });
 
-  test("renders markdown report without private evaluator paths", async () => {
+  test("renders markdown report with case and recent run tables without private evaluator paths", async () => {
     const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
-    await writeRunArtifact(workspaceRoot, {
+    const artifactDir = await writeRunArtifact(workspaceRoot, {
       runId: "run_markdown",
       caseId: "case_markdown_20260612T000000Z",
       profile: "current",
@@ -1683,6 +1683,14 @@ describe("pbench codex capture flow", () => {
 
     expect(markdown).toContain("| current | 1 | 1 | 100.0% | 100 | 10 | 5 |");
     expect(markdown).toContain("| passed | 1 |");
+    expect(markdown).toContain("## Cases");
+    expect(markdown).toContain("| Case | Runs | Profiles | Statuses |");
+    expect(markdown).toContain("| case_markdown_20260612T000000Z | 1 | current: 1 | passed: 1 |");
+    expect(markdown).toContain("## Recent Runs");
+    expect(markdown).toContain("| Run | Case | Profile | Status | Duration (ms) | Summary |");
+    expect(markdown).toContain(
+      `| run_markdown | case_markdown_20260612T000000Z | current | passed | 100 | ${join(artifactDir, "summary.md")} |`
+    );
     expect(markdown).not.toContain("private/validators");
     expect(markdown).not.toContain("PB_PRIVATE_DIR");
   });
@@ -1727,5 +1735,59 @@ describe("pbench codex capture flow", () => {
     expect(audit.warnings).toContain("public/prompt.md is empty");
     expect(audit.warnings).toContain("private/validators/check-completion.mjs needs completion logic from session correction evidence");
     expect(audit.errors.join("\n")).toContain("private evaluator path");
+  });
+
+  test("audits every finalized case in a workspace", async () => {
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    const { home, casePath, caseId } = await finalizedRunnableCase({ workspaceRoot });
+    const warningCaseId = "case_warning_20260612T000000Z";
+    const warningCasePath = join(workspaceRoot, "cases", warningCaseId);
+    await cp(casePath, warningCasePath, { recursive: true });
+    const warningManifestPath = join(warningCasePath, "case.json");
+    const warningManifest = JSON.parse(await readFile(warningManifestPath, "utf8"));
+    warningManifest.id = warningCaseId;
+    await writeFile(warningManifestPath, `${JSON.stringify(warningManifest, null, 2)}\n`);
+    await writeFile(join(warningCasePath, "public", "prompt.md"), "\n");
+
+    const audit = JSON.parse(String(await pbenchCommand("audit", home).run(["--workspace", workspaceRoot])));
+
+    expect(audit).toMatchObject({
+      schemaVersion: 1,
+      workspaceRoot,
+      ok: false,
+      totals: {
+        cases: 2,
+        passed: 1,
+        failed: 1,
+        warnings: 1
+      }
+    });
+    expect(audit.cases.map((entry: { caseId: string }) => entry.caseId)).toEqual([caseId, warningCaseId].sort());
+    expect(audit.cases.find((entry: { caseId: string }) => entry.caseId === caseId).ok).toBe(true);
+    expect(audit.cases.find((entry: { caseId: string }) => entry.caseId === warningCaseId).warnings).toContain(
+      "public/prompt.md is empty"
+    );
+  });
+
+  test("audits an empty workspace without a cases directory", async () => {
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    await rm(join(workspaceRoot, "cases"), { recursive: true, force: true });
+
+    const audit = JSON.parse(String(await pbenchCommand("audit", home).run(["--workspace", workspaceRoot])));
+
+    expect(audit).toEqual({
+      schemaVersion: 1,
+      workspaceRoot,
+      ok: true,
+      totals: {
+        cases: 0,
+        passed: 0,
+        failed: 0,
+        warnings: 0
+      },
+      cases: []
+    });
   });
 });
