@@ -1,9 +1,9 @@
 import type { FunctionCommand } from "@ya-skills/core";
 import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { arch, homedir, platform, release } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -89,6 +89,7 @@ export type CaptureResult = {
   caseDir: string;
   caseId: string;
   workspaceRoot: string;
+  authoringChecklistPath: string;
   warnings: string[];
 };
 
@@ -946,6 +947,38 @@ async function writeRunSummary(state: RunState, details: string[] = []): Promise
   return path;
 }
 
+function commandVersion(command: string, args: string[] = ["--version"]): string | null {
+  try {
+    return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeRunnerEnvironment(state: RunState): Promise<void> {
+  await writeJson(join(state.artifactDir, "runner-environment.json"), {
+    schemaVersion: 1,
+    runId: state.runId,
+    caseId: state.caseId,
+    profile: state.profile,
+    agentMode: state.agentMode,
+    os: {
+      platform: platform(),
+      release: release(),
+      arch: arch()
+    },
+    runtime: {
+      node: process.version,
+      bun: commandVersion("bun", ["--version"])
+    },
+    tools: {
+      git: commandVersion("git", ["--version"]),
+      codex: commandVersion("codex", ["--version"])
+    },
+    requiredEnv: state.requiredEnv.map((name) => ({ name, present: Boolean(process.env[name]) }))
+  });
+}
+
 function runEvent(phase: RunEvent["phase"], status: string, fields: Omit<RunEvent, "phase" | "status" | "at"> = {}): RunEvent {
   return { phase, status, at: nowIso(), ...fields };
 }
@@ -967,6 +1000,43 @@ function validatorRunEvent(outcomes: ValidatorOutcome[]): RunEvent {
     return runEvent("validator", "failed", { message: failed.id, exitCode: failed.exitCode });
   }
   return runEvent("validator", "passed", { message: `${outcomes.length} validator(s) passed.` });
+}
+
+function setupFailureSummary(failed: ValidatorOutcome | undefined): string[] {
+  return [
+    "Setup failed before agent execution.",
+    ...(failed
+      ? [
+          `- Failed setup command: ${failed.id}`,
+          `- Exit code: ${String(failed.exitCode)}`,
+          "- Setup outcomes: setup-outcomes.json",
+          "- Candidate diff: agent.diff",
+          "- Candidate files: candidate/untracked.json"
+        ]
+      : [])
+  ];
+}
+
+function agentFailureSummary(exitCode: number | null): string[] {
+  return [
+    "Agent failed before private validation.",
+    `- Agent exit code: ${String(exitCode)}`,
+    "- Agent stdout: agent.stdout.log",
+    "- Agent stderr: agent.stderr.log",
+    "- Candidate diff: agent.diff",
+    "- Candidate files: candidate/untracked.json"
+  ];
+}
+
+function validatorFailureSummary(outcomes: ValidatorOutcome[]): string[] {
+  const failed = outcomes.find((outcome) => outcome.actual !== outcome.expected);
+  return [
+    "Private validators failed.",
+    ...(failed ? [`- Failed validator: ${failed.id}`, `- Exit code: ${String(failed.exitCode)}`] : []),
+    "- Validator outcomes: validator-outcomes.json",
+    "- Candidate diff: agent.diff",
+    "- Candidate files: candidate/untracked.json"
+  ];
 }
 
 function validatorCounts(outcomes: ValidatorOutcome[] = []): { total: number; passed: number; failed: number } {
@@ -1110,15 +1180,66 @@ async function writeAgentDiff(
   const untracked = execGitOptional(worktree, ["ls-files", "--others", "--exclude-standard"])
     .split(/\r?\n/)
     .map((file) => file.trim())
-    .filter((file) => file.length > 0 && !file.startsWith(".pbench/"));
+    .filter((file) => file.length > 0)
+    .sort((left, right) => left.localeCompare(right));
+  const visibleUntracked = untracked.filter((file) => !file.startsWith(".pbench/"));
   const untrackedSection =
-    untracked.length > 0
-      ? ["", "Untracked files:", ...untracked.map((file) => `- ${file}`), ""].join("\n")
+    visibleUntracked.length > 0
+      ? ["", "Untracked files:", ...visibleUntracked.map((file) => `- ${file}`), ""].join("\n")
       : "";
   const diff = `${tracked}${untrackedSection}`;
   const path = join(artifactDir, "agent.diff");
   await writeFile(path, redactor(diff));
+  await writeCandidateArtifacts({ worktree, artifactDir, tracked, untracked, redactor });
   return path;
+}
+
+async function writeCandidateArtifacts(options: {
+  worktree: string;
+  artifactDir: string;
+  tracked: string;
+  untracked: string[];
+  redactor: (text: string) => string;
+}): Promise<void> {
+  const candidateDir = join(options.artifactDir, "candidate");
+  const copiedRoot = join(candidateDir, "untracked");
+  const files: JsonObject[] = [];
+  await mkdir(copiedRoot, { recursive: true });
+  await writeFile(join(candidateDir, "tracked.diff"), options.redactor(options.tracked));
+  for (const file of options.untracked) {
+    const safe = safeRelativePath(file);
+    if (!safe) {
+      files.push({ path: file, status: "skipped", reason: "unsafe path" });
+      continue;
+    }
+    if (safe.startsWith(".pbench/")) {
+      files.push({ path: safe, status: "skipped", reason: ".pbench" });
+      continue;
+    }
+    const sourcePath = join(options.worktree, safe);
+    const info = await stat(sourcePath).catch(() => null);
+    if (!info?.isFile()) {
+      files.push({ path: safe, status: "skipped", reason: "not a file" });
+      continue;
+    }
+    if (info.size > MAX_PUBLIC_TEXT_FILE_BYTES) {
+      files.push({ path: safe, status: "skipped", reason: "large file", sizeBytes: info.size });
+      continue;
+    }
+    const bytes = await readFile(sourcePath);
+    if (!isUtf8Text(bytes)) {
+      files.push({ path: safe, status: "skipped", reason: "binary file", sizeBytes: info.size });
+      continue;
+    }
+    const destination = join(copiedRoot, safe);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, options.redactor(TEXT_DECODER.decode(bytes)));
+    files.push({ path: safe, status: "copied", sizeBytes: info.size, artifactPath: `candidate/untracked/${safe}` });
+  }
+  await writeJson(join(candidateDir, "untracked.json"), {
+    schemaVersion: 1,
+    files
+  });
 }
 
 function renderAgentPrompt(): string {
@@ -1219,6 +1340,7 @@ async function createStartedRun(options: {
   };
 
   try {
+    await writeRunnerEnvironment(state);
     await preparePublicCapsule(options.caseDir, manifest, worktree, runId);
     await applyStartingPatch(options.caseDir, worktree);
     if (options.agentMode === "skill") {
@@ -1235,7 +1357,7 @@ async function createStartedRun(options: {
         state.terminal = true;
         state.finishedAt = nowIso();
         await writeAgentDiff(worktree, artifactDir, redactor);
-        await writeRunSummary(state, ["Setup failed before agent execution."]);
+        await writeRunSummary(state, setupFailureSummary(failed));
         await writeTerminalRunArtifacts(state, {
           events: [...(state.events ?? []), runEvent("finish", "setup_failed", { message: "Setup failed before agent execution." })]
         });
@@ -1268,7 +1390,7 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
   state.status = errors.length === 0 ? "passed" : "validator_failed";
   state.terminal = true;
   state.finishedAt = nowIso();
-  await writeRunSummary(state, errors.length === 0 ? ["Private validators passed."] : ["Private validators failed."]);
+  await writeRunSummary(state, errors.length === 0 ? ["Private validators passed."] : validatorFailureSummary(outcomes));
   await writeTerminalRunArtifacts(state, {
     events: [
       ...(state.events ?? []),
@@ -1321,7 +1443,7 @@ async function runPbenchCase(options: {
     state.terminal = true;
     state.finishedAt = nowIso();
     await writeAgentDiff(state.worktree, state.artifactDir, redactor);
-    await writeRunSummary(state, ["Agent failed before private validation."]);
+    await writeRunSummary(state, agentFailureSummary(agent.exitCode));
     await writeTerminalRunArtifacts(state, {
       events: [...(state.events ?? []), runEvent("finish", "agent_failed", { message: "Agent failed before private validation." })]
     });
@@ -2158,6 +2280,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
 
   const createdAt = nowIso(options.now);
   const replayRequirements = defaultReplayRequirements();
+  const authoring = buildAuthoringArtifacts(rawTitle, extracted, sourceRepoRoot);
   const manifest = {
     $schema: "https://personal-bench.local/schemas/case.schema.json",
     schemaVersion: 1,
@@ -2182,6 +2305,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
       agentInstructions: "public/agent-instructions.md",
       keyObservations: PUBLIC_KEY_OBSERVATIONS_PATH,
       commandObservations: PUBLIC_COMMAND_OBSERVATIONS_PATH,
+      authoringChecklist: "private/authoring-checklist.md",
       failure: "private/failure.md",
       failureDraft: "private/failure-draft.md",
       successCriteria: "private/success.md",
@@ -2204,14 +2328,13 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
         type: "script",
         purpose: "completion",
         path: "private/validators/check-completion.mjs",
-        cwd: ".",
+        cwd: authoring.validatorCwd,
         timeoutSeconds: 120,
         baselineExpected: "fail"
       }
     ],
     replayRequirements
   };
-  const authoring = buildAuthoringArtifacts(rawTitle, extracted);
   const sanitizePublicText = makePublicReplaySanitizer({
     sourceRepoRoot,
     captureCwd: subject.sourceCwd,
@@ -2268,7 +2391,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     records: extracted.approvalSandboxRecords
   });
   await writeJson(join(caseDir, "private", "artifacts", "extracted", "touched-files.json"), extracted.touchedFiles);
-  await writeReplayContext({
+  const replayWarnings = await writeReplayContext({
     caseDir,
     caseId,
     title: rawTitle,
@@ -2280,6 +2403,12 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     extracted,
     replayRequirements,
     sanitizePublicText
+  });
+  const authoringChecklistPath = join(caseDir, "private", "authoring-checklist.md");
+  await writeAuthoringChecklist(authoringChecklistPath, {
+    authoring,
+    setupCommands: manifest.setupCommands,
+    replayWarnings
   });
   await writeJson(join(transactionPath, "transaction.json"), {
     schemaVersion: 1,
@@ -2293,7 +2422,37 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     strictValidatedAt: null
   });
 
-  return { transactionPath, caseDir, caseId, workspaceRoot, warnings: subject.warnings };
+  return { transactionPath, caseDir, caseId, workspaceRoot, authoringChecklistPath, warnings: subject.warnings };
+}
+
+async function writeAuthoringChecklist(
+  path: string,
+  options: { authoring: GeneratedAuthoringArtifacts; setupCommands: JsonObject[]; replayWarnings: string[] }
+): Promise<void> {
+  const generated = options.authoring.validatorScript.includes(VALIDATOR_AUTHORING_SENTINEL)
+    ? "needs manual authoring"
+    : `generated command validator (cwd: ${options.authoring.validatorCwd})`;
+  const setup =
+    options.setupCommands.length > 0
+      ? options.setupCommands.map((command) => `${String(command.command)} (cwd: ${String(command.cwd ?? ".")})`).join(", ")
+      : "none detected";
+  const replayWarnings =
+    options.replayWarnings.length > 0 ? options.replayWarnings.map((warning) => `  - ${warning}`).join("\n") : "  - none";
+  await writeFile(
+    path,
+    [
+      "# Authoring Checklist",
+      "",
+      "- Prompt present: " + (options.authoring.hasPrompt ? "yes" : "no"),
+      "- Failure evidence present: " + (options.authoring.hasFailureEvidence ? "yes" : "no"),
+      "- Replayable verification found: " + (!options.authoring.validatorScript.includes(VALIDATOR_AUTHORING_SENTINEL) ? "yes" : "no"),
+      "- Generated validator: " + generated,
+      "- Setup commands: " + setup,
+      "- Public replay warnings:",
+      replayWarnings,
+      ""
+    ].join("\n")
+  );
 }
 
 function selectedTaskTitle(extracted: ExtractedCodexSession): string | null {
@@ -2305,27 +2464,36 @@ type GeneratedAuthoringArtifacts = {
   failure: string;
   success: string;
   verification: string;
+  validatorCwd: string;
+  hasFailureEvidence: boolean;
+  hasPrompt: boolean;
   validatorScript: string;
 };
 
 type VerificationCommand = {
   command: string;
   cwd: string;
+  replayCwd: string | null;
+  unsafeReason?: string;
   stderr: string;
   stdout: string;
 };
 
-function buildAuthoringArtifacts(title: string, extracted: ExtractedCodexSession): GeneratedAuthoringArtifacts {
+function buildAuthoringArtifacts(title: string, extracted: ExtractedCodexSession, sourceRepoRoot: string): GeneratedAuthoringArtifacts {
   const prompt = extracted.userMessages[0]?.trim() ?? "";
   const corrections = extracted.userMessages.slice(1).map(evidenceLine).filter(Boolean);
   const errors = extracted.errorRecords.map(errorEvidenceLine).filter(Boolean);
-  const failedVerification = findFailedVerificationCommand(extracted);
+  const failedVerification = findFailedVerificationCommand(extracted, sourceRepoRoot);
+  const validatorCwd = failedVerification?.replayCwd ?? ".";
 
   return {
     failure: renderFailureDocument(corrections, errors),
     success: renderSuccessDocument(title, prompt, corrections),
     verification: renderVerificationDocument(failedVerification),
-    validatorScript: failedVerification
+    validatorCwd,
+    hasFailureEvidence: corrections.length > 0 || errors.length > 0,
+    hasPrompt: prompt.length > 0,
+    validatorScript: failedVerification?.replayCwd
       ? renderCommandValidatorScript(failedVerification.command)
       : renderAuthoringRequiredValidatorScript()
   };
@@ -2366,14 +2534,25 @@ function renderSuccessDocument(title: string, prompt: string, corrections: strin
 function renderVerificationDocument(command: VerificationCommand | null): string {
   const lines = ["# Verification", "", "Generated from captured Codex session history.", ""];
   if (command) {
-    lines.push(
-      "The completion validator reruns the failed verification command captured in the original session:",
-      "",
-      `- command: \`${command.command}\``,
-      `- cwd: ${command.cwd}`,
-      "- pass condition: exit code 0",
-      ""
-    );
+    if (command.replayCwd) {
+      lines.push(
+        "The completion validator reruns the failed verification command captured in the original session:",
+        "",
+        `- command: \`${command.command}\``,
+        `- cwd: ${command.replayCwd}`,
+        "- pass condition: exit code 0",
+        ""
+      );
+    } else {
+      lines.push(
+        "The captured verification cwd cannot be replayed safely, so the completion validator must be implemented manually.",
+        "",
+        `- command: \`${command.command}\``,
+        `- captured cwd: ${command.cwd}`,
+        `- reason: ${command.unsafeReason ?? "unsafe cwd"}`,
+        ""
+      );
+    }
     if (command.stderr) {
       lines.push("Captured failure stderr:", "", fenced(command.stderr), "");
     }
@@ -2390,7 +2569,38 @@ function renderVerificationDocument(command: VerificationCommand | null): string
   return `${lines.join("\n")}\n`;
 }
 
-function findFailedVerificationCommand(extracted: ExtractedCodexSession): VerificationCommand | null {
+function realPathOrResolved(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+function replayCwdFromCapturedCwd(cwd: string, sourceRepoRoot: string): { replayCwd: string | null; unsafeReason?: string } {
+  if (!cwd || cwd === "unknown") {
+    return { replayCwd: "." };
+  }
+  if (isAbsolute(cwd)) {
+    const resolvedRepo = realPathOrResolved(sourceRepoRoot);
+    const resolvedCwd = realPathOrResolved(cwd);
+    const relativeCwd = relative(resolvedRepo, resolvedCwd).replace(/\\/g, "/");
+    if (relativeCwd === "") {
+      return { replayCwd: "." };
+    }
+    if (!relativeCwd.startsWith("../") && relativeCwd !== ".." && !isAbsolute(relativeCwd)) {
+      return { replayCwd: relativeCwd };
+    }
+    return { replayCwd: null, unsafeReason: "cwd is outside the captured subject repository" };
+  }
+  const safe = safeRelativePath(cwd);
+  if (!safe) {
+    return { replayCwd: null, unsafeReason: "cwd is not a safe repo-relative path" };
+  }
+  return { replayCwd: safe };
+}
+
+function findFailedVerificationCommand(extracted: ExtractedCodexSession, sourceRepoRoot: string): VerificationCommand | null {
   const candidates: VerificationCommand[] = [];
   for (const record of extracted.errorRecords) {
     const command = commandText(record).trim();
@@ -2398,9 +2608,12 @@ function findFailedVerificationCommand(extracted: ExtractedCodexSession): Verifi
       continue;
     }
     const args = asObject(record.arguments) ?? {};
+    const cwd = String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? ".");
+    const replayCwd = replayCwdFromCapturedCwd(cwd, sourceRepoRoot);
     candidates.push({
       command,
-      cwd: String(args.cwd ?? args.workdir ?? record.cwd ?? record.workdir ?? "."),
+      cwd,
+      ...replayCwd,
       stdout: excerpt(String(record.stdout ?? ""), 1000),
       stderr: excerpt(String(record.stderr ?? ""), 1000)
     });
@@ -2479,7 +2692,7 @@ type PublicContextFile = {
   kind: "untracked";
 };
 
-async function writeReplayContext(options: ReplayContextOptions): Promise<void> {
+async function writeReplayContext(options: ReplayContextOptions): Promise<string[]> {
   const warnings: string[] = [];
   const agentInstructionsPath = await writeAgentInstructions(
     options.caseDir,
@@ -2531,6 +2744,7 @@ async function writeReplayContext(options: ReplayContextOptions): Promise<void> 
     join(options.caseDir, "public", "replay.md"),
     options.sanitizePublicText(renderReplayMarkdown(options, replayFiles, contextFiles, warnings))
   );
+  return warnings;
 }
 
 function inferPackageManager(setupCommands: JsonObject[]): string | null {
@@ -2947,6 +3161,9 @@ async function findAuthoringWarnings(caseDir: string): Promise<string[]> {
     }
     if (path === "private/validators/check-completion.mjs" && content.includes(VALIDATOR_AUTHORING_SENTINEL)) {
       warnings.push("private/validators/check-completion.mjs needs completion logic from session correction evidence");
+    }
+    if (path === "private/verification.md" && content.includes("The captured verification cwd cannot be replayed safely")) {
+      warnings.push("private/verification.md has unsafe verification cwd; implement validator manually");
     }
   }
   return warnings;

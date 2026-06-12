@@ -526,6 +526,7 @@ describe("pbench codex capture flow", () => {
       const success = await readFile(join(result.caseDir, "private", "success.md"), "utf8");
       const verification = await readFile(join(result.caseDir, "private", "verification.md"), "utf8");
       const validator = await readFile(join(result.caseDir, "private", "validators", "check-completion.mjs"), "utf8");
+      const checklist = await readFile(result.authoringChecklistPath, "utf8");
 
       expect(result.initialValidation.ok).toBe(false);
       expect(result.initialValidation.warnings).not.toContain("private/failure.md still contains TODO");
@@ -540,6 +541,11 @@ describe("pbench codex capture flow", () => {
       expect(verification).toContain("completion validator");
       expect(validator).toContain("PBENCH_AUTHORING_REQUIRED");
       expect(`${failure}\n${success}\n${verification}`).not.toContain("TODO");
+      expect(result.authoringChecklistPath).toBe(join(result.caseDir, "private", "authoring-checklist.md"));
+      expect(checklist).toContain("- Prompt present: yes");
+      expect(checklist).toContain("- Failure evidence present: yes");
+      expect(checklist).toContain("- Replayable verification found: no");
+      expect(checklist).toContain("- Generated validator: needs manual authoring");
       expect(result.next).toContain(`Review ${result.caseDir}`);
     } finally {
       process.chdir(originalCwd);
@@ -685,6 +691,101 @@ describe("pbench codex capture flow", () => {
       expected: "fail",
       actual: "fail"
     });
+  });
+
+  test("generated completion validator preserves captured repo-relative verification cwd", async () => {
+    const repo = await makeRepo();
+    await mkdir(join(repo, "packages", "app"), { recursive: true });
+    await writeFile(join(repo, "packages", "app", "package.json"), "{\"scripts\":{\"test\":\"node check-done.mjs\"}}\n");
+    await writeFile(
+      join(repo, "packages", "app", "check-done.mjs"),
+      "import { existsSync } from 'node:fs';\nprocess.exit(existsSync('done.txt') ? 0 : 1);\n"
+    );
+    git(repo, ["add", "."]);
+    git(repo, ["commit", "-m", "add app package"]);
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const appCwd = join(repo, "packages", "app");
+    const sessionJsonl = await writeCodexSession(repo, commit, [
+      {
+        type: "exec_command",
+        arguments: { cmd: "bun run test", workdir: appCwd },
+        exit_code: 1,
+        stderr: "packages/app/done.txt is missing"
+      },
+      {
+        type: "message",
+        role: "user",
+        content: "The app package is only complete when packages/app/done.txt exists and its test passes."
+      }
+    ]);
+
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      input: sessionJsonl,
+      yes: true,
+      title: "App package done file missing"
+    });
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
+    const validator = await readFile(join(tx.caseDir, "private", "validators", "check-completion.mjs"), "utf8");
+    const verification = await readFile(join(tx.caseDir, "private", "verification.md"), "utf8");
+    const validation = await strictValidateTransaction(tx.transactionPath);
+
+    expect(manifest.validators[0].cwd).toBe("packages/app");
+    expect(validator).toContain("bun run test");
+    expect(validator).not.toContain("PBENCH_AUTHORING_REQUIRED");
+    expect(verification).toContain("- cwd: packages/app");
+    expect(validation.ok).toBe(true);
+    expect(validation.validatorOutcomes?.[0]).toMatchObject({
+      id: "completion",
+      expected: "fail",
+      actual: "fail"
+    });
+  });
+
+  test("unsafe verification cwd leaves validator unfinished and warns during capture", async () => {
+    const repo = await makeRepoWithFailingTest();
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    const outsideCwd = await temp("outside-cwd");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionJsonl = await writeCodexSession(repo, commit, [
+      {
+        type: "exec_command",
+        arguments: { cmd: "bun run test", workdir: outsideCwd },
+        exit_code: 1,
+        stderr: "outside repo failure"
+      },
+      {
+        type: "message",
+        role: "user",
+        content: "The task is only complete when the replayable repo check passes."
+      }
+    ]);
+
+    const output = await pbenchCommand("capture", home).run([
+      "--source",
+      "codex",
+      "--workspace",
+      workspaceRoot,
+      "--input",
+      sessionJsonl,
+      "--title",
+      "Unsafe verification cwd",
+      "--yes"
+    ]);
+    const result = JSON.parse(String(output));
+    const validator = await readFile(join(result.caseDir, "private", "validators", "check-completion.mjs"), "utf8");
+    const verification = await readFile(join(result.caseDir, "private", "verification.md"), "utf8");
+
+    expect(validator).toContain("PBENCH_AUTHORING_REQUIRED");
+    expect(verification).toContain("The captured verification cwd cannot be replayed safely");
+    expect(result.initialValidation.warnings).toContain(
+      "private/verification.md has unsafe verification cwd; implement validator manually"
+    );
   });
 
   test("captures a Codex session, strict-validates the baseline failure, then finalizes the case", async () => {
@@ -1326,6 +1427,7 @@ describe("pbench codex capture flow", () => {
       const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
       const metrics = JSON.parse(await readFile(join(result.artifactDir, "metrics.json"), "utf8"));
       const events = JSON.parse(await readFile(join(result.artifactDir, "events.json"), "utf8"));
+      const runnerEnvironment = JSON.parse(await readFile(join(result.artifactDir, "runner-environment.json"), "utf8"));
 
       expect(runJson.profile).toBe("current-skills");
       expect(metrics).toMatchObject({
@@ -1345,8 +1447,71 @@ describe("pbench codex capture flow", () => {
         "validator",
         "finish"
       ]);
+      expect(runnerEnvironment).toMatchObject({
+        schemaVersion: 1,
+        runId: result.runId,
+        caseId,
+        profile: "current-skills",
+        agentMode: "codex",
+        requiredEnv: []
+      });
+      expect(runnerEnvironment.runtime.node).toBeTruthy();
     } finally {
       process.env.PATH = originalPath;
+    }
+  });
+
+  test("captures candidate untracked file contents and redacts required env values", async () => {
+    const secretName = "PBENCH_TEST_SECRET";
+    const secretValue = "super-secret-pbench-value";
+    const originalSecret = process.env[secretName];
+    process.env[secretName] = secretValue;
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase({ requiredEnv: [secretName] });
+    const fake = await writeFakeCodex({
+      body: [
+        "  writeFileSync(join(root, 'done.txt'), 'done\\n');",
+        `  writeFileSync(join(root, 'notes.txt'), process.env.${secretName} + '\\n');`,
+        "  writeFileSync(join(root, '.pbench', 'internal.txt'), 'internal\\n');"
+      ].join("\n")
+    });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await pbenchCommand("run", home).run([
+        "--case",
+        caseId,
+        "--workspace",
+        workspaceRoot,
+        "--agent",
+        "codex"
+      ]);
+      const result = JSON.parse(String(output));
+      const untracked = JSON.parse(await readFile(join(result.artifactDir, "candidate", "untracked.json"), "utf8"));
+      const copiedNotes = await readFile(join(result.artifactDir, "candidate", "untracked", "notes.txt"), "utf8");
+      const runnerEnvironment = await readFile(join(result.artifactDir, "runner-environment.json"), "utf8");
+
+      expect(result.status).toBe("passed");
+      expect(untracked.files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: "done.txt", status: "copied" }),
+          expect.objectContaining({ path: "notes.txt", status: "copied" })
+        ])
+      );
+      expect(untracked.files).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ".pbench/internal.txt", status: "skipped", reason: ".pbench" })])
+      );
+      expect(copiedNotes).toContain("[REDACTED:PBENCH_TEST_SECRET]");
+      expect(copiedNotes).not.toContain(secretValue);
+      expect(runnerEnvironment).toContain(`"name": "${secretName}"`);
+      expect(runnerEnvironment).toContain('"present": true');
+      expect(runnerEnvironment).not.toContain(secretValue);
+    } finally {
+      process.env.PATH = originalPath;
+      if (originalSecret === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = originalSecret;
+      }
     }
   });
 
@@ -1473,9 +1638,13 @@ describe("pbench codex capture flow", () => {
         ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
       const result = JSON.parse(String(output));
       const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
+      const summary = await readFile(join(result.artifactDir, "summary.md"), "utf8");
 
       expect(result.status).toBe("agent_failed");
       expect(runJson.agentExitCode).toBe(7);
+      expect(summary).toContain("- Agent exit code: 7");
+      expect(summary).toContain("- Agent stdout: agent.stdout.log");
+      expect(summary).toContain("- Agent stderr: agent.stderr.log");
       await expect(stat(join(result.artifactDir, "validator-outcomes.json"))).rejects.toThrow();
     } finally {
       process.env.PATH = originalPath;
@@ -1496,8 +1665,12 @@ describe("pbench codex capture flow", () => {
         .find((command) => command.action === "run")
         ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
       const result = JSON.parse(String(output));
+      const summary = await readFile(join(result.artifactDir, "summary.md"), "utf8");
 
       expect(result.status).toBe("setup_failed");
+      expect(summary).toContain("- Failed setup command: node -e \"process.exit(9)\"");
+      expect(summary).toContain("- Exit code: 9");
+      expect(summary).toContain("- Setup outcomes: setup-outcomes.json");
       await expect(readFile(join(result.artifactDir, "setup-outcomes.json"), "utf8")).resolves.toContain('"actual": "fail"');
       await expect(stat(join(result.artifactDir, "agent.stdout.log"))).rejects.toThrow();
     } finally {
@@ -1516,9 +1689,20 @@ describe("pbench codex capture flow", () => {
         ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "codex"]);
       const result = JSON.parse(String(output));
       const diff = await readFile(join(result.artifactDir, "agent.diff"), "utf8");
+      const copiedWrong = await readFile(join(result.artifactDir, "candidate", "untracked", "wrong.txt"), "utf8");
+      const untracked = JSON.parse(await readFile(join(result.artifactDir, "candidate", "untracked.json"), "utf8"));
+      const summary = await readFile(join(result.artifactDir, "summary.md"), "utf8");
 
       expect(result.status).toBe("validator_failed");
       expect(diff).toContain("wrong.txt");
+      expect(copiedWrong).toBe("wrong\n");
+      expect(untracked.files).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: "wrong.txt", status: "copied" })])
+      );
+      expect(summary).toContain("- Failed validator: completion");
+      expect(summary).toContain("- Validator outcomes: validator-outcomes.json");
+      expect(summary).toContain("- Candidate diff: agent.diff");
+      expect(summary).toContain("- Candidate files: candidate/untracked.json");
       await expect(readFile(join(result.artifactDir, "validator-outcomes.json"), "utf8")).resolves.toContain('"actual": "fail"');
     } finally {
       process.env.PATH = originalPath;

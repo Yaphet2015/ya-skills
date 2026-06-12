@@ -40,6 +40,7 @@ After the user approves capture:
 
 1. Run `yk pbench capture --source codex --yes` from the subject Git repository. If capturing an older or non-current session, pass `--input <jsonl>` or `--session-id <id>`; capture uses the session cwd and Git baseline when Codex recorded them.
 2. Read the printed transaction path, case directory, and `initialValidation` warnings.
+   - Read `private/authoring-checklist.md` first for the generated capture-quality summary.
    - Treat empty prompt, empty command observations, or missing failure evidence warnings as capture-quality gaps to fix before finalizing.
 3. Edit the transaction `case/` bundle:
    - read `public/replay.md` and `public/context.manifest.json` to understand the replay capsule;
@@ -47,6 +48,7 @@ After the user approves capture:
    - refine `public/prompt.md`, `public/context.md`, `public/environment.md`, `public/replay.md`, and public context files as the future agent-visible task input;
    - review generated `private/failure.md`, `private/success.md`, and `private/verification.md` against `private/failure-draft.md` and the raw session transcript;
    - fix generated private docs only when the session evidence is missing, ambiguous, or incomplete;
+   - keep generated command validators only when their captured cwd was normalized to the replay repository; unsafe cwd warnings mean the validator must be authored manually;
    - if `private/validators/check-completion.mjs` says `PBENCH_AUTHORING_REQUIRED`, implement the validator from the correction evidence and private transcript;
    - if strict validation needs live services or secrets, record the required environment variable names in `replayRequirements.requiredEnv` and on the validator instead of putting secret values in docs;
    - ask the user for clarification only when the captured session does not identify the failure or does not imply an observable completion check.
@@ -63,6 +65,6 @@ Use finalized cases through the harness when comparing agents, models, rules, or
 - For agents that cannot be launched by CLI, run `yk pbench start --case <case-id-or-dir> --profile <comparison-label>`, open the printed `<workspace>/.personal-bench/replays/<run-id>/worktree` with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
 - Use stable profile labels such as `baseline`, `current-model`, `current-skills`, or `new-harness` when comparing model, skill, rules, or harness changes.
 - Use `yk pbench audit` before a comparison pass when you want a quick quality check across finalized cases.
-- After runs finish, use `yk pbench report --profile <comparison-label>` or `yk pbench report --format markdown` to summarize status, manual-intervention, duration, token, case, and recent-run results.
+- After runs finish, use `yk pbench report --profile <comparison-label>` or `yk pbench report --format markdown` to summarize status, manual-intervention, duration, token, case, and recent-run results. For debugging an individual run, inspect the run summary plus `runner-environment.json`, `agent.diff`, and `candidate/untracked.json` in the artifact directory.
 
 Do not give a benchmarked agent the full case bundle. The runner prepares `.pbench/public/`, `.pbench/case.public.json`, and `.pbench/run.json` as the agent-visible surface inside the workspace-owned replay worktree, then runs private validators outside the public replay capsule.
