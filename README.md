@@ -36,15 +36,14 @@ The tap repository is [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/ho
 
 ### PBench
 
-`yk pbench` captures task/session-level outcome mismatch from Codex work into local private personal benchmark cases, then replays finalized cases through a harness-managed runner.
+`yk pbench` captures real Codex workflow misses into local private personal benchmark cases, then replays finalized cases through a harness-managed runner. Use it to answer whether a model, skill, rules package, or harness change improves your own workflow.
 
-> I created pbench because public benchmarks and general rules packages cannot answer the question I actually need answered during daily agent work: did this model, skill, rules package, or harness change make my own workflow better? PBench turns real Codex misses into reproducible private cases with explicit success criteria and replay evidence, so failures become regression assets instead of one-off frustration.
->
-> The important constraint is low-friction capture. When an agent fails, the useful evidence is still in the session: prompts, cwd, Git state, commands, touched files, tool calls, errors, sandbox and approval context, and the user's correction. PBench preserves that context before it disappears, while keeping private material separate from the public replay capsule. Later, those cases can be used to judge whether a workflow change reduced manual intervention, used tools correctly, completed verification, and solved the original task.
+Full documentation:
 
-Daily workflow:
+- [PBench documentation (English)](docs/pbench.md)
+- [PBench 中文文档](docs/pbench.zh-CN.md)
 
-Most usage should feel like two actions: capture the bad session, then later trigger a benchmark runner. The other commands are either one-time setup or harness internals.
+Daily workflow should feel like two actions: capture the bad session, then later trigger a benchmark runner. The other commands are either one-time setup or harness internals.
 
 ```mermaid
 flowchart TD
@@ -63,8 +62,6 @@ flowchart TD
   classDef internal fill:#f7f7f7,stroke:#777,color:#111,stroke-dasharray: 4 3
 ```
 
-
-
 - `yk pbench workspace-init <path>` initializes a local pbench workspace.
 - `yk pbench project-link --workspace <path>` links the current project to a workspace.
 - `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` creates an authoring transaction under `~/.ya-skills/pbench`, asks for confirmation unless `--yes` is passed, writes a private authoring checklist, and prints initial authoring validation warnings.
@@ -76,14 +73,6 @@ flowchart TD
 - `yk pbench finish --run <run-id>` performs the one-shot private validation for a skill-mediated run and prints only the run id, status, and summary path.
 - `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` aggregates existing run artifacts into status, case, profile, duration, and token summaries. JSON is the default; Markdown adds concise case and recent-run tables for human review.
 - `yk pbench audit [--case <case-dir-or-case-id>] [--workspace <path>]` checks case quality without running private validators. With `--case`, it audits one case; without `--case`, it audits all finalized cases in the workspace. It reports invalid case shape, authoring warnings, and public replay references to private evaluator paths.
-
-Capture supports both legacy and current Codex JSONL shapes. When a session records its own cwd and Git metadata, capture uses that session repository and baseline commit even if `yk pbench capture --input <jsonl>` is launched from another repo. If `--session-id` is used and the Codex index does not include file paths, capture scans `~/.codex/sessions/**/*.jsonl` for the matching session id.
-
-Capture writes a replay context capsule into `public/`: `prompt.md`, `replay.md`, `replay.manifest.json`, `context.manifest.json`, repo agent instructions, filtered key observations, bounded command observations, a bounded dirty starting patch, and small non-ignored untracked text files. It also stores Codex prompts, timeline, tool calls, touched files, error records, approval/sandbox context, and generated private authoring docs in `private/`. Private `failure.md`, `success.md`, `verification.md`, and `authoring-checklist.md` are prefilled from session corrections and error evidence; failed replayable verification commands can become completion validators using the captured repo-relative cwd. If the session does not contain enough safe evidence, initial authoring warnings identify the missing failure or validator work before finalization. Setup detection supports Bun, pnpm, npm, and Yarn repositories.
-
-Full case bundles are for authoring and harness validation. Agent-facing replay should use `public/replay.manifest.json`, `yk pbench export-replay`, `yk pbench run`, or a `yk pbench start` worktree, all of which give the agent only sanitized public inputs and a `case.public.json` view. Replay startup fails closed if agent-visible pbench inputs expose `/private`, `private/...`, `PB_PRIVATE_DIR`, `PB_CASE_DIR`, raw transcript paths, validator paths, or the original case directory. Cases can declare replay requirements such as `live-integration`, network needs, and required environment variable names; strict validation and runner startup fail before replay when required variables are missing, without printing secret values.
-
-Runner artifacts are private local benchmark records. Automatic Codex runs and skill-mediated runs write status, duration, normalized `metrics.json`, normalized `events.json`, `runner-environment.json`, redacted logs, diffs, candidate tracked/untracked artifacts, and validator outcomes to `<workspace>/runs/<run-id>/`. Skill-mediated runs are one-shot: after `yk pbench finish --run <run-id>`, the agent sees only pass/fail-level output while private validator details remain in the workspace artifact directory.
 
 Install the capture workflow with `yk install pbench`. `yk pbench start` installs `pbench-runner` into each prepared benchmark worktree automatically.
 
