@@ -1069,6 +1069,9 @@ function agentFailureSummary(exitCode: number | null): string[] {
 }
 
 function failingValidatorIdOf(outcomes: ValidatorOutcome[]): string | null {
+  // null when no single validator outcome failed — including structural failures where runValidators
+  // pushes an error (e.g. a manifest with no completion validator) without emitting a failing outcome.
+  // A null id on a validator_failed run means "structural, no specific validator", not "unknown".
   return outcomes.find((outcome) => outcome.actual !== outcome.expected)?.id ?? null;
 }
 
@@ -1667,6 +1670,8 @@ function sortObjectValues<T>(input: Record<string, T>): Record<string, T> {
   return Object.fromEntries(Object.entries(input).sort(([left], [right]) => left.localeCompare(right)));
 }
 
+// O(runs): scans the workspace run directory on every start so attemptNumber/priorRunIds reflect
+// real history. Acceptable for personal-bench scale; revisit if workspaces grow very large.
 async function priorAttempts(workspaceRoot: string, caseId: string, profile: string): Promise<{ runIds: string[] }> {
   const runsRoot = join(workspaceRoot, "runs");
   if (!(await pathExists(runsRoot))) {
@@ -1686,7 +1691,10 @@ async function priorAttempts(workspaceRoot: string, caseId: string, profile: str
       const run = await readJson(runJsonPath);
       const sameCase = String(run.caseId ?? "") === caseId;
       const sameProfile = normalizeRunProfile(typeof run.profile === "string" ? run.profile : undefined) === profile;
-      if (sameCase && sameProfile) {
+      // Count only prior runs that COMPLETED (terminal) under the new accounting (carry attemptNumber),
+      // so in-flight runs and legacy pre-feature runs don't inflate the attempt counter.
+      const isCountedPrior = run.terminal === true && typeof run.attemptNumber === "number";
+      if (sameCase && sameProfile && isCountedPrior) {
         runIds.push(String(run.runId ?? entry.name));
       }
     } catch {

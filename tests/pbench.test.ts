@@ -1663,6 +1663,9 @@ describe("pbench codex capture flow", () => {
       priorRunIds: [],
       contaminated: false
     });
+    // Finish each run so it becomes a terminal prior attempt before the next start.
+    await writeFile(join(first.worktree, "done.txt"), "done\n");
+    await pbenchCommand("finish", home).run(["--run", first.runId]);
 
     const second = JSON.parse(
       String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot, "--profile", "probe"]))
@@ -1670,6 +1673,8 @@ describe("pbench codex capture flow", () => {
     const secondRun = JSON.parse(await readFile(join(second.artifactDir, "run.json"), "utf8"));
     expect(secondRun.attemptNumber).toBe(2);
     expect(secondRun.priorRunIds).toEqual([first.runId]);
+    await writeFile(join(second.worktree, "done.txt"), "done\n");
+    await pbenchCommand("finish", home).run(["--run", second.runId]);
 
     const tainted = JSON.parse(
       String(
@@ -1687,6 +1692,26 @@ describe("pbench codex capture flow", () => {
     const taintedRun = JSON.parse(await readFile(join(tainted.artifactDir, "run.json"), "utf8"));
     expect(taintedRun.contaminated).toBe(true);
     expect(taintedRun.attemptNumber).toBe(3);
+  });
+
+  test("prior attempts exclude in-flight and legacy pre-feature runs", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    // Legacy run: terminal but no attemptNumber field (pre-feature shape) — must NOT count.
+    await writeRunArtifact(workspaceRoot, {
+      runId: "legacy_probe_20260601T000000Z",
+      caseId,
+      profile: "probe",
+      status: "passed",
+      manualIntervention: false
+    });
+    // In-flight run: started but never finished (terminal:false) — must NOT count.
+    await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot, "--profile", "probe"]);
+    const next = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot, "--profile", "probe"]))
+    );
+    const nextRun = JSON.parse(await readFile(join(next.artifactDir, "run.json"), "utf8"));
+    expect(nextRun.attemptNumber).toBe(1);
+    expect(nextRun.priorRunIds).toEqual([]);
   });
 
   test("report surfaces isolation, attempt, and contaminated provenance", async () => {
