@@ -44,7 +44,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 - **一条命令安装可直接给 Agent 使用的 Skill** —— `yk install` 会把 Skill 写入 `.claude/skills` 和/或 `.agents/skills`，并带有合理的安装目标检测，你完全不用操心它们落到哪里。
 - **函数即命令** —— 每个 Skill 的底层逻辑都能通过 `yk <domain> <action>` 调用，同一份目录既能驱动 Agent，也能驱动纯命令行工作流。
 - **感知依赖、绝不破坏** —— 安装 `demo-dependent` 会自动拉取 `demo-base`；`yk uninstall` 只删除你指定的内容，绝不会悄悄删除共享依赖。
-- **开箱即用** —— 自带可用 Skill：[`pbench`](#pbench)（个人 Codex 基准测试）与 [`video-transcript`](#video-transcript)。
+- **开箱即用** —— 自带可用 Skill：[`pbench`](#pbench)（本地、隐私优先的个人 Codex 基准测试）与 [`video-transcript`](#video-transcript)。
 - **单一编译二进制** —— `yk` 以可 Homebrew 安装的 macOS arm64 二进制形式发布，并内置目录，安装时不依赖源码检出。
 - **Bun + TypeScript 单仓多包** —— `packages/core` 负责目录/安装逻辑，`packages/cli` 负责路由，每个 `packages/functions-*` 包负责一个领域。边界清晰、构建快速。
 
@@ -53,7 +53,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | Skill | 说明 | 安装命令 |
 | --- | --- | --- |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
-| **pbench** | 把真实的 Codex 工作流失误捕获为本地、私有的个人基准用例，再通过 harness 管理的 runner 重放。 | `yk install pbench` |
+| **pbench** | 把真实的 Codex 工作流失误捕获为本地、私有的个人基准用例，再通过 harness 管理的 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
 | **demo-dependent** | 依赖 `demo-base` 的演示 Skill（用于验证依赖安装）。 | `yk install demo-dependent` |
 | **demo-base** | 用于 CLI 校验的最小基础依赖。 | `yk install demo-base` |
 
@@ -128,7 +128,9 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 
 ### PBench
 
-`yk pbench` 会把真实的 Codex 工作流失误捕获为本地、私有的个人基准用例，再通过 harness 管理的 runner 重放已定稿的用例。用它来判断一次模型、Skill、规则包或 harness 的改动是否*真的*改善了*你自己的*工作流。
+`yk pbench` 会把真实的 Codex 工作流失误捕获为完全本地、私有的个人基准用例，再通过 harness 管理的 runner 重放已定稿的用例。用它来判断一次模型、Skill、规则包或 harness 的改动是否*真的*改善了*你自己的*工作流。
+
+PBench 默认按隐私优先设计：case、原始 transcript、评估说明、私有校验器和运行报告都留在你的本地 workspace。它不会把 case 上传到托管 benchmark 服务，不会做云同步，也不会发布到公开排行榜。被测 agent 只能看到脱敏后的 public replay capsule。
 
 > 📖 完整文档：**[PBench 中文文档](./docs/pbench.zh-CN.md)** · **[PBench (English)](./docs/pbench.md)**
 

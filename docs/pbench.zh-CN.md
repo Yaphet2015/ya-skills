@@ -1,8 +1,10 @@
 # PBench 中文文档
 
-PBench 是一套本地、私有的 coding agent benchmark 工作流。它把真实工作中发生过的 agent 失误沉淀成可复现 case，然后用这些 case 判断新的模型、skill、rules 包或 harness 改动，是否真的改善了你的日常工作流。
+PBench 是一套完全本地、隐私优先的 coding agent benchmark 工作流。它把真实工作中发生过的 agent 失误沉淀成可复现的私有 case，然后用这些 case 判断新的模型、skill、rules 包或 harness 改动，是否真的改善了你的日常工作流。
 
 PBench 不是公开排行榜，也不是为了衡量模型的通用能力。它的信号来自真实失败：agent 过早宣称完成、漏读上下文、工具使用方式不对、验证失败、或者需要用户指出问题后才重新做对。
+
+所有 benchmark 状态都属于你的本机：authoring transaction、finalized case、原始 transcript、私有评估文档、validator、replay worktree 和 run report 都存放在本地 PBench 路径下。PBench 不会把 case 上传到托管服务，不会做云同步，也不会发布结果。被测 agent 只能看到本次运行准备好的、脱敏后的 public replay capsule。
 
 ## 目录
 
@@ -325,6 +327,7 @@ PBench 默认假设 case 是私有的：
 
 隐私模型很直接：
 
+- PBench 把 benchmark 数据保存在本地磁盘，没有托管同步或上传路径；
 - public files 用作 replay input；
 - private files 用作 authoring、evaluator intent、raw evidence 和 validators；
 - benchmarked agent 只能看到 public input；
@@ -528,4 +531,3 @@ public replay input 不能引用 private evaluator material、validator paths、
 - `validator_failed`：agent 运行完成，但 private validators 失败。
 
 检查 `<workspace>/runs/<run-id>/summary.md`、`runner-environment.json`、logs、`agent.diff` 和 `candidate/` artifacts。
-

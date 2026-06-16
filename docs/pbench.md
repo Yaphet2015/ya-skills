@@ -1,8 +1,10 @@
 # PBench
 
-PBench is a local, private benchmark workflow for coding-agent work. It turns a real agent miss into a reproducible case, then uses that case to check whether a model, skill, rules package, or harness change improves the user's actual workflow.
+PBench is a fully local, privacy-first benchmark workflow for coding-agent work. It turns a real agent miss into a reproducible private case, then uses that case to check whether a model, skill, rules package, or harness change improves the user's actual workflow.
 
 PBench is not a public leaderboard and it does not try to measure general model ability. Its signal comes from failures that already happened in real work: the agent claimed success too early, missed context, used tools incorrectly, failed verification, or needed user correction before the task was actually usable.
+
+All benchmark state belongs to your machine: authoring transactions, finalized cases, raw transcripts, private evaluator docs, validators, replay worktrees, and run reports are stored under local PBench paths. PBench does not upload cases to a hosted service, sync them to cloud storage, or publish results. The only material shown to a benchmarked agent is the sanitized public replay capsule prepared for that run.
 
 ## Contents
 
@@ -325,6 +327,7 @@ PBench assumes cases are private by default:
 
 The privacy design is simple:
 
+- PBench stores benchmark data on local disk and has no hosted sync or upload path;
 - public files are for replay input;
 - private files are for authoring, evaluator intent, raw evidence, and validators;
 - benchmarked agents get public input only;
@@ -528,4 +531,3 @@ Check the run status:
 - `validator_failed`: the agent ran, but private validators failed.
 
 Inspect `<workspace>/runs/<run-id>/summary.md`, `runner-environment.json`, logs, `agent.diff`, and `candidate/` artifacts.
-

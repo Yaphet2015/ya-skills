@@ -44,7 +44,7 @@ yk pbench capture --source codex --yes   # run a domain command
 - **Install agent-ready skills in one command** — `yk install` writes skills into `.claude/skills` and/or `.agents/skills`, with sensible target detection so you never have to think about where they land.
 - **Functions become commands** — every skill's underlying logic is reachable as `yk <domain> <action>`, so the same catalog powers both agents and plain shell workflows.
 - **Dependency-aware, never destructive** — installing `demo-dependent` pulls in `demo-base`; `yk uninstall` removes only what you ask for and never silently nukes shared dependencies.
-- **Batteries included** — ships ready-to-use skills: [`pbench`](#pbench) (personal Codex benchmarking) and [`video-transcript`](#video-transcript).
+- **Batteries included** — ships ready-to-use skills: [`pbench`](#pbench) (local, privacy-first personal Codex benchmarking) and [`video-transcript`](#video-transcript).
 - **Single compiled binary** — `yk` ships as a Homebrew-pourable macOS arm64 binary that bundles the catalog, so installs don't depend on the source checkout.
 - **Bun + TypeScript monorepo** — `packages/core` owns catalog/install logic, `packages/cli` owns routing, and each `packages/functions-*` package owns one domain. Clean boundaries, fast builds.
 
@@ -53,7 +53,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | Skill | Description | Install |
 | --- | --- | --- |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
-| **pbench** | Capture real Codex workflow misses as private personal-benchmark cases, then replay them through a harness-managed runner. | `yk install pbench` |
+| **pbench** | Capture real Codex workflow misses as local, private personal-benchmark cases, then replay them through a harness-managed runner without cloud sync or leaderboard upload. | `yk install pbench` |
 | **demo-dependent** | Demo skill that depends on `demo-base` (used to verify dependency install). | `yk install demo-dependent` |
 | **demo-base** | Tiny base dependency for CLI verification. | `yk install demo-base` |
 
@@ -128,7 +128,9 @@ bun run build:binary:macos-arm64    # produce the compiled dist/yk binary
 
 ### PBench
 
-`yk pbench` captures real Codex workflow misses into local, private personal-benchmark cases, then replays finalized cases through a harness-managed runner. Use it to answer whether a model, skill, rules package, or harness change actually improves *your* workflow.
+`yk pbench` captures real Codex workflow misses into fully local, private personal-benchmark cases, then replays finalized cases through a harness-managed runner. Use it to answer whether a model, skill, rules package, or harness change actually improves *your* workflow.
+
+PBench is privacy-first by design: cases, raw transcripts, evaluator notes, private validators, and run reports stay in your local workspace. It does not upload cases to a hosted benchmark service, sync them to the cloud, or publish them to a public leaderboard. Benchmarked agents only receive the sanitized public replay capsule.
 
 > 📖 Full documentation: **[PBench (English)](./docs/pbench.md)** · **[PBench 中文文档](./docs/pbench.zh-CN.md)**
 
