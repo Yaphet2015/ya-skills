@@ -1757,6 +1757,24 @@ describe("pbench codex capture flow", () => {
     expectNoAgentVisiblePrivateReferences(skill);
   });
 
+  test("redacts setup-outcomes stdout/stderr in skill mode (review)", async () => {
+    const { home, workspaceRoot, caseId, casePath } = await finalizedRunnableCase();
+    const manifestPath = join(casePath, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.setupCommands = [{ command: "node -e \"process.stdout.write('setup-oracle-leak')\"", cwd: ".", timeoutSeconds: 10 }];
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const started = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
+    );
+    const setupOutcomes = JSON.parse(await readFile(join(started.artifactDir, "setup-outcomes.json"), "utf8"));
+    expect(setupOutcomes.length).toBe(1);
+    for (const outcome of setupOutcomes) {
+      expect(outcome).not.toHaveProperty("stdout");
+      expect(outcome).not.toHaveProperty("stderr");
+    }
+    expect(setupOutcomes[0]).toEqual({ id: expect.any(String), expected: "pass", actual: "pass", exitCode: 0 });
+  });
+
   test("fails before agent execution when required replay env is missing", async () => {
     const missingEnv = "PBENCH_TEST_REQUIRED_BUT_MISSING";
     const original = process.env[missingEnv];

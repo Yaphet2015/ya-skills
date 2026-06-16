@@ -1072,9 +1072,9 @@ function failingValidatorIdOf(outcomes: ValidatorOutcome[]): string | null {
   return outcomes.find((outcome) => outcome.actual !== outcome.expected)?.id ?? null;
 }
 
-function redactedValidatorOutcomes(outcomes: ValidatorOutcome[]) {
+function redactedOutcomes(outcomes: ValidatorOutcome[]) {
   // Drop stdout/stderr (the per-step pass/fail sequence + diffs) so a skill-mediated agent that
-  // reads validator-outcomes.json off disk cannot use it as an iteration oracle.
+  // reads validator-outcomes.json or setup-outcomes.json off disk cannot use them as an oracle.
   return outcomes.map((outcome) => ({
     id: outcome.id,
     expected: outcome.expected,
@@ -1426,7 +1426,8 @@ async function createStartedRun(options: {
     const setupOutcomes = runSetupCommands(manifest, worktree, publicRunnerEnv(worktree));
     state.events = [setupRunEvent(setupOutcomes)];
     if (setupOutcomes.length > 0) {
-      await writeFile(join(artifactDir, "setup-outcomes.json"), redactor(JSON.stringify(setupOutcomes, null, 2)));
+      const setupForDisk = options.agentMode === "skill" ? redactedOutcomes(setupOutcomes) : setupOutcomes;
+      await writeFile(join(artifactDir, "setup-outcomes.json"), redactor(JSON.stringify(setupForDisk, null, 2)));
       const failed = setupOutcomes.find((outcome) => outcome.actual !== "pass");
       if (failed) {
         state.status = "setup_failed";
@@ -1468,7 +1469,7 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
   // iteration oracle if left in the agent-readable run dir. Persist only a per-validator pass/fail
   // summary there; sandboxed codex runs keep the full outcomes. See docs/pbench-leak-handoff.md P1.1.
   const skillMode = state.agentMode === "skill";
-  const outcomesForDisk = skillMode ? redactedValidatorOutcomes(outcomes) : outcomes;
+  const outcomesForDisk = skillMode ? redactedOutcomes(outcomes) : outcomes;
   await writeFile(join(state.artifactDir, "validator-outcomes.json"), redactor(`${JSON.stringify(outcomesForDisk, null, 2)}\n`));
   await writeAgentDiff(state.worktree, state.artifactDir, redactor);
   state.status = passed ? "passed" : "validator_failed";
