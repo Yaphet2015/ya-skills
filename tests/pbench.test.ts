@@ -1767,6 +1767,31 @@ describe("pbench codex capture flow", () => {
     expect(runJson.accessAuditSuspicious).not.toBe(true);
   });
 
+  test("access audit flags the capture-skill source but not the runner skill it must read", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+    await writeFile(
+      join(started.worktree, ".pbench", "access-audit.jsonl"),
+      [
+        JSON.stringify({ path: join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md") }),
+        JSON.stringify({ path: "/repo/skills/pbench/SKILL.md" }),
+        JSON.stringify({ path: "/cases/x/private/failure.md" }),
+        JSON.stringify({ path: "src/index.ts" })
+      ].join("\n") + "\n"
+    );
+    await pbenchCommand("finish", home).run(["--run", started.runId]);
+    const audit = JSON.parse(await readFile(join(started.artifactDir, "access-audit.json"), "utf8"));
+    expect(audit.readCount).toBe(4);
+    expect(audit.suspicious).toBe(true);
+    expect(audit.sensitiveReads.map((entry: { kind: string }) => entry.kind).sort()).toEqual([
+      "pbench-skill-source",
+      "private-evidence"
+    ]);
+  });
+
   test("installs the runner skill with integrity boundaries and the access-audit rule (P3)", async () => {
     const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
     const started = JSON.parse(

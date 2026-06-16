@@ -1569,7 +1569,9 @@ function sensitiveAccessReadKind(path: string): string | null {
   if (/(^|[/\\])private([/\\]|$)/.test(path)) return "private-evidence";
   if (/(^|[/\\])runs([/\\]|$)/.test(path)) return "prior-run-artifacts";
   if (/[/\\]functions-pbench[/\\]src/.test(path) || /[/\\]functions-pbench[/\\]/.test(path)) return "harness-source";
-  if (/[/\\]skills[/\\]pbench/.test(path)) return "pbench-skill-source";
+  // Match the capture/authoring skill source (skills/pbench/...), NOT the runner skill the agent
+  // is required to read (skills/pbench-runner/...) — "pbench" must be followed by a separator or end.
+  if (/[/\\]skills[/\\]pbench(?:[/\\]|$)/.test(path)) return "pbench-skill-source";
   if (/(^|[/\\])case\.json$/.test(path)) return "case-manifest";
   return null;
 }
