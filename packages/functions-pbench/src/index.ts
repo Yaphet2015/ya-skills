@@ -31,6 +31,11 @@ type ReplayRequirements = {
 
 type PbenchRunStatus = "running" | "passed" | "blocked" | "setup_failed" | "agent_failed" | "validator_failed";
 
+// Sandbox/enforcement level the benchmarked agent ran under. Harness-agnostic: it describes the
+// mechanism, not which harness. codex runs under `workspace-write`; skill-mediated runs are `none`
+// until a read-whitelist sandbox lands (see docs/pbench-leak-handoff.md P1.3 follow-up).
+type PbenchIsolation = "none" | "workspace-write";
+
 type RunState = JsonObject & {
   schemaVersion: 1;
   runId: string;
@@ -45,6 +50,12 @@ type RunState = JsonObject & {
   status: PbenchRunStatus;
   terminal: boolean;
   manualIntervention: boolean;
+  isolation: PbenchIsolation;
+  attemptNumber: number;
+  priorRunIds: string[];
+  contaminated: boolean;
+  failingValidatorId?: string | null;
+  accessAuditSuspicious?: boolean;
   requiredEnv: string[];
   events?: RunEvent[];
   createdAt: string;
@@ -129,6 +140,12 @@ type PbenchReportRun = {
   summaryPath: string;
   agentMode: string;
   manualIntervention: boolean;
+  isolation: string;
+  attemptNumber: number;
+  priorRunIds: string[];
+  contaminated: boolean;
+  failingValidatorId: string | null;
+  accessAuditSuspicious: boolean;
   durationMs: number | null;
   tokenUsage: JsonObject;
   createdAt: string | null;
@@ -274,7 +291,8 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
             caseDir,
             workspaceRoot,
             home: options.home,
-            profile: normalizeRunProfile(getString(parsed, "profile"))
+            profile: normalizeRunProfile(getString(parsed, "profile")),
+            contaminated: getBoolean(parsed, "contaminated")
           })
         );
       }
@@ -940,6 +958,11 @@ async function writeRunSummary(state: RunState, details: string[] = []): Promise
       `- Status: ${state.status}`,
       `- Agent mode: ${state.agentMode}`,
       `- Manual intervention: ${String(state.manualIntervention)}`,
+      `- Isolation: ${state.isolation}`,
+      `- Attempt: ${String(state.attemptNumber)}${state.priorRunIds.length > 0 ? ` (prior: ${state.priorRunIds.join(", ")})` : ""}`,
+      `- Contaminated: ${String(state.contaminated)}`,
+      ...(state.failingValidatorId ? [`- Failing validator: ${state.failingValidatorId}`] : []),
+      ...(state.accessAuditSuspicious ? ["- Access audit: sensitive reads flagged (access-audit.json)"] : []),
       "",
       ...details
     ].join("\n")
@@ -1028,6 +1051,30 @@ function agentFailureSummary(exitCode: number | null): string[] {
   ];
 }
 
+function failingValidatorIdOf(outcomes: ValidatorOutcome[]): string | null {
+  return outcomes.find((outcome) => outcome.actual !== outcome.expected)?.id ?? null;
+}
+
+function redactedValidatorOutcomes(outcomes: ValidatorOutcome[]) {
+  // Drop stdout/stderr (the per-step pass/fail sequence + diffs) so a skill-mediated agent that
+  // reads validator-outcomes.json off disk cannot use it as an iteration oracle.
+  return outcomes.map((outcome) => ({
+    id: outcome.id,
+    expected: outcome.expected,
+    actual: outcome.actual,
+    exitCode: outcome.exitCode
+  }));
+}
+
+function validatorFailureSummaryRedacted(failingValidatorId: string | null): string[] {
+  return [
+    "Private validators failed.",
+    ...(failingValidatorId ? [`- Failed validator: ${failingValidatorId}`] : []),
+    "- Candidate diff: agent.diff",
+    "- Candidate files: candidate/untracked.json"
+  ];
+}
+
 function validatorFailureSummary(outcomes: ValidatorOutcome[]): string[] {
   const failed = outcomes.find((outcome) => outcome.actual !== outcome.expected);
   return [
@@ -1057,6 +1104,12 @@ async function writeRunMetrics(state: RunState, options: { validatorOutcomes?: V
     status: state.status,
     agentMode: state.agentMode,
     manualIntervention: state.manualIntervention,
+    isolation: state.isolation,
+    attemptNumber: state.attemptNumber,
+    priorRunIds: state.priorRunIds,
+    contaminated: state.contaminated,
+    failingValidatorId: state.failingValidatorId ?? null,
+    accessAuditSuspicious: state.accessAuditSuspicious === true,
     durationMs: typeof state.durationMs === "number" ? state.durationMs : null,
     tokenUsage: tokenUsageFromState(state),
     validator: validatorCounts(options.validatorOutcomes),
@@ -1313,6 +1366,7 @@ async function createStartedRun(options: {
   home?: string;
   agentMode: "codex" | "skill";
   profile: string;
+  contaminated?: boolean;
 }): Promise<{ state: RunState; manifest: JsonObject; redactor: (text: string) => string }> {
   const { manifest, caseId, repoCache, commit, requiredEnv } = await loadRunnableCase(options.caseDir, options.workspaceRoot);
   const runId = makeRunId(caseId);
@@ -1320,6 +1374,7 @@ async function createStartedRun(options: {
   await mkdir(artifactDir, { recursive: true });
   const worktree = await createReplayWorktree(repoCache, commit, options.workspaceRoot, runId);
   const redactor = makeRedactor(requiredEnv);
+  const prior = await priorAttempts(options.workspaceRoot, caseId, options.profile);
   const state: RunState = {
     schemaVersion: 1,
     runId,
@@ -1334,6 +1389,10 @@ async function createStartedRun(options: {
     status: "running",
     terminal: false,
     manualIntervention: options.agentMode === "skill",
+    isolation: options.agentMode === "codex" ? "workspace-write" : "none",
+    attemptNumber: prior.runIds.length + 1,
+    priorRunIds: prior.runIds,
+    contaminated: options.contaminated === true,
     requiredEnv,
     createdAt: nowIso(),
     updatedAt: nowIso()
@@ -1385,12 +1444,25 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
     expectedMode: "candidate",
     errors
   });
-  await writeFile(join(state.artifactDir, "validator-outcomes.json"), redactor(`${JSON.stringify(outcomes, null, 2)}\n`));
+  const passed = errors.length === 0;
+  const failingValidatorId = failingValidatorIdOf(outcomes);
+  state.failingValidatorId = failingValidatorId;
+  // Skill-mediated runs are unsandboxed, so persisted validator step output (stdout/stderr) is an
+  // iteration oracle if left in the agent-readable run dir. Persist only a per-validator pass/fail
+  // summary there; sandboxed codex runs keep the full outcomes. See docs/pbench-leak-handoff.md P1.1.
+  const skillMode = state.agentMode === "skill";
+  const outcomesForDisk = skillMode ? redactedValidatorOutcomes(outcomes) : outcomes;
+  await writeFile(join(state.artifactDir, "validator-outcomes.json"), redactor(`${JSON.stringify(outcomesForDisk, null, 2)}\n`));
   await writeAgentDiff(state.worktree, state.artifactDir, redactor);
-  state.status = errors.length === 0 ? "passed" : "validator_failed";
+  state.status = passed ? "passed" : "validator_failed";
   state.terminal = true;
   state.finishedAt = nowIso();
-  await writeRunSummary(state, errors.length === 0 ? ["Private validators passed."] : validatorFailureSummary(outcomes));
+  const summaryDetails = passed
+    ? ["Private validators passed."]
+    : skillMode
+      ? validatorFailureSummaryRedacted(failingValidatorId)
+      : validatorFailureSummary(outcomes);
+  await writeRunSummary(state, summaryDetails);
   await writeTerminalRunArtifacts(state, {
     events: [
       ...(state.events ?? []),
@@ -1460,6 +1532,7 @@ async function startSkillMediatedRun(options: {
   workspaceRoot: string;
   home?: string;
   profile: string;
+  contaminated?: boolean;
 }): Promise<JsonObject> {
   const { state } = await createStartedRun({ ...options, agentMode: "skill" });
   return {
@@ -1471,14 +1544,60 @@ async function startSkillMediatedRun(options: {
   };
 }
 
+function sensitiveAccessReadKind(path: string): string | null {
+  if (/(^|[/\\])private([/\\]|$)/.test(path)) return "private-evidence";
+  if (/(^|[/\\])runs([/\\]|$)/.test(path)) return "prior-run-artifacts";
+  if (/[/\\]functions-pbench[/\\]src/.test(path) || /[/\\]functions-pbench[/\\]/.test(path)) return "harness-source";
+  if (/[/\\]skills[/\\]pbench/.test(path)) return "pbench-skill-source";
+  if (/(^|[/\\])case\.json$/.test(path)) return "case-manifest";
+  return null;
+}
+
+async function summarizeAccessAudit(worktree: string): Promise<{ readCount: number; sensitiveReads: { path: string; kind: string }[]; suspicious: boolean } | null> {
+  const logPath = join(worktree, ".pbench", "access-audit.jsonl");
+  if (!(await pathExists(logPath))) {
+    return null;
+  }
+  const text = await readFile(logPath, "utf8");
+  const sensitiveReads: { path: string; kind: string }[] = [];
+  let readCount = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    readCount += 1;
+    let entry: { path?: unknown } = {};
+    try {
+      entry = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const readPath = typeof entry.path === "string" ? entry.path : "";
+    const kind = sensitiveAccessReadKind(readPath);
+    if (kind) {
+      sensitiveReads.push({ path: readPath, kind });
+    }
+  }
+  return { readCount, sensitiveReads, suspicious: sensitiveReads.length > 0 };
+}
+
 async function finishPbenchRun(options: { runId: string; home?: string }): Promise<JsonObject> {
   const state = await readRunState(options.runId, options.home);
   if (state.terminal || state.status !== "running") {
     throw new Error(`PBench run already finished: ${state.runId} (${state.status})`);
   }
   const manifest = await readJson(join(state.caseDir, "case.json"));
+  // P1.3-lite: copy the skill agent's voluntary access-audit log out of the worktree BEFORE
+  // completeRunWithValidators deletes the worktree, and flag sensitive reads for post-hoc review.
+  const accessAudit = await summarizeAccessAudit(state.worktree);
+  if (accessAudit) {
+    state.accessAuditSuspicious = accessAudit.suspicious;
+    await writeJson(join(state.artifactDir, "access-audit.json"), accessAudit);
+  }
   const finished = await completeRunWithValidators(state, manifest, options.home);
-  return { runId: finished.runId, status: finished.status, summaryPath: join(finished.artifactDir, "summary.md") };
+  // P1.1: skill finish returns only minimal signal — no summaryPath / validator-outcomes pointer.
+  return { runId: finished.runId, status: finished.status, failingValidatorId: finished.failingValidatorId ?? null };
 }
 
 async function readRunArtifact(path: string): Promise<JsonObject> {
@@ -1491,6 +1610,7 @@ async function readRunArtifact(path: string): Promise<JsonObject> {
 
 function normalizeReportRun(run: JsonObject): PbenchReportRun {
   const artifactDir = typeof run.artifactDir === "string" ? run.artifactDir : "";
+  const priorRunIds = Array.isArray(run.priorRunIds) ? run.priorRunIds.map((id) => String(id)) : [];
   return {
     runId: String(run.runId ?? ""),
     caseId: String(run.caseId ?? ""),
@@ -1500,6 +1620,12 @@ function normalizeReportRun(run: JsonObject): PbenchReportRun {
     summaryPath: join(artifactDir, "summary.md"),
     agentMode: String(run.agentMode ?? "unknown"),
     manualIntervention: run.manualIntervention === true,
+    isolation: typeof run.isolation === "string" ? run.isolation : "none",
+    attemptNumber: typeof run.attemptNumber === "number" ? run.attemptNumber : 1,
+    priorRunIds,
+    contaminated: run.contaminated === true,
+    failingValidatorId: typeof run.failingValidatorId === "string" ? run.failingValidatorId : null,
+    accessAuditSuspicious: run.accessAuditSuspicious === true,
     durationMs: typeof run.durationMs === "number" ? run.durationMs : null,
     tokenUsage: asObject(run.tokenUsage) ?? {},
     createdAt: typeof run.createdAt === "string" ? run.createdAt : null,
@@ -1521,6 +1647,35 @@ function addTokenUsage(target: Record<string, number>, tokenUsage: JsonObject): 
 
 function sortObjectValues<T>(input: Record<string, T>): Record<string, T> {
   return Object.fromEntries(Object.entries(input).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+async function priorAttempts(workspaceRoot: string, caseId: string, profile: string): Promise<{ runIds: string[] }> {
+  const runsRoot = join(workspaceRoot, "runs");
+  if (!(await pathExists(runsRoot))) {
+    return { runIds: [] };
+  }
+  const entries = await readdir(runsRoot, { withFileTypes: true });
+  const runIds: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const runJsonPath = join(runsRoot, entry.name, "run.json");
+    if (!(await pathExists(runJsonPath))) {
+      continue;
+    }
+    try {
+      const run = await readJson(runJsonPath);
+      const sameCase = String(run.caseId ?? "") === caseId;
+      const sameProfile = normalizeRunProfile(typeof run.profile === "string" ? run.profile : undefined) === profile;
+      if (sameCase && sameProfile) {
+        runIds.push(String(run.runId ?? entry.name));
+      }
+    } catch {
+      // Ignore malformed prior run artifacts — they cannot be reliable prior attempts.
+    }
+  }
+  return { runIds };
 }
 
 async function listReportRuns(workspaceRoot: string): Promise<PbenchReportRun[]> {
@@ -1565,11 +1720,13 @@ async function buildPbenchReport(options: {
   > = {};
   const cases: Record<string, { runs: number; profiles: Record<string, number>; statusCounts: Record<string, number> }> = {};
   let manualIntervention = 0;
+  let contaminated = 0;
 
   for (const run of runs) {
     caseIds.add(run.caseId);
     incrementCount(statusCounts, run.status);
     if (run.manualIntervention) manualIntervention += 1;
+    if (run.contaminated) contaminated += 1;
 
     profiles[run.profile] ??= {
       runs: 0,
@@ -1635,6 +1792,7 @@ async function buildPbenchReport(options: {
       runs: runs.length,
       cases: caseIds.size,
       manualIntervention,
+      contaminated,
       statusCounts: sortObjectValues(statusCounts)
     },
     profiles: renderedProfiles,

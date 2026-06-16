@@ -1547,7 +1547,7 @@ describe("pbench codex capture flow", () => {
       .find((command) => command.action === "finish")
       ?.run(["--run", started.runId]);
     const finished = JSON.parse(String(finishOutput));
-    const summary = await readFile(finished.summaryPath, "utf8");
+    const summary = await readFile(join(started.artifactDir, "summary.md"), "utf8");
 
     expect(finished.status).toBe("passed");
     expect(String(finishOutput)).not.toContain("private/validators");
@@ -1589,6 +1589,157 @@ describe("pbench codex capture flow", () => {
       manualIntervention: true,
       validator: { total: 1, passed: 1, failed: 0 }
     });
+  });
+
+  test("skill finish returns minimal signal with no run-dir pointer and redacts validator step output (P1.1)", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
+    );
+    // Leave done.txt absent so the validator fails — failing outcomes carry stdout/stderr that must be redacted.
+    const finishOutput = await pbenchCommand("finish", home).run(["--run", started.runId]);
+    const finished = JSON.parse(String(finishOutput));
+
+    expect(Object.keys(finished).sort()).toEqual(["failingValidatorId", "runId", "status"]);
+    expect(finished.status).toBe("validator_failed");
+    expect(finished.failingValidatorId).toBeTruthy();
+    expect(String(finishOutput)).not.toContain("summary.md");
+    expect(String(finishOutput)).not.toContain("validator-outcomes");
+
+    const outcomes = JSON.parse(await readFile(join(started.artifactDir, "validator-outcomes.json"), "utf8"));
+    for (const outcome of outcomes) {
+      expect(outcome).not.toHaveProperty("stdout");
+      expect(outcome).not.toHaveProperty("stderr");
+    }
+    const summary = await readFile(join(started.artifactDir, "summary.md"), "utf8");
+    expect(summary).not.toContain("validator-outcomes.json");
+  });
+
+  test("codex run keeps full validator outcomes, returns a summary path, and records workspace-write isolation", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const fake = await writeFakeCodex({
+      stdout: '{"type":"message","role":"assistant","content":"done"}\n'
+    });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const result = JSON.parse(
+        String(
+          await pbenchCommand("run", home).run([
+            "--case",
+            caseId,
+            "--workspace",
+            workspaceRoot,
+            "--agent",
+            "codex",
+            "--profile",
+            "full-outcomes"
+          ])
+        )
+      );
+      expect(result).toHaveProperty("summaryPath");
+      const outcomes = JSON.parse(await readFile(join(result.artifactDir, "validator-outcomes.json"), "utf8"));
+      expect(outcomes.length).toBeGreaterThan(0);
+      expect(outcomes[0]).toHaveProperty("stdout");
+      expect(outcomes[0]).toHaveProperty("stderr");
+      const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
+      expect(runJson.isolation).toBe("workspace-write");
+      expect(runJson.attemptNumber).toBe(1);
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  test("records harness-agnostic isolation, attempt, priorRunIds, and contaminated provenance (P1.2)", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const first = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot, "--profile", "probe"]))
+    );
+    const firstRun = JSON.parse(await readFile(join(first.artifactDir, "run.json"), "utf8"));
+    expect(firstRun).toMatchObject({
+      agentMode: "skill",
+      isolation: "none",
+      attemptNumber: 1,
+      priorRunIds: [],
+      contaminated: false
+    });
+
+    const second = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot, "--profile", "probe"]))
+    );
+    const secondRun = JSON.parse(await readFile(join(second.artifactDir, "run.json"), "utf8"));
+    expect(secondRun.attemptNumber).toBe(2);
+    expect(secondRun.priorRunIds).toEqual([first.runId]);
+
+    const tainted = JSON.parse(
+      String(
+        await pbenchCommand("start", home).run([
+          "--case",
+          caseId,
+          "--workspace",
+          workspaceRoot,
+          "--profile",
+          "probe",
+          "--contaminated"
+        ])
+      )
+    );
+    const taintedRun = JSON.parse(await readFile(join(tainted.artifactDir, "run.json"), "utf8"));
+    expect(taintedRun.contaminated).toBe(true);
+    expect(taintedRun.attemptNumber).toBe(3);
+  });
+
+  test("report surfaces isolation, attempt, and contaminated provenance", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    await pbenchCommand("start", home).run([
+      "--case",
+      caseId,
+      "--workspace",
+      workspaceRoot,
+      "--profile",
+      "probe",
+      "--contaminated"
+    ]);
+    const report = JSON.parse(String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot])));
+    expect(report.totals.contaminated).toBe(1);
+    const recent = report.recentRuns.find((run: { contaminated: boolean }) => run.contaminated === true);
+    expect(recent).toBeTruthy();
+    expect(recent).toMatchObject({ isolation: "none", attemptNumber: 1, contaminated: true });
+  });
+
+  test("skill finish copies the access-audit log and flags sensitive reads (P1.3-lite)", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+    await writeFile(
+      join(started.worktree, ".pbench", "access-audit.jsonl"),
+      [
+        JSON.stringify({ path: "src/index.ts", at: "2026-06-16T10:00:00Z" }),
+        JSON.stringify({ path: "/cases/x/private/failure.md", at: "2026-06-16T10:01:00Z" })
+      ].join("\n") + "\n"
+    );
+    await pbenchCommand("finish", home).run(["--run", started.runId]);
+
+    const audit = JSON.parse(await readFile(join(started.artifactDir, "access-audit.json"), "utf8"));
+    expect(audit.readCount).toBe(2);
+    expect(audit.suspicious).toBe(true);
+    expect(audit.sensitiveReads.map((entry: { kind: string }) => entry.kind)).toContain("private-evidence");
+    const runJson = JSON.parse(await readFile(join(started.artifactDir, "run.json"), "utf8"));
+    expect(runJson.accessAuditSuspicious).toBe(true);
+  });
+
+  test("skill finish writes no access-audit artifact when the agent kept no log", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+    await pbenchCommand("finish", home).run(["--run", started.runId]);
+    await expect(readFile(join(started.artifactDir, "access-audit.json"), "utf8")).rejects.toThrow();
+    const runJson = JSON.parse(await readFile(join(started.artifactDir, "run.json"), "utf8"));
+    expect(runJson.accessAuditSuspicious).not.toBe(true);
   });
 
   test("fails before agent execution when required replay env is missing", async () => {
