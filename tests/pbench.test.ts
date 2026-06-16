@@ -1742,6 +1742,21 @@ describe("pbench codex capture flow", () => {
     expect(runJson.accessAuditSuspicious).not.toBe(true);
   });
 
+  test("installs the runner skill with integrity boundaries and the access-audit rule (P3)", async () => {
+    const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
+    );
+    const skill = await readFile(join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md"), "utf8");
+    expect(skill).toContain("Integrity boundaries");
+    expect(skill).toContain("access-audit.jsonl");
+    expect(skill).toContain("one-shot");
+    expect(skill).toContain("run-artifacts");
+    expect(skill).toContain("harness implementation");
+    // The integrity prose must not itself trip the fail-closed private-reference gate.
+    expectNoAgentVisiblePrivateReferences(skill);
+  });
+
   test("fails before agent execution when required replay env is missing", async () => {
     const missingEnv = "PBENCH_TEST_REQUIRED_BUT_MISSING";
     const original = process.env[missingEnv];
