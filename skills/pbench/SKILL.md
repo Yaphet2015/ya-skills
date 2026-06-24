@@ -38,7 +38,7 @@ When you notice benchmark-worthy outcome mismatch:
 
 After the user approves capture:
 
-1. Run `yk pbench capture --source codex --yes` from the subject Git repository. If capturing an older or non-current session, pass `--input <jsonl>` or `--session-id <id>`; capture uses the session cwd and Git baseline when Codex recorded them.
+1. Run `yk pbench capture --source <agent> --yes` from the subject Git repository. Built-in sources are `codex` and `claude`; other sources require `--input <transcript>`. For Codex, if capturing an older or non-current session, pass `--input <jsonl>` or `--session-id <id>`; for Claude, pass `--session-id <id>` (matches `~/.claude/projects` transcripts) or `--input <jsonl>`. Capture uses the session cwd and Git baseline when the agent recorded them.
 2. Read the printed transaction path, case directory, and `initialValidation` warnings.
    - Read `private/authoring-checklist.md` first for the generated capture-quality summary.
    - Treat empty prompt, empty command observations, or missing failure evidence warnings as capture-quality gaps to fix before finalizing.
@@ -61,8 +61,8 @@ Never expose `private/` contents to a future benchmarked agent. Use `yk pbench e
 
 Use finalized cases through the harness when comparing agents, models, rules, or skills:
 
-- For Codex CLI automation, run `yk pbench run --case <case-id-or-dir> --agent codex --profile <comparison-label>`.
-- For agents that cannot be launched by CLI, run `yk pbench start --case <case-id-or-dir> --profile <comparison-label>`, open the printed `<workspace>/.personal-bench/replays/<run-id>/worktree` with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
+- For headless automation, run `yk pbench run --case <case-id-or-dir> --agent <agent> --profile <comparison-label>`. Built-in agents are `codex` and `claude`; any case can run against any registered agent, so a case captured from one agent can be benchmarked against another.
+- For agents that cannot be launched headlessly, run `yk pbench start --case <case-id-or-dir> --profile <comparison-label>`, open the printed `<workspace>/.personal-bench/replays/<run-id>/worktree` with that agent, and let the installed `pbench-runner` skill trigger the one-shot `yk pbench finish --run <run-id>` validation.
 - Use stable profile labels such as `baseline`, `current-model`, `current-skills`, or `new-harness` when comparing model, skill, rules, or harness changes.
 - Use `yk pbench audit` before a comparison pass when you want a quick quality check across finalized cases.
 - After runs finish, use `yk pbench report --profile <comparison-label>` or `yk pbench report --format markdown` to summarize status, manual-intervention, duration, token, case, and recent-run results. For debugging an individual run, inspect the run summary plus `runner-environment.json`, `agent.diff`, and `candidate/untracked.json` in the artifact directory.

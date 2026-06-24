@@ -357,9 +357,9 @@ Initializes a local PBench workspace. It creates workspace metadata, `cases/`, a
 
 Links the current project to an initialized workspace by writing `.personal-bench/workspace.json`.
 
-### `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>] [--workspace <path>] [--title <title>]`
+### `yk pbench capture --source <agent> [--yes] [--input <jsonl>] [--session-id <id>] [--workspace <path>] [--title <title>]`
 
-Creates an authoring transaction from a Codex session. Without `--yes`, interactive capture asks for confirmation with the session path, repository, baseline commit, and title. In non-interactive mode, pass `--yes`.
+Creates an authoring transaction from a coding-agent session. Built-in sources: `codex` (reads `~/.codex` sessions or `--input`) and `claude` (reads `~/.claude/projects` transcripts by `--session-id`, or `--input`). Other sources require `--input <transcript>`. Without `--yes`, interactive capture asks for confirmation with the session path, repository, baseline commit, and title. In non-interactive mode, pass `--yes`.
 
 Output includes the transaction path, case directory, case id, workspace root, authoring checklist path, warnings, initial validation, and next commands.
 
@@ -379,9 +379,9 @@ Finalizes a strict-validated transaction into `<workspace>/cases/<case-id>`.
 
 Exports the public replay capsule for external inspection or manual agent setup.
 
-### `yk pbench run --case <case-id-or-dir> --agent codex [--workspace <path>] [--profile <name>]`
+### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-Runs a finalized case through the harness-managed Codex path. In v1, the automatic agent value must be `codex`.
+Runs a finalized case headlessly through a registered agent runner. Built-in agents: `codex` (sandboxed, `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Evaluator integrity comes from the public/private worktree boundary, not the agent's own sandbox, so any agent with a headless runner is a valid target.
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 
