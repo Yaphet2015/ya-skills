@@ -373,6 +373,38 @@ async function writeModernCodexSession(options: {
   return sessionJsonl;
 }
 
+function modernSessionPayloadJsonl(options: {
+  metaId: string;
+  cwd: string;
+  commit: string;
+  prompt: string;
+  timestamp: string;
+}): string {
+  return [
+    JSON.stringify({
+      timestamp: options.timestamp,
+      type: "session_meta",
+      payload: {
+        id: options.metaId,
+        timestamp: options.timestamp,
+        cwd: options.cwd,
+        cli_version: "0.136.0",
+        model: "gpt-test",
+        git: { commit_hash: options.commit, branch: "main" }
+      }
+    }),
+    JSON.stringify({
+      timestamp: options.timestamp,
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: options.prompt }]
+      }
+    })
+  ].join("\n") + "\n";
+}
+
 describe("pbench workspace handling", () => {
   test("initializes and links a local workspace without creating a git repository", async () => {
     const project = await temp("project");
@@ -948,6 +980,78 @@ describe("pbench codex capture flow", () => {
 
     expect(manifest.metadata.source.sessionId).toBe("scan-session-1");
     expect(manifest.subjects[0].baseline.commit).toBe(commit);
+  });
+
+  test("resolves a session by id from its filename without reading competing session files", async () => {
+    // The codex session index carries only {id, thread_name, updated_at} — no file path — so a
+    // session id must resolve to its transcript file. Codex embeds the id in the filename
+    // (rollout-<ts>-<sessionId>.jsonl), so resolution must match the filename rather than opening
+    // every transcript. The bait file below carries the requested id in its *content* but not its
+    // filename and is the newest session: a content-scanning resolver would pick it and capture
+    // the wrong prompt; a filename-based resolver must skip it.
+    const repo = await makeRepo();
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    const fakeHome = await temp("home");
+    await initWorkspace(workspaceRoot);
+    const commit = git(repo, ["rev-parse", "HEAD"]);
+    const sessionsDir = join(fakeHome, ".codex", "sessions", "2026", "06", "24");
+    await mkdir(sessionsDir, { recursive: true });
+
+    await writeFile(
+      join(sessionsDir, "rollout-2026-06-24T10-00-00-capture-target.jsonl"),
+      modernSessionPayloadJsonl({
+        metaId: "capture-target",
+        cwd: repo,
+        commit,
+        prompt: "TARGET PROMPT MARKER",
+        timestamp: "2026-06-24T10:00:00.000Z"
+      })
+    );
+    await writeFile(
+      join(sessionsDir, "rollout-2026-06-24T09-00-00-older-decoy.jsonl"),
+      modernSessionPayloadJsonl({
+        metaId: "older-decoy",
+        cwd: repo,
+        commit,
+        prompt: "OLDER DECOY MARKER",
+        timestamp: "2026-06-24T09:00:00.000Z"
+      })
+    );
+    await writeFile(
+      join(sessionsDir, "rollout-2026-06-24T11-00-00-stale-decoy.jsonl"),
+      modernSessionPayloadJsonl({
+        metaId: "capture-target",
+        cwd: repo,
+        commit,
+        prompt: "STALE DECOY MARKER",
+        timestamp: "2026-06-24T11:00:00.000Z"
+      })
+    );
+    await mkdir(join(fakeHome, ".codex"), { recursive: true });
+    await writeFile(
+      join(fakeHome, ".codex", "session_index.jsonl"),
+      [
+        { id: "older-decoy", thread_name: "older", updated_at: "2026-06-24T09:30:00Z" },
+        { id: "capture-target", thread_name: "target", updated_at: "2026-06-24T10:30:00Z" },
+        { id: "capture-target", thread_name: "stale", updated_at: "2026-06-24T11:30:00Z" }
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join("\n") + "\n"
+    );
+
+    const tx = await captureTestCodexSession({
+      cwd: repo,
+      workspaceRoot,
+      sessionId: "capture-target",
+      home: fakeHome,
+      yes: true
+    });
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
+    const prompt = await readFile(join(tx.caseDir, "public", "prompt.md"), "utf8");
+
+    expect(manifest.metadata.source.sessionId).toBe("capture-target");
+    expect(prompt).toContain("TARGET PROMPT MARKER");
+    expect(prompt).not.toContain("STALE DECOY MARKER");
   });
 
   test("extracts Codex errors and approval/sandbox context as private artifacts", async () => {
