@@ -2299,83 +2299,54 @@ function isApprovalSandboxRecord(record: JsonObject): boolean {
 }
 
 async function findSessionFromIndex(options: { cwd: string; sessionId?: string; home: string }): Promise<string> {
-  const indexPath = join(options.home, ".codex", "session_index.jsonl");
-  if (!(await pathExists(indexPath)) && !options.sessionId) {
-    throw new Error(`Codex session index not found: ${indexPath}`);
-  }
-  const currentRepo = resolveGitRoot(options.cwd);
-  const entries = (await pathExists(indexPath)) ? parseJsonlLines(await readFile(indexPath, "utf8")) : [];
-  const candidates: { path: string; updatedAt: number }[] = [];
-  const scannedPaths = new Set<string>();
+  const sessionsRoot = join(options.home, ".codex", "sessions");
 
-  async function considerPath(candidatePath: string, entry: JsonObject = {}): Promise<void> {
-    if (!candidatePath) {
-      return;
+  if (options.sessionId) {
+    // Codex names session transcripts `rollout-<timestamp>-<sessionId>.jsonl`, so the session id is
+    // embedded in the filename. Resolve by filename instead of opening every transcript: the prior
+    // implementation read, parsed, and fully extracted every session file under ~/.codex/sessions
+    // (hundreds of multi-MB files) just to read a single id field, which made `--session-id`
+    // captures extremely slow. The chosen file is read and extracted once, downstream in capture.
+    const byName = await findSessionFileByName(sessionsRoot, options.sessionId);
+    if (byName) {
+      return byName;
     }
-    const expandedPath = expandHome(candidatePath, options.home);
-    if (scannedPaths.has(expandedPath)) {
-      return;
-    }
-    scannedPaths.add(expandedPath);
-    try {
-      const records = parseJsonlLines(await readFile(expandedPath, "utf8"));
-      const extracted = extractCodexSession(records);
-      const sessionCwd = String(extracted.meta.cwd ?? entry.cwd ?? "");
-      const sessionId = String(extracted.meta.id ?? entry.id ?? "");
-      if (options.sessionId && !sessionId.includes(options.sessionId) && !expandedPath.includes(options.sessionId)) {
-        return;
-      }
-      if (options.sessionId || (sessionCwd && resolveGitRoot(sessionCwd) === currentRepo)) {
-        const time = Date.parse(
-          String(entry.updated_at ?? entry.timestamp ?? extracted.meta.updated_at ?? extracted.meta.timestamp ?? 0)
-        );
-        candidates.push({ path: expandedPath, updatedAt: Number.isFinite(time) ? time : 0 });
-      }
-    } catch {
-      return;
-    }
+    throw new Error(
+      `No Codex session file found for session id "${options.sessionId}". Pass --input <jsonl> to capture it directly.`
+    );
   }
 
-  for (const entry of entries) {
-    const candidatePath = String(entry.path ?? entry.session_path ?? entry.file ?? "");
-    if (options.sessionId && !JSON.stringify(entry).includes(options.sessionId)) {
-      continue;
-    }
-    await considerPath(candidatePath, entry);
-  }
-
-  if (options.sessionId && candidates.length === 0) {
-    for (const candidatePath of await findCodexSessionFiles(options.home)) {
-      await considerPath(candidatePath);
-    }
-  }
-
-  candidates.sort((a, b) => b.updatedAt - a.updatedAt);
-  if (!candidates[0]) {
-    throw new Error("No matching Codex session found for current Git repository. Use --input <jsonl>.");
-  }
-  return candidates[0].path;
+  // No session id: the codex session index records only {id, thread_name, updated_at} with no file
+  // path or working directory, so the current repository cannot be mapped to a specific session
+  // without scanning every transcript. Require an explicit session id or input path.
+  throw new Error(
+    "Pass --session-id <id> or --input <jsonl> to identify which Codex session to capture; the session index does not record file paths or working directories."
+  );
 }
 
-async function findCodexSessionFiles(home: string): Promise<string[]> {
-  const root = join(home, ".codex", "sessions");
-  if (!(await pathExists(root))) {
-    return [];
+async function findSessionFileByName(sessionsRoot: string, sessionId: string): Promise<string | null> {
+  if (!(await pathExists(sessionsRoot))) {
+    return null;
   }
-  const files: string[] = [];
+  const matches: { path: string; mtimeMs: number }[] = [];
   async function visit(dir: string): Promise<void> {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
         await visit(path);
-      } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-        files.push(path);
+      } else if (entry.isFile() && entry.name.endsWith(".jsonl") && entry.name.includes(sessionId)) {
+        matches.push({ path, mtimeMs: (await stat(path)).mtimeMs });
       }
     }
   }
-  await visit(root);
-  return files;
+  await visit(sessionsRoot);
+  if (matches.length === 0) {
+    return null;
+  }
+  // If a partial id matches several files, prefer the most recently modified transcript.
+  matches.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return matches[0].path;
 }
 
 function resolveGitRootOrNull(cwdInput: string): string | null {
