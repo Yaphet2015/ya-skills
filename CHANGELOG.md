@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/Yaphet2015/ya-skills/compare/v0.2.0...v0.3.0) (2026-06-25)
+
+
+### Features
+
+* **pbench:** platform-agnostic capture and rerun (codex + claude) ([ffbeedb](https://github.com/Yaphet2015/ya-skills/commit/ffbeedb46187759150949a8fe69946c2c853f6cc))
+
+
+### Bug Fixes
+
+* **pbench:** resolve --session-id by filename, not by scanning all transcripts ([7c5fc01](https://github.com/Yaphet2015/ya-skills/commit/7c5fc016046ab7e619b00c889ce3f19096ed5d52))
+
 ## [0.2.0](https://github.com/Yaphet2015/ya-skills/compare/v0.1.1...v0.2.0) (2026-06-17)
 
 
