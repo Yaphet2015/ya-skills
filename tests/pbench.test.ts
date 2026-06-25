@@ -226,6 +226,43 @@ async function writeFakeCodex(options: {
   return { binDir, commandPath };
 }
 
+async function writeFakeClaude(options: { exitCode?: number; cost?: number; body?: string } = {}): Promise<{ binDir: string; commandPath: string }> {
+  const binDir = await temp("fake-claude-bin");
+  const commandPath = join(binDir, "claude");
+  const assistantLine = JSON.stringify({
+    type: "assistant",
+    message: { role: "assistant", content: [{ type: "text", text: "done" }] }
+  });
+  const resultLine = JSON.stringify({
+    type: "result",
+    result: "done",
+    usage: { input_tokens: 11, output_tokens: 7 },
+    total_cost_usd: options.cost ?? 0.0012
+  });
+  await writeFile(
+    commandPath,
+    [
+      "#!/usr/bin/env node",
+      "import { writeFileSync } from 'node:fs';",
+      "import { join } from 'node:path';",
+      "let stdin = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { stdin += chunk; });",
+      "process.stdin.on('end', () => {",
+      "  const root = process.cwd();",
+      "  writeFileSync(join(root, '.pbench', 'fake-claude-stdin.txt'), stdin);",
+      options.body ?? "  writeFileSync(join(root, 'done.txt'), 'done\\n');",
+      `  process.stdout.write(${JSON.stringify(assistantLine)} + "\\n");`,
+      `  process.stdout.write(${JSON.stringify(resultLine)} + "\\n");`,
+      `  process.exit(${options.exitCode ?? 0});`,
+      "});",
+      ""
+    ].join("\n")
+  );
+  await chmod(commandPath, 0o755);
+  return { binDir, commandPath };
+}
+
 function expectNoAgentVisiblePrivateReferences(text: string): void {
   expect(text).not.toContain("/private/");
   expect(text).not.toContain("private/validators");
@@ -403,6 +440,59 @@ function modernSessionPayloadJsonl(options: {
       }
     })
   ].join("\n") + "\n";
+}
+
+async function writeClaudeTranscript(options: {
+  cwd: string;
+  sessionId?: string;
+  branch?: string;
+  records?: Record<string, unknown>[];
+}): Promise<string> {
+  const sessionId = options.sessionId ?? "claude-session-1";
+  const transcript = join(await temp("claude-session"), `${sessionId}.jsonl`);
+  const base = { cwd: options.cwd, sessionId, gitBranch: options.branch ?? "main", version: "2.1.187" };
+  await writeFile(
+    transcript,
+    [
+      JSON.stringify({
+        type: "user",
+        ...base,
+        timestamp: "2026-06-24T10:00:00Z",
+        message: { role: "user", content: "Fix the login bug so the focused test passes." }
+      }),
+      JSON.stringify({
+        type: "assistant",
+        ...base,
+        timestamp: "2026-06-24T10:00:01Z",
+        message: {
+          role: "assistant",
+          model: "claude-test",
+          content: [
+            { type: "text", text: "Running the focused test to reproduce." },
+            { type: "tool_use", id: "call_1", name: "Bash", input: { command: "bun run test" } }
+          ],
+          usage: { input_tokens: 120, output_tokens: 30 }
+        }
+      }),
+      JSON.stringify({
+        type: "user",
+        ...base,
+        timestamp: "2026-06-24T10:00:02Z",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "call_1", content: "Exit code: 1\ndone.txt is missing" }]
+        }
+      }),
+      JSON.stringify({
+        type: "user",
+        ...base,
+        timestamp: "2026-06-24T10:00:03Z",
+        message: { role: "user", content: "The task is complete only when done.txt exists and the test passes." }
+      }),
+      ...(options.records ?? []).map((record) => JSON.stringify(record))
+    ].join("\n") + "\n"
+  );
+  return transcript;
 }
 
 describe("pbench workspace handling", () => {
@@ -1054,6 +1144,32 @@ describe("pbench codex capture flow", () => {
     expect(prompt).not.toContain("STALE DECOY MARKER");
   });
 
+  test("captures a Claude Code session through the platform-agnostic source registry", async () => {
+    const repo = await makeRepoWithFailingTest();
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const transcript = await writeClaudeTranscript({ cwd: repo });
+
+    const output = await createPbenchCommands({ home })
+      .find((command) => command.action === "capture")
+      ?.run(["--source", "claude", "--workspace", workspaceRoot, "--input", transcript, "--yes"]);
+    const result = JSON.parse(String(output));
+    const manifest = JSON.parse(await readFile(join(result.caseDir, "case.json"), "utf8"));
+    const prompt = await readFile(join(result.caseDir, "public", "prompt.md"), "utf8");
+    const observations = await readFile(join(result.caseDir, "public", "command-observations.md"), "utf8");
+
+    expect(manifest.metadata.source.kind).toBe("claude-session");
+    expect(manifest.metadata.source.sessionId).toBe("claude-session-1");
+    expect(manifest.metadata.tags).toContain("claude");
+    expect(prompt).toContain("Fix the login bug");
+    expect(observations).toContain("bun run test");
+    expect(observations).toContain("exitCode: 1");
+    await expect(
+      readFile(join(result.caseDir, "private", "artifacts", "raw", "claude-session.jsonl"), "utf8")
+    ).resolves.toContain("claude-test");
+  });
+
   test("extracts Codex errors and approval/sandbox context as private artifacts", async () => {
     const repo = await makeRepo();
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
@@ -1508,6 +1624,35 @@ describe("pbench codex capture flow", () => {
     }
   });
 
+  test("runs a finalized case with the claude runner and records claude provenance", async () => {
+    // Proves platform-independence on the rerun side: a case (here captured from Codex) runs
+    // headlessly against Claude Code via the agent registry, with no Codex-specific code.
+    const workspaceRoot = join(await repoTemp("workspace-root"), "workspace");
+    const { home, caseId } = await finalizedRunnableCase({ workspaceRoot });
+    const fake = await writeFakeClaude();
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${originalPath ?? ""}`;
+    try {
+      const output = await createPbenchCommands({ home })
+        .find((command) => command.action === "run")
+        ?.run(["--case", caseId, "--workspace", workspaceRoot, "--agent", "claude"]);
+      const result = JSON.parse(String(output));
+      const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
+      const metrics = JSON.parse(await readFile(join(result.artifactDir, "metrics.json"), "utf8"));
+      const runnerEnvironment = JSON.parse(await readFile(join(result.artifactDir, "runner-environment.json"), "utf8"));
+
+      expect(result.status).toBe("passed");
+      expect(runJson.agentMode).toBe("claude");
+      expect(runJson.isolation).toBe("none");
+      expect(runJson.tokenUsage).toEqual({ input_tokens: 11, output_tokens: 7 });
+      expect(runJson.cost).toBe(0.0012);
+      expect(metrics.agentMode).toBe("claude");
+      expect(runnerEnvironment.tools.claude).toBeTruthy();
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
   test("records run profile and normalized metrics/events for an automatic run", async () => {
     const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
     const fake = await writeFakeCodex({
@@ -1909,6 +2054,10 @@ describe("pbench codex capture flow", () => {
     expect(skill).toContain("harness implementation");
     // The integrity prose must not itself trip the fail-closed private-reference gate.
     expectNoAgentVisiblePrivateReferences(skill);
+    // SSOT: the installed runner skill must match the checked-in source verbatim, so the embedded
+    // install copy cannot silently diverge from skills/pbench-runner/SKILL.md.
+    const checkedInSource = await readFile(join(process.cwd(), "skills", "pbench-runner", "SKILL.md"), "utf8");
+    expect(skill).toBe(checkedInSource);
   });
 
   test("redacts setup-outcomes stdout/stderr in skill mode (review)", async () => {

@@ -379,9 +379,9 @@ public/
 
 导出 public replay capsule，供外部检查或手动 agent setup 使用。
 
-### `yk pbench run --case <case-id-or-dir> --agent codex [--workspace <path>] [--profile <name>]`
+### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-通过 harness-managed Codex 路径运行 finalized case。v1 中 automatic agent 只支持 `codex`。
+通过已注册的 agent runner 以 headless 方式运行 finalized case。内置 agent：`codex`（沙箱 `--sandbox workspace-write`）与 `claude`（Claude Code `-p` headless）。评估完整性来自 public/private worktree 边界，而非 agent 自带沙箱，因此任何具备 headless runner 的 agent 都可作为目标。
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 

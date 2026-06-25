@@ -45,7 +45,7 @@ type RunState = JsonObject & {
   artifactDir: string;
   worktree: string;
   repoCache: string;
-  agentMode: "codex" | "skill";
+  agentMode: string;
   profile: string;
   status: PbenchRunStatus;
   terminal: boolean;
@@ -88,6 +88,7 @@ export type CaptureOptions = {
   workspaceRoot?: string;
   input?: string;
   sessionId?: string;
+  source?: string;
   yes?: boolean;
   title?: string;
   now?: Date;
@@ -157,13 +158,10 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
     {
       domain: "pbench",
       action: "capture",
-      description: "Create a persistent pbench authoring transaction from a Codex session.",
+      description: "Create a persistent pbench authoring transaction from a coding-agent session.",
       run: async (args) => {
         const parsed = parseArgs(args);
-        const source = getString(parsed, "source");
-        if (source !== "codex") {
-          throw new Error("yk pbench capture supports only --source codex");
-        }
+        const source = getString(parsed, "source") ?? "codex";
         const workspace = getString(parsed, "workspace");
         const yes = getBoolean(parsed, "yes");
         const workspaceRoot = workspace
@@ -174,6 +172,7 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
           workspaceRoot,
           input: getString(parsed, "input"),
           sessionId: getString(parsed, "session-id"),
+          source,
           yes,
           title: getString(parsed, "title"),
           home: options.home
@@ -244,9 +243,6 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
         const parsed = parseArgs(args);
         const caseInput = requireString(parsed, "case", "yk pbench run requires --case <case-dir-or-case-id>");
         const agent = getString(parsed, "agent") ?? "codex";
-        if (agent !== "codex") {
-          throw new Error(`yk pbench run supports only --agent codex in v1: ${agent}`);
-        }
         const workspaceRoot = await resolveWorkspaceRoot({
           workspace: getString(parsed, "workspace"),
           cwd: process.cwd(),
@@ -263,6 +259,7 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
             caseDir,
             workspaceRoot,
             home: options.home,
+            agent,
             profile: normalizeRunProfile(getString(parsed, "profile"))
           })
         );
@@ -747,7 +744,7 @@ function forbiddenAgentVisibleHits(text: string, forbiddenPaths: string[]): stri
   if (/\bPB_CASE_DIR\b/.test(text)) {
     hits.push("PB_CASE_DIR");
   }
-  if (/(^|[\s"'`(=:[{])codex-session\.jsonl\b/.test(text)) {
+  if (/(^|[\s"'`(=:[{])[\w-]+-session\.jsonl\b/.test(text)) {
     hits.push("raw transcript path");
   }
   for (const path of forbiddenPaths) {
@@ -1013,7 +1010,7 @@ async function writeRunnerEnvironment(state: RunState): Promise<void> {
     },
     tools: {
       git: commandVersion("git", ["--version"]),
-      codex: commandVersion("codex", ["--version"])
+      ...(AGENT_RUNNERS[state.agentMode] ? { [state.agentMode]: AGENT_RUNNERS[state.agentMode].versionProbe() } : {})
     },
     requiredEnv: state.requiredEnv.map((name) => ({ name, present: Boolean(process.env[name]) }))
   });
@@ -1380,11 +1377,98 @@ function spawnCodexAgent(worktree: string, prompt: string): { exitCode: number |
   };
 }
 
+function spawnClaudeAgent(worktree: string, prompt: string): { exitCode: number | null; stdout: string; stderr: string } {
+  // Headless Claude Code: print mode, stream-json output, prompt on stdin, no permission prompts.
+  // Integrity rests on the public/private worktree boundary (the agent only sees .pbench/public),
+  // not on a Codex-style sandbox; Claude has no equivalent, so isolation is recorded as "none".
+  const result = spawnSync(
+    "claude",
+    ["-p", "--output-format", "stream-json", "--input-format", "text", "--dangerously-skip-permissions"],
+    {
+      cwd: worktree,
+      input: prompt,
+      encoding: "utf8",
+      env: publicRunnerEnv(worktree),
+      timeout: 30 * 60 * 1000
+    }
+  );
+  return {
+    exitCode: result.status ?? (result.signal ? 124 : null),
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? ""
+  };
+}
+
+function parseClaudeStreamJsonSummary(stdoutText: string): { lastMessage: string | null; tokenUsage: JsonObject | null; cost: number | null } {
+  let lastMessage: string | null = null;
+  let tokenUsage: JsonObject | null = null;
+  let cost: number | null = null;
+  for (const line of stdoutText.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line) as JsonObject;
+      const message = asObject(event.message);
+      const usage = asObject(event.usage) ?? asObject(message?.usage);
+      if (usage) {
+        tokenUsage = usage;
+      }
+      if (event.type === "result") {
+        if (typeof event.result === "string") {
+          lastMessage = event.result;
+        }
+        if (typeof event.total_cost_usd === "number") {
+          cost = event.total_cost_usd;
+        }
+      } else if (event.type === "assistant" && message && Array.isArray(message.content)) {
+        for (const block of message.content) {
+          const textBlock = asObject(block);
+          if (textBlock?.type === "text" && typeof textBlock.text === "string") {
+            lastMessage = textBlock.text;
+          }
+        }
+      }
+    } catch {
+      // Non-JSON output is still stored as stdout.
+    }
+  }
+  return { lastMessage, tokenUsage, cost };
+}
+
+// A harness runner drives one coding agent headlessly against a replay worktree and parses its
+// output into a normalized summary. Add a runner here to teach `yk pbench run --agent <id>` a new
+// agent. The Codex runner reuses the existing spawn + JSONL parser; the public/private worktree
+// boundary (not the agent's own sandbox) is what protects evaluator integrity, so any agent that
+// can be driven headlessly is a valid target.
+type AgentRunner = {
+  id: string;
+  launch(options: { worktree: string; prompt: string }): { exitCode: number | null; stdout: string; stderr: string };
+  parseSummary(stdout: string): { lastMessage: string | null; tokenUsage: JsonObject | null; cost?: number | null };
+  defaultIsolation: PbenchIsolation;
+  versionProbe(): string | null;
+};
+
+const AGENT_RUNNERS: Record<string, AgentRunner> = {
+  codex: {
+    id: "codex",
+    launch: ({ worktree, prompt }) => spawnCodexAgent(worktree, prompt),
+    parseSummary: (stdout) => parseCodexJsonlSummary(stdout),
+    defaultIsolation: "workspace-write",
+    versionProbe: () => commandVersion("codex", ["--version"])
+  },
+  claude: {
+    id: "claude",
+    launch: ({ worktree, prompt }) => spawnClaudeAgent(worktree, prompt),
+    parseSummary: (stdout) => parseClaudeStreamJsonSummary(stdout),
+    defaultIsolation: "none",
+    versionProbe: () => commandVersion("claude", ["--version"])
+  }
+};
+
 async function createStartedRun(options: {
   caseDir: string;
   workspaceRoot: string;
   home?: string;
-  agentMode: "codex" | "skill";
+  agentMode: string;
   profile: string;
   contaminated?: boolean;
 }): Promise<{ state: RunState; manifest: JsonObject; redactor: (text: string) => string }> {
@@ -1409,7 +1493,7 @@ async function createStartedRun(options: {
     status: "running",
     terminal: false,
     manualIntervention: options.agentMode === "skill",
-    isolation: options.agentMode === "codex" ? "workspace-write" : "none",
+    isolation: options.agentMode === "skill" ? "none" : AGENT_RUNNERS[options.agentMode]?.defaultIsolation ?? "none",
     attemptNumber: prior.runIds.length + 1,
     priorRunIds: prior.runIds,
     contaminated: options.contaminated === true,
@@ -1502,41 +1586,47 @@ async function runPbenchCase(options: {
   workspaceRoot: string;
   home?: string;
   profile: string;
+  agent?: string;
 }): Promise<JsonObject> {
-  const { state, manifest, redactor } = await createStartedRun({ ...options, agentMode: "codex" });
+  const agent = options.agent ?? "codex";
+  const runner = AGENT_RUNNERS[agent];
+  if (!runner) {
+    throw new Error(`Unknown agent runner "${agent}". Known agents: ${Object.keys(AGENT_RUNNERS).join(", ")}.`);
+  }
+  const { state, manifest, redactor } = await createStartedRun({ ...options, agentMode: agent });
   if (state.terminal) {
     return { runId: state.runId, status: state.status, artifactDir: state.artifactDir, summaryPath: join(state.artifactDir, "summary.md") };
   }
   const prompt = renderAgentPrompt();
   await writeFile(join(state.artifactDir, "agent-stdin.txt"), redactor(prompt));
   const startedAt = Date.now();
-  const agent = spawnCodexAgent(state.worktree, prompt);
+  const agentResult = runner.launch({ worktree: state.worktree, prompt });
   const durationMs = Date.now() - startedAt;
-  await writeFile(join(state.artifactDir, "agent.stdout.log"), redactor(agent.stdout));
-  await writeFile(join(state.artifactDir, "agent.stderr.log"), redactor(agent.stderr));
-  await writeFile(join(state.artifactDir, "agent.jsonl"), redactor(agent.stdout));
-  const agentSummary = parseCodexJsonlSummary(agent.stdout);
+  await writeFile(join(state.artifactDir, "agent.stdout.log"), redactor(agentResult.stdout));
+  await writeFile(join(state.artifactDir, "agent.stderr.log"), redactor(agentResult.stderr));
+  await writeFile(join(state.artifactDir, "agent.jsonl"), redactor(agentResult.stdout));
+  const agentSummary = runner.parseSummary(agentResult.stdout);
   if (agentSummary.lastMessage) {
     await writeFile(join(state.artifactDir, "agent-last-message.md"), redactor(agentSummary.lastMessage));
   }
   await copyAgentProbeFiles(state.worktree, state.artifactDir, redactor);
-  state.agentExitCode = agent.exitCode;
+  state.agentExitCode = agentResult.exitCode;
   state.durationMs = durationMs;
-  state.cost = null;
+  state.cost = agentSummary.cost ?? null;
   state.tokenUsage = agentSummary.tokenUsage;
   state.events = [
     ...(state.events ?? []),
-    runEvent("agent", agent.exitCode === 0 ? "passed" : "failed", {
-      exitCode: agent.exitCode,
-      message: agent.exitCode === 0 ? "Agent completed." : "Agent failed before private validation."
+    runEvent("agent", agentResult.exitCode === 0 ? "passed" : "failed", {
+      exitCode: agentResult.exitCode,
+      message: agentResult.exitCode === 0 ? "Agent completed." : "Agent failed before private validation."
     })
   ];
-  if (agent.exitCode !== 0) {
+  if (agentResult.exitCode !== 0) {
     state.status = "agent_failed";
     state.terminal = true;
     state.finishedAt = nowIso();
     await writeAgentDiff(state.worktree, state.artifactDir, redactor);
-    await writeRunSummary(state, agentFailureSummary(agent.exitCode));
+    await writeRunSummary(state, agentFailureSummary(agentResult.exitCode));
     await writeTerminalRunArtifacts(state, {
       events: [...(state.events ?? []), runEvent("finish", "agent_failed", { message: "Agent failed before private validation." })]
     });
@@ -2118,6 +2208,44 @@ type ExtractedCodexSession = {
   timeline: string[];
 };
 
+// The agent-neutral shape every capture source must produce. The Codex extractor already returns
+// this shape, so it doubles as the canonical normalized session for all sources.
+type NormalizedSession = ExtractedCodexSession;
+
+type SessionSource = {
+  id: string;
+  sourceKind: string;
+  locate(options: { cwd: string; sessionId?: string; home: string }): Promise<string>;
+  extract(rawText: string): NormalizedSession;
+};
+
+// Registry of capture sources. Add a source here to teach `yk pbench capture --source <id>` a new
+// agent's transcript format. The Codex source reuses the existing extractor + filename locator.
+const SESSION_SOURCES: Record<string, SessionSource> = {
+  codex: {
+    id: "codex",
+    sourceKind: "codex-session",
+    locate: findSessionFromIndex,
+    extract: (rawText) => extractCodexSession(parseJsonlLines(rawText))
+  },
+  claude: {
+    id: "claude",
+    sourceKind: "claude-session",
+    locate: async (opts) => {
+      if (!opts.sessionId) {
+        throw new Error("Capturing a Claude Code session requires --session-id <id> or --input <transcript>.");
+      }
+      const projectsRoot = join(opts.home, ".claude", "projects");
+      const path = await findSessionFileByName(projectsRoot, opts.sessionId);
+      if (!path) {
+        throw new Error(`No Claude Code transcript found for session id "${opts.sessionId}". Pass --input <jsonl> to capture it directly.`);
+      }
+      return path;
+    },
+    extract: (rawText) => extractClaudeSession(rawText)
+  }
+};
+
 type CaptureSubject = {
   sourceRepoRoot: string;
   sourceCwd: string;
@@ -2271,6 +2399,177 @@ function isInjectedUserContext(content: string): boolean {
   );
 }
 
+function isInjectedClaudeContext(content: string): boolean {
+  const trimmed = content.trimStart();
+  return (
+    trimmed.startsWith("Caveat:") ||
+    trimmed.startsWith("<command-name>") ||
+    trimmed.startsWith("<local-command") ||
+    trimmed.startsWith("<user-memory") ||
+    trimmed.startsWith("<system-reminder") ||
+    trimmed.startsWith("[Request interrupted") ||
+    trimmed.startsWith("This is your task:")
+  );
+}
+
+function claudeToolResultText(result: JsonObject): string {
+  const content = result.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => {
+        const textBlock = asObject(block);
+        return textBlock && typeof textBlock.text === "string" ? textBlock.text : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "";
+}
+
+function claudeToolResultExitCode(result: JsonObject): number | null {
+  const match = claudeToolResultText(result).match(/exit\s*code\s*[:=]?\s*(-?\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+// Extracts a Claude Code transcript (~/.claude/projects/**/<sessionId>.jsonl) into the same
+// NormalizedSession shape the Codex extractor produces, so all downstream authoring is reused.
+// Claude transcripts carry top-level cwd/gitBranch/sessionId; user prompts are string message
+// content; assistant turns are content arrays of text/tool_use blocks with message.usage; tool
+// results ride in later user messages as tool_result blocks keyed by tool_use id. Git commit is
+// not recorded, so the baseline falls back to the repository HEAD at capture time.
+function extractClaudeSession(rawText: string): NormalizedSession {
+  const records = parseJsonlLines(rawText);
+  const userMessages: string[] = [];
+  const assistantMessages: string[] = [];
+  const toolCalls: JsonObject[] = [];
+  const errorRecords: JsonObject[] = [];
+  const approvalSandboxRecords: JsonObject[] = [];
+  const touched = new Set<string>();
+  const timeline: string[] = [];
+  const toolResultsById = new Map<string, JsonObject>();
+
+  for (const record of records) {
+    const message = asObject(record.message);
+    if (record.type === "user" && message && Array.isArray(message.content)) {
+      for (const rawBlock of message.content) {
+        const block = asObject(rawBlock);
+        if (block?.type === "tool_result") {
+          const id = typeof block.tool_use_id === "string" ? block.tool_use_id : null;
+          if (id) {
+            toolResultsById.set(id, block);
+          }
+        }
+      }
+    }
+  }
+
+  let metaCwd: string | undefined;
+  let metaId: string | undefined;
+  let metaModel: string | undefined;
+  let metaBranch: string | undefined;
+
+  for (const [index, record] of records.entries()) {
+    const type = String(record.type ?? "");
+    if (typeof record.cwd === "string" && !metaCwd) {
+      metaCwd = record.cwd;
+    }
+    if (typeof record.sessionId === "string" && !metaId) {
+      metaId = record.sessionId;
+    }
+    if (typeof record.gitBranch === "string" && !metaBranch) {
+      metaBranch = record.gitBranch;
+    }
+    const message = asObject(record.message);
+
+    if (type === "user" && message && typeof message.content === "string") {
+      const text = message.content;
+      if (text.trim() && !isInjectedClaudeContext(text)) {
+        userMessages.push(text);
+        timeline.push(`- ${index + 1}. user: ${text.slice(0, 200).replace(/\s+/g, " ")}`);
+      }
+    }
+
+    if (type === "assistant" && message) {
+      if (typeof message.model === "string" && !metaModel) {
+        metaModel = message.model;
+      }
+      const content = Array.isArray(message.content) ? message.content : [];
+      for (const rawBlock of content) {
+        const block = asObject(rawBlock);
+        if (!block) continue;
+        if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
+          assistantMessages.push(block.text);
+        }
+        if (block.type === "tool_use") {
+          const name = String(block.name ?? "");
+          const input = (asObject(block.input) ?? {}) as JsonObject;
+          const callId = typeof block.id === "string" ? block.id : null;
+          const command =
+            typeof input.command === "string" ? input.command : typeof input.cmd === "string" ? input.cmd : undefined;
+          const filePath =
+            typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : undefined;
+          const toolCall: JsonObject = {
+            type: "tool_call",
+            name,
+            call_id: callId,
+            command,
+            arguments: input,
+            cwd: metaCwd
+          };
+          if (filePath) {
+            toolCall.file_path = filePath;
+            touched.add(filePath);
+          }
+          if (callId) {
+            const result = toolResultsById.get(callId);
+            if (result) {
+              const outputText = claudeToolResultText(result);
+              if (outputText) {
+                toolCall.stdout = outputText;
+              }
+              const exitCode = claudeToolResultExitCode(result);
+              if (exitCode !== null) {
+                toolCall.exit_code = exitCode;
+                toolCall.status = exitCode === 0 ? "success" : "failed";
+              } else if (result.is_error === true) {
+                toolCall.status = "failed";
+              }
+              if (isErrorRecord(toolCall) && !errorRecords.includes(toolCall)) {
+                errorRecords.push(toolCall);
+              }
+            }
+          }
+          toolCalls.push(toolCall);
+          timeline.push(`- ${index + 1}. tool: ${name}${command ? `: ${command.slice(0, 120)}` : ""}`);
+        }
+      }
+    }
+
+    if (type === "permission-mode" || type === "mode") {
+      approvalSandboxRecords.push(record);
+    }
+  }
+
+  const meta: JsonObject = { cwd: metaCwd, id: metaId, model: metaModel, cli_version: "claude-code" };
+  if (metaBranch) {
+    meta.git = { branch: metaBranch };
+  }
+
+  return {
+    meta,
+    userMessages,
+    assistantMessages,
+    toolCalls,
+    errorRecords,
+    approvalSandboxRecords,
+    touchedFiles: [...touched].sort(),
+    timeline
+  };
+}
+
 function collectTouchedPaths(record: JsonObject, touched: Set<string>): void {
   const serialized = JSON.stringify(record);
   for (const match of serialized.matchAll(/(?:path|file|cwd|workdir)"?\s*[:=]\s*"([^"\n]+)"/g)) {
@@ -2399,14 +2698,22 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     ? absolutePath(options.workspaceRoot, cwd, home)
     : await resolveWorkspaceRoot({ cwd, home, createDefault: options.yes });
   await assertWorkspace(workspaceRoot);
-  const inputPath = options.input ? absolutePath(options.input, cwd, home) : await findSessionFromIndex({ cwd, sessionId: options.sessionId, home });
+  const sourceId = options.source ?? "codex";
+  const source = SESSION_SOURCES[sourceId];
+  if (!source) {
+    throw new Error(`Unknown capture source "${sourceId}". Known sources: ${Object.keys(SESSION_SOURCES).join(", ")}.`);
+  }
+  const inputPath = options.input
+    ? absolutePath(options.input, cwd, home)
+    : await source.locate({ cwd, sessionId: options.sessionId, home });
   const rawText = await readFile(inputPath, "utf8");
-  const records = parseJsonlLines(rawText);
-  const extracted = extractCodexSession(records);
+  const extracted = source.extract(rawText);
   const meta = extracted.meta;
+  const sourceKind = source.sourceKind;
+  const rawFilename = `${source.id}-session.jsonl`;
   const subject = resolveCaptureSubject(cwd, meta, home);
   const sourceRepoRoot = subject.sourceRepoRoot;
-  const rawTitle = options.title ?? selectedTaskTitle(extracted) ?? "codex session capture";
+  const rawTitle = options.title ?? selectedTaskTitle(extracted) ?? `${sourceId} session capture`;
   const caseId = makeCaseId(rawTitle, options.now);
   const slug = caseId.match(/^case_(.*)_\d{8}T\d{6}Z$/)?.[1] ?? slugify(rawTitle);
   const gitMeta = meta.git && typeof meta.git === "object" ? (meta.git as JsonObject) : undefined;
@@ -2448,9 +2755,9 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     metadata: {
       domain: "Context/Harness Engineering",
       taskTypes: ["coding-agent", "context-capture"],
-      tags: ["codex", "capture", "git-baseline"],
+      tags: [sourceId, "capture", "git-baseline"],
       createdAt,
-      source: { kind: "codex-session", sessionId: String(meta.id ?? options.sessionId ?? basename(inputPath)) }
+      source: { kind: sourceKind, sessionId: String(meta.id ?? options.sessionId ?? basename(inputPath)) }
     },
     documents: {
       prompt: "public/prompt.md",
@@ -2523,7 +2830,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
   await writeFile(join(caseDir, "private", "success.md"), authoring.success);
   await writeFile(join(caseDir, "private", "verification.md"), authoring.verification);
   await writeFile(join(caseDir, "private", "validators", "check-completion.mjs"), authoring.validatorScript);
-  await writeFile(join(caseDir, "private", "artifacts", "raw", "codex-session.jsonl"), rawText);
+  await writeFile(join(caseDir, "private", "artifacts", "raw", rawFilename), rawText);
   await writeFile(join(caseDir, "private", "artifacts", "extracted", "original-prompt.md"), `${extracted.userMessages.join("\n\n---\n\n")}\n`);
   await writeFile(join(caseDir, "private", "artifacts", "extracted", "timeline.md"), `${extracted.timeline.join("\n")}\n`);
   await writeJson(join(caseDir, "private", "artifacts", "extracted", "session-summary.json"), {
@@ -2558,6 +2865,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     baselineCommit,
     setupCommands: manifest.setupCommands,
     extracted,
+    sourceKind,
     replayRequirements,
     sanitizePublicText
   });
@@ -2574,7 +2882,7 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
     caseDir,
     caseId,
     sourceRoot: sourceRepoRoot,
-    source: { kind: "codex-session", inputPath },
+    source: { kind: sourceKind, inputPath },
     createdAt,
     strictValidatedAt: null
   });
@@ -2809,7 +3117,7 @@ function renderCommandValidatorScript(command: string): string {
 function renderAuthoringRequiredValidatorScript(): string {
   return [
     `console.error('${VALIDATOR_AUTHORING_SENTINEL}: implement completion validator from captured correction evidence.');`,
-    "console.error('Read private/failure.md, private/success.md, private/verification.md, and private/artifacts/raw/codex-session.jsonl.');",
+    "console.error('Read private/failure.md, private/success.md, private/verification.md, and the raw session transcript under private/artifacts/raw/.');",
     "process.exit(2);",
     ""
   ].join("\n");
@@ -2839,6 +3147,7 @@ type ReplayContextOptions = {
   baselineCommit: string;
   setupCommands: JsonObject[];
   extracted: ExtractedCodexSession;
+  sourceKind: string;
   replayRequirements: ReplayRequirements;
   sanitizePublicText: (text: string) => string;
 };
@@ -2878,7 +3187,7 @@ async function writeReplayContext(options: ReplayContextOptions): Promise<string
     title: options.title,
     createdAt: options.createdAt,
     source: {
-      kind: "codex-session",
+      kind: options.sourceKind,
       sessionId: String(options.extracted.meta.id ?? ""),
       cwd: typeof options.extracted.meta.cwd === "string" ? options.sanitizePublicText(options.extracted.meta.cwd) : null,
       model: options.extracted.meta.model ?? null
