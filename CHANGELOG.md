@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Yaphet2015/ya-skills/compare/v0.3.0...v0.4.0) (2026-06-25)
+
+
+### Features
+
+* add design-grill skill ([dbf6e54](https://github.com/Yaphet2015/ya-skills/commit/dbf6e54f5f119bdc3db9e674b963a276b616b388))
+
 ## [0.3.0](https://github.com/Yaphet2015/ya-skills/compare/v0.2.0...v0.3.0) (2026-06-25)
 
 
