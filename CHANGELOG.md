@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/Yaphet2015/ya-skills/compare/v0.1.1...v0.2.0) (2026-06-17)
+
+
+### Features
+
+* add LICENSE file and enhance README with Chinese translation ([f53ceec](https://github.com/Yaphet2015/ya-skills/commit/f53ceecc37b91fd7774da43f13d8cf3cf54aa393))
+* **pbench:** add integrity boundaries + access-audit rule to runner skill (P3) ([307c5b5](https://github.com/Yaphet2015/ya-skills/commit/307c5b57d9bb8b270d3c9df531f5541ef701815f))
+* **pbench:** enhance capture and validation processes ([9ba4723](https://github.com/Yaphet2015/ya-skills/commit/9ba4723459a1de28b600c03f1b09dff410a7866f))
+* **pbench:** enhance functionality with new reporting and auditing commands ([b19668b](https://github.com/Yaphet2015/ya-skills/commit/b19668ba13254d9b86812d166b54e06489b4dc8d))
+* **pbench:** enhance pbench functionality with new commands and documentation updates ([b008ec7](https://github.com/Yaphet2015/ya-skills/commit/b008ec77b47b45aa3f80b94fab598c19df1c5f35))
+* **pbench:** enhance reporting and auditing capabilities ([f3c3fa3](https://github.com/Yaphet2015/ya-skills/commit/f3c3fa3d2fba04dbe082391bdebe929dde633a95))
+* **pbench:** harden skill-mediated run integrity (P1.1/P1.2/P1.3-lite) ([a535fb4](https://github.com/Yaphet2015/ya-skills/commit/a535fb4eb6a8623912552fa36d383bd87a9316a9))
+
+
+### Bug Fixes
+
+* **pbench:** access-audit regex must not flag the runner skill (P0 finding) ([3e908e3](https://github.com/Yaphet2015/ya-skills/commit/3e908e3afe58bf392dc9396b23af1133c2fd2ac4))
+* **pbench:** priorAttempts counts only completed new-accounting runs (review) ([d95fb16](https://github.com/Yaphet2015/ya-skills/commit/d95fb16728054c4921d2095af70105d180318ae1))
+* **pbench:** redact setup-outcomes.json in skill mode (review) ([2a53c59](https://github.com/Yaphet2015/ya-skills/commit/2a53c59a5b5724c5bd508afa96a8245c6d5295a3))
+
 ## [0.1.1](https://github.com/Yaphet2015/ya-skills/compare/v0.1.0...v0.1.1) (2026-06-09)
 
 
