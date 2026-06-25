@@ -122,6 +122,14 @@ test("root catalog exposes the video-transcript skill", async () => {
   expect(videoTranscript?.functions).toEqual([]);
 });
 
+test("root catalog exposes the design-grill skill", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const designGrill = catalog.byName.get("design-grill");
+
+  expect(designGrill?.description).toContain("stress-test");
+  expect(designGrill?.functions).toEqual([]);
+});
+
 test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => {
   await writeSkill("homebrew-only", {
     name: "homebrew-only",
