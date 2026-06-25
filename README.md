@@ -44,7 +44,7 @@ yk pbench capture --source codex --yes   # run a domain command
 - **Install agent-ready skills in one command** — `yk install` writes skills into `.claude/skills` and/or `.agents/skills`, with sensible target detection so you never have to think about where they land.
 - **Functions become commands** — every skill's underlying logic is reachable as `yk <domain> <action>`, so the same catalog powers both agents and plain shell workflows.
 - **Dependency-aware, never destructive** — installing `demo-dependent` pulls in `demo-base`; `yk uninstall` removes only what you ask for and never silently nukes shared dependencies.
-- **Batteries included** — ships ready-to-use skills: [`pbench`](#pbench) (local, privacy-first personal Codex benchmarking) and [`video-transcript`](#video-transcript).
+- **Batteries included** — ships ready-to-use skills for benchmarking, transcript extraction, and design grilling.
 - **Single compiled binary** — `yk` ships as a Homebrew-pourable macOS arm64 binary that bundles the catalog, so installs don't depend on the source checkout.
 - **Bun + TypeScript monorepo** — `packages/core` owns catalog/install logic, `packages/cli` owns routing, and each `packages/functions-*` package owns one domain. Clean boundaries, fast builds.
 
@@ -52,6 +52,7 @@ yk pbench capture --source codex --yes   # run a domain command
 
 | Skill | Description | Install |
 | --- | --- | --- |
+| **design-grill** | Stress-test an idea, design, plan, architecture, PRD, or implementation approach before coding, with a running `DESIGN-GRILL.md` decision summary. | `yk install design-grill` |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
 | **pbench** | Capture real Codex workflow misses as local, private personal-benchmark cases, then replay them through a harness-managed runner without cloud sync or leaderboard upload. | `yk install pbench` |
 | **demo-dependent** | Demo skill that depends on `demo-base` (used to verify dependency install). | `yk install demo-dependent` |
