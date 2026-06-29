@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Yaphet2015/ya-skills/compare/v0.4.0...v0.4.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* release assets and automate homebrew tap update ([#10](https://github.com/Yaphet2015/ya-skills/issues/10)) ([adb52b8](https://github.com/Yaphet2015/ya-skills/commit/adb52b838eecedc521c2ae3f84bf9ed0b08c5569))
+
 ## [0.4.0](https://github.com/Yaphet2015/ya-skills/compare/v0.3.0...v0.4.0) (2026-06-25)
 
 
