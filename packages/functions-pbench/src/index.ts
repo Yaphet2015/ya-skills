@@ -938,17 +938,32 @@ async function loadRunnableCase(caseDir: string, workspaceRoot: string): Promise
   return { manifest, caseId: String(manifest.id), repoCache, commit, requiredEnv };
 }
 
-function makeRedactor(requiredEnv: string[]): (text: string) => string {
-  const replacements = requiredEnv
+function makeRedactor(requiredEnv: string[], pathAliases: Array<{ actual: string; replacement: string }> = []): (text: string) => string {
+  const secretReplacements = requiredEnv
     .map((name) => ({ name, value: process.env[name] }))
     .filter((item): item is { name: string; value: string } => typeof item.value === "string" && item.value.length > 0);
+  const pathReplacements = pathAliases
+    .filter((item) => item.actual.length > 0 && item.actual !== item.replacement)
+    .sort((left, right) => right.actual.length - left.actual.length);
   return (text: string) => {
     let outputText = text;
-    for (const { name, value } of replacements) {
+    for (const { actual, replacement } of pathReplacements) {
+      outputText = outputText.split(actual).join(replacement);
+    }
+    for (const { name, value } of secretReplacements) {
       outputText = outputText.split(value).join(`[REDACTED:${name}]`);
     }
     return outputText;
   };
+}
+
+function runnerPathAliases(worktree: string): Array<{ actual: string; replacement: string }> {
+  try {
+    const realWorktree = realpathSync(worktree);
+    return [{ actual: realWorktree, replacement: worktree }];
+  } catch {
+    return [];
+  }
 }
 
 async function saveRunState(state: RunState, home?: string): Promise<void> {
@@ -1477,7 +1492,7 @@ async function createStartedRun(options: {
   const artifactDir = join(options.workspaceRoot, "runs", runId);
   await mkdir(artifactDir, { recursive: true });
   const worktree = await createReplayWorktree(repoCache, commit, options.workspaceRoot, runId);
-  const redactor = makeRedactor(requiredEnv);
+  const redactor = makeRedactor(requiredEnv, runnerPathAliases(worktree));
   const prior = await priorAttempts(options.workspaceRoot, caseId, options.profile);
   const state: RunState = {
     schemaVersion: 1,
@@ -1540,7 +1555,7 @@ async function createStartedRun(options: {
 
 async function completeRunWithValidators(state: RunState, manifest: JsonObject, home?: string): Promise<RunState> {
   const errors: string[] = [];
-  const redactor = makeRedactor(state.requiredEnv);
+  const redactor = makeRedactor(state.requiredEnv, runnerPathAliases(state.worktree));
   const outcomes = await runValidators({
     caseDir: state.caseDir,
     manifest,
