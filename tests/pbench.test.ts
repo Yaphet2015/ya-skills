@@ -179,6 +179,7 @@ async function writeFakeCodex(options: {
   stderr?: string;
   body?: string;
 } = {}): Promise<{ binDir: string; commandPath: string }> {
+  // Test doubles must satisfy runner environment version probes on CI, where real agents are absent.
   const binDir = await temp("fake-codex-bin");
   const commandPath = join(binDir, "codex");
   await writeFile(
@@ -231,6 +232,7 @@ async function writeFakeCodex(options: {
 }
 
 async function writeFakeClaude(options: { exitCode?: number; cost?: number; body?: string } = {}): Promise<{ binDir: string; commandPath: string }> {
+  // Test doubles must satisfy runner environment version probes on CI, where real agents are absent.
   const binDir = await temp("fake-claude-bin");
   const commandPath = join(binDir, "claude");
   const assistantLine = JSON.stringify({
