@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/Yaphet2015/ya-skills/compare/v0.4.1...v0.4.2) (2026-06-29)
+
+
+### Bug Fixes
+
+* make pbench agent version probes portable ([d9ec80c](https://github.com/Yaphet2015/ya-skills/commit/d9ec80cb49a1c76f4b044651b51178fe393511ea))
+
 ## [0.4.1](https://github.com/Yaphet2015/ya-skills/compare/v0.4.0...v0.4.1) (2026-06-29)
 
 
