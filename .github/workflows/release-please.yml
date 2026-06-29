@@ -29,6 +29,9 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: macos-latest
+    outputs:
+      asset_name: ${{ steps.package.outputs.asset_name }}
+      asset_sha256: ${{ steps.package.outputs.asset_sha256 }}
     steps:
       - name: Check out release commit
         uses: actions/checkout@v4
@@ -59,6 +62,7 @@ jobs:
         run: bun run build:binary:macos-arm64
 
       - name: Package release asset
+        id: package
         run: |
           version="${{ needs.release-please.outputs.version }}"
           asset="ya-skills-v${version}-macos-arm64.tar.gz"
@@ -66,7 +70,10 @@ jobs:
           cp dist/yk dist/release/ya-skills/yk
           cp -R skills dist/release/ya-skills/skills
           tar -czf "${asset}" -C dist/release/ya-skills yk skills
-          shasum -a 256 "${asset}" | tee "${asset}.sha256"
+          asset_sha256="$(shasum -a 256 "${asset}" | awk '{print $1}')"
+          printf '%s  %s\n' "${asset_sha256}" "${asset}" | tee "${asset}.sha256"
+          echo "asset_name=${asset}" >> "${GITHUB_OUTPUT}"
+          echo "asset_sha256=${asset_sha256}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload release asset
         env:
@@ -76,3 +83,65 @@ jobs:
           tag="${{ needs.release-please.outputs.tag_name }}"
           asset="ya-skills-v${version}-macos-arm64.tar.gz"
           gh release upload "${tag}" "${asset}" "${asset}.sha256" --clobber
+
+  update-homebrew-tap:
+    needs:
+      - release-please
+      - upload-macos-arm64-asset
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      VERSION: ${{ needs.release-please.outputs.version }}
+      TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+      ASSET_NAME: ${{ needs.upload-macos-arm64-asset.outputs.asset_name }}
+      ASSET_SHA256: ${{ needs.upload-macos-arm64-asset.outputs.asset_sha256 }}
+    steps:
+      - name: Validate tap token
+        run: |
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "Missing HOMEBREW_TAP_TOKEN secret with write access to Yaphet2015/homebrew-tap." >&2
+            exit 1
+          fi
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: Yaphet2015/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update ya-skills formula
+        working-directory: homebrew-tap
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          formula = Path("Formula/ya-skills.rb")
+          version = os.environ["VERSION"]
+          tag = os.environ["TAG_NAME"]
+          asset_name = os.environ["ASSET_NAME"]
+          sha256 = os.environ["ASSET_SHA256"]
+          url = f"https://github.com/Yaphet2015/ya-skills/releases/download/{tag}/{asset_name}"
+          text = formula.read_text()
+          text = re.sub(r'url "[^"]+"', f'url "{url}"', text, count=1)
+          text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
+          text = re.sub(r'sha256 "[^"]+"', f'sha256 "{sha256}"', text, count=1)
+          formula.write_text(text)
+          PY
+          git diff -- Formula/ya-skills.rb
+
+      - name: Commit and push tap update
+        working-directory: homebrew-tap
+        run: |
+          if git diff --quiet -- Formula/ya-skills.rb; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/ya-skills.rb
+          git commit -m "ya-skills ${VERSION}"
+          git push origin HEAD:main
