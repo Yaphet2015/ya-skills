@@ -1001,7 +1001,7 @@ async function writeRunSummary(state: RunState, details: string[] = []): Promise
 
 function commandVersion(command: string, args: string[] = ["--version"]): string | null {
   try {
-    return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 }).trim() || null;
+    return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000, env: process.env }).trim() || null;
   } catch {
     return null;
   }
