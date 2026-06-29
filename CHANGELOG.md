@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/Yaphet2015/ya-skills/compare/v0.4.2...v0.4.3) (2026-06-29)
+
+
+### Bug Fixes
+
+* pass current environment to pbench version probes ([6117a5b](https://github.com/Yaphet2015/ya-skills/commit/6117a5b3e0d60c8a1428526ad9fb86a0a4d605ae))
+
 ## [0.4.2](https://github.com/Yaphet2015/ya-skills/compare/v0.4.1...v0.4.2) (2026-06-29)
 
 
