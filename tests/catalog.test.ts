@@ -130,6 +130,14 @@ test("root catalog exposes the design-grill skill", async () => {
   expect(designGrill?.functions).toEqual([]);
 });
 
+test("root catalog exposes the a-share-data skill", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const aShareData = catalog.byName.get("a-share-data");
+
+  expect(aShareData?.description).toContain("A-share");
+  expect(aShareData?.functions).toEqual([]);
+});
+
 test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => {
   await writeSkill("homebrew-only", {
     name: "homebrew-only",
