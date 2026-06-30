@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Yaphet2015/ya-skills/compare/v0.4.3...v0.5.0) (2026-06-30)
+
+
+### Features
+
+* add A-share data skill ([#16](https://github.com/Yaphet2015/ya-skills/issues/16)) ([5eafd39](https://github.com/Yaphet2015/ya-skills/commit/5eafd394acf135588b9526fb9fb07fa2a373d602))
+
 ## [0.4.3](https://github.com/Yaphet2015/ya-skills/compare/v0.4.2...v0.4.3) (2026-06-29)
 
 
