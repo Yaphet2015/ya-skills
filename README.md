@@ -1,12 +1,14 @@
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
+# ya-skills
+
 <p align="center">
   <img src="./docs/assets/ya-skills-banner.svg" alt="ya-skills" width="680" />
 </p>
 
 <p align="center">
-  A personal skill catalog and the <code>yk</code> CLI that installs agent-ready skills into any repo
-  <br/>and exposes their underlying functions as commands.
+  AI agent skill catalog and <code>yk</code> CLI for installing reusable Claude Code / Codex-ready skills
+  <br/>and running workflow tools such as PBench, transcript extraction, design review, and A-share data fetches.
 </p>
 
 <p align="center">
@@ -28,7 +30,11 @@
 
 ---
 
-`yk` installs skills from this catalog into the current repository and exposes each skill's underlying functions as real CLI commands. One tool, two jobs: **drop skills into a project** and **run domain functions from the terminal**.
+## What is ya-skills?
+
+`ya-skills` is a curated **AI agent skill catalog** plus the `yk` command-line tool. It installs reusable skills into repositories for coding agents such as **Claude Code**, **OpenAI Codex**, and other `.agents/skills` or `.claude/skills` compatible workflows, while also exposing selected skill functions as normal terminal commands.
+
+One tool, two jobs: **drop agent-ready skills into a project** and **run repeatable workflow automation from the terminal**. The catalog currently covers personal benchmarking with PBench, video transcript extraction, design critique, and Chinese A-share market-data retrieval.
 
 ```sh
 brew tap Yaphet2015/tap
@@ -41,8 +47,8 @@ yk pbench capture --source codex --yes   # run a domain command
 
 ## ✨ Features
 
-- **Install agent-ready skills in one command** — `yk install` writes skills into `.claude/skills` and/or `.agents/skills`, with sensible target detection so you never have to think about where they land.
-- **Functions become commands** — every skill's underlying logic is reachable as `yk <domain> <action>`, so the same catalog powers both agents and plain shell workflows.
+- **Install AI agent skills in one command** — `yk install` writes reusable skills into `.claude/skills` and/or `.agents/skills`, with sensible target detection so Claude Code, Codex-style agents, and local automation can share the same catalog.
+- **Functions become commands** — selected skill logic is reachable as `yk <domain> <action>`, so the same catalog powers both agent workflows and plain shell automation.
 - **Dependency-aware, never destructive** — installing `demo-dependent` pulls in `demo-base`; `yk uninstall` removes only what you ask for and never silently nukes shared dependencies.
 - **Batteries included** — ships ready-to-use skills for benchmarking, transcript extraction, and design grilling.
 - **Single compiled binary** — `yk` ships as a Homebrew-pourable macOS arm64 binary that bundles the catalog, so installs don't depend on the source checkout.
@@ -65,6 +71,7 @@ Browse the full catalog at any time with `yk list`.
 
 ## 📑 Table of Contents
 
+- [What is ya-skills?](#what-is-ya-skills)
 - [Features](#-features)
 - [Available Skills](#-available-skills)
 - [Quick Start](#quick-start)

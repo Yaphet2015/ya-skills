@@ -1,12 +1,14 @@
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
+# ya-skills
+
 <p align="center">
   <img src="./docs/assets/ya-skills-banner.svg" alt="ya-skills" width="680" />
 </p>
 
 <p align="center">
-  一个个人 Skill 目录，以及 <code>yk</code> 命令行工具——把可直接给 Agent 使用的 Skill 安装到任意仓库，
-  <br/>并把其底层函数暴露为命令。
+  面向 AI Agent 的 Skill 目录和 <code>yk</code> 命令行工具——把 Claude Code / Codex 可用的可复用 Skill 安装到任意仓库，
+  <br/>并运行 PBench、视频文稿、设计评审、A 股数据获取等工作流工具。
 </p>
 
 <p align="center">
@@ -28,7 +30,11 @@
 
 ---
 
-`yk` 会把这个目录里的 Skill 安装到当前仓库，并把每个 Skill 的底层函数暴露为真正的命令行命令。一个工具，两件事：**把 Skill 放进项目**，以及**在终端运行领域函数**。
+## ya-skills 是什么？
+
+`ya-skills` 是一个可复用的 **AI Agent Skill 目录**，也是一个名为 `yk` 的命令行工具。它可以把 Skill 安装进项目仓库，供 **Claude Code**、**OpenAI Codex** 以及其他兼容 `.agents/skills` 或 `.claude/skills` 的 Agent 工作流使用；同时，也能把部分 Skill 的底层能力暴露为普通终端命令。
+
+一个工具，两件事：**把 Agent 可直接使用的 Skill 放进项目**，以及**在终端运行可重复的工作流自动化**。目前目录覆盖 PBench 个人基准、视频文稿提取、设计评审、A 股市场数据获取等场景。
 
 ```sh
 brew tap Yaphet2015/tap
@@ -41,8 +47,8 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 
 ## ✨ 特性
 
-- **一条命令安装可直接给 Agent 使用的 Skill** —— `yk install` 会把 Skill 写入 `.claude/skills` 和/或 `.agents/skills`，并带有合理的安装目标检测，你完全不用操心它们落到哪里。
-- **函数即命令** —— 每个 Skill 的底层逻辑都能通过 `yk <domain> <action>` 调用，同一份目录既能驱动 Agent，也能驱动纯命令行工作流。
+- **一条命令安装 AI Agent Skill** —— `yk install` 会把可复用 Skill 写入 `.claude/skills` 和/或 `.agents/skills`，并带有合理的安装目标检测，方便 Claude Code、Codex 风格 Agent 和本地自动化共用同一份目录。
+- **函数即命令** —— 部分 Skill 的底层逻辑能通过 `yk <domain> <action>` 调用，同一份目录既能驱动 Agent 工作流，也能驱动纯命令行自动化。
 - **感知依赖、绝不破坏** —— 安装 `demo-dependent` 会自动拉取 `demo-base`；`yk uninstall` 只删除你指定的内容，绝不会悄悄删除共享依赖。
 - **开箱即用** —— 自带可用 Skill，覆盖基准测试、视频文稿提取和设计追问。
 - **单一编译二进制** —— `yk` 以可 Homebrew 安装的 macOS arm64 二进制形式发布，并内置目录，安装时不依赖源码检出。
@@ -65,6 +71,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 
 ## 📑 目录
 
+- [ya-skills 是什么？](#ya-skills-是什么)
 - [特性](#-特性)
 - [可用 Skills](#-可用-skills)
 - [快速开始](#快速开始)
