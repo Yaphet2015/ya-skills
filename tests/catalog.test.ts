@@ -138,6 +138,13 @@ test("root catalog exposes the a-share-data skill", async () => {
   expect(aShareData?.functions).toEqual([]);
 });
 
+test("root catalog does not expose demo-only skills", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+
+  expect(catalog.byName.has("demo-base")).toBe(false);
+  expect(catalog.byName.has("demo-dependent")).toBe(false);
+});
+
 test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => {
   await writeSkill("homebrew-only", {
     name: "homebrew-only",
