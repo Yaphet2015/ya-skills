@@ -52,6 +52,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 
 | Skill | 说明 | 安装命令 |
 | --- | --- | --- |
+| **a-share-data** | 从公开数据源获取 A 股报价、K 线、财务指标、现金流和公告，并保留来源与缺失字段说明，避免编造数据。 | `yk install a-share-data` |
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
 | **pbench** | 把真实的 Codex 工作流失误捕获为本地、私有的个人基准用例，再通过 harness 管理的 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |

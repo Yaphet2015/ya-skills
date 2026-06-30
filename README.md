@@ -52,6 +52,7 @@ yk pbench capture --source codex --yes   # run a domain command
 
 | Skill | Description | Install |
 | --- | --- | --- |
+| **a-share-data** | Fetch Chinese A-share quotes, K-lines, financial indicators, cash flow, and announcements from public data sources with provenance and no fabricated fields. | `yk install a-share-data` |
 | **design-grill** | Stress-test an idea, design, plan, architecture, PRD, or implementation approach before coding, with a running `DESIGN-GRILL.md` decision summary. | `yk install design-grill` |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
 | **pbench** | Capture real Codex workflow misses as local, private personal-benchmark cases, then replay them through a harness-managed runner without cloud sync or leaderboard upload. | `yk install pbench` |
