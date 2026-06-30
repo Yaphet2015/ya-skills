@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/Yaphet2015/ya-skills/compare/v0.5.0...v0.6.0) (2026-06-30)
+
+
+### Features
+
+* add CLI help version flags and remove demo skills ([#19](https://github.com/Yaphet2015/ya-skills/issues/19)) ([33215e8](https://github.com/Yaphet2015/ya-skills/commit/33215e8088b54a4d8f661193c78bcf5bc4badf0f))
+
 ## [0.5.0](https://github.com/Yaphet2015/ya-skills/compare/v0.4.3...v0.5.0) (2026-06-30)
 
 
