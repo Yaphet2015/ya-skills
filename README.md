@@ -49,7 +49,7 @@ yk pbench capture --source codex --yes   # run a domain command
 
 - **Install AI agent skills in one command** — `yk install` writes reusable skills into `.claude/skills` and/or `.agents/skills`, with sensible target detection so Claude Code, Codex-style agents, and local automation can share the same catalog.
 - **Functions become commands** — selected skill logic is reachable as `yk <domain> <action>`, so the same catalog powers both agent workflows and plain shell automation.
-- **Dependency-aware, never destructive** — installing `demo-dependent` pulls in `demo-base`; `yk uninstall` removes only what you ask for and never silently nukes shared dependencies.
+- **Dependency-aware, never destructive** — `yk install` resolves required skills before installing; `yk uninstall` removes only what you ask for and never silently nukes shared dependencies.
 - **Batteries included** — ships ready-to-use skills for benchmarking, transcript extraction, and design grilling.
 - **Single compiled binary** — `yk` ships as a Homebrew-pourable macOS arm64 binary that bundles the catalog, so installs don't depend on the source checkout.
 - **Bun + TypeScript monorepo** — `packages/core` owns catalog/install logic, `packages/cli` owns routing, and each `packages/functions-*` package owns one domain. Clean boundaries, fast builds.
@@ -61,9 +61,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **a-share-data** | Fetch Chinese A-share quotes, K-lines, financial indicators, cash flow, and announcements from public data sources with provenance and no fabricated fields. | `yk install a-share-data` |
 | **design-grill** | Stress-test an idea, design, plan, architecture, PRD, or implementation approach before coding, with a running `DESIGN-GRILL.md` decision summary. | `yk install design-grill` |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
-| **pbench** | Capture real Codex workflow misses as local, private personal-benchmark cases, then replay them through a harness-managed runner without cloud sync or leaderboard upload. | `yk install pbench` |
-| **demo-dependent** | Demo skill that depends on `demo-base` (used to verify dependency install). | `yk install demo-dependent` |
-| **demo-base** | Tiny base dependency for CLI verification. | `yk install demo-base` |
+| **pbench** | Capture real Codex workflow misses as local, private personal-benchmark cases, then replay finalized cases through a harness-managed runner without cloud sync or leaderboard upload. | `yk install pbench` |
 
 > `pbench-runner` is installed automatically by `yk pbench start` into each prepared benchmark worktree — you don't install it manually.
 
@@ -121,6 +119,11 @@ bun run build:binary:macos-arm64    # produce the compiled dist/yk binary
 ```
 
 ## Commands
+
+Global options:
+
+- `-h`, `--help` — show help.
+- `-v`, `--version` — show the installed `yk` version.
 
 - `yk list` — list skills in the local catalog.
 - `yk install [skill...]` — install selected skills into the current repository.
@@ -209,7 +212,7 @@ This is a Bun workspace monorepo:
 
 - `packages/cli` — owns the `yk` binary and command routing.
 - `packages/core` — owns shared catalog, install, uninstall, target detection, dependency resolution, and function-registry logic.
-- `packages/functions-demo` — the independent `yk demo <action>` command package.
+- `packages/functions-demo` — a tiny sample `yk demo <action>` command package used by CLI/function-registry tests.
 - `packages/functions-pbench` — the independent `yk pbench <action>` command package.
 - `skills/` — the local skill catalog installed by `yk install`.
 

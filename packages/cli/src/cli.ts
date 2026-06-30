@@ -4,38 +4,67 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { installSkills, loadCatalog, uninstallSkills, type SkillCatalog } from "@ya-skills/core";
+import { installSkills, loadCatalog, uninstallSkills, type FunctionCommand, type SkillCatalog } from "@ya-skills/core";
 import { createCliFunctionRegistry } from "./function-registry.js";
+import packageJson from "../../../package.json" with { type: "json" };
 
 async function main(argv: string[]) {
   const [command, ...args] = argv;
 
-  if (!command || command === "--help" || command === "-h") {
+  if (!command || isHelpFlag(command)) {
     printHelp();
     return;
   }
 
+  if (isVersionFlag(command)) {
+    printVersion();
+    return;
+  }
+
   if (command === "list") {
+    if (args.some(isHelpFlag)) {
+      printListHelp();
+      return;
+    }
+    if (args.length > 0) {
+      throw new Error("yk list does not accept arguments");
+    }
     await listSkills();
     return;
   }
 
   if (command === "install") {
+    if (args.some(isHelpFlag)) {
+      printInstallHelp();
+      return;
+    }
     await installCommand(args);
     return;
   }
 
   if (command === "uninstall") {
+    if (args.some(isHelpFlag)) {
+      printUninstallHelp();
+      return;
+    }
     await uninstallCommand(args);
     return;
   }
 
   const [action, ...functionArgs] = args;
+  const registry = createCliFunctionRegistry();
+  if (isHelpFlag(action ?? "")) {
+    printDomainHelp(command, registry.list());
+    return;
+  }
   if (!action) {
     throw new Error(`Missing action for function domain '${command}'`);
   }
+  if (functionArgs.some(isHelpFlag)) {
+    printFunctionHelp(command, action, registry.list());
+    return;
+  }
 
-  const registry = createCliFunctionRegistry();
   const result = await registry.run(command, action, functionArgs);
   if (result !== undefined) {
     console.log(result);
@@ -136,12 +165,93 @@ function catalogCandidates(): string[] {
 function printHelp() {
   console.log(`yk
 
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
 Commands:
   yk list
   yk install [skill...]
   yk uninstall <skill...>
   yk <domain> <action> [...args]
 `);
+}
+
+function printListHelp() {
+  console.log(`yk list
+
+Usage:
+  yk list
+
+List skills in the active catalog.
+`);
+}
+
+function printInstallHelp() {
+  console.log(`yk install
+
+Usage:
+  yk install [skill...]
+
+Install selected skills into this repository. If no skills are provided, yk prompts interactively.
+`);
+}
+
+function printUninstallHelp() {
+  console.log(`yk uninstall
+
+Usage:
+  yk uninstall <skill...>
+
+Remove selected skills from existing .claude/skills and .agents/skills targets in this repository.
+`);
+}
+
+function printDomainHelp(domain: string, commands: FunctionCommand[]) {
+  const matches = commands.filter((command) => command.domain === domain);
+  if (matches.length === 0) {
+    throw new Error(`Unknown function domain: ${domain}`);
+  }
+
+  console.log(`yk ${domain}
+
+Usage:
+  yk ${domain} <action> [...args]
+
+Actions:
+${matches.map((command) => `  ${command.action.padEnd(16)} ${command.description}`).join("\n")}
+`);
+}
+
+function printFunctionHelp(domain: string, action: string, commands: FunctionCommand[]) {
+  const command = commands.find((candidate) => candidate.domain === domain && candidate.action === action);
+  if (!command) {
+    throw new Error(`Unknown function command: ${domain} ${action}`);
+  }
+
+  console.log(`yk ${domain} ${action}
+
+Usage:
+  yk ${domain} ${action} [...args]
+
+${command.description}
+`);
+}
+
+function printVersion() {
+  console.log(packageJson.version);
+}
+
+function isHelpFlag(value: string): boolean {
+  return value === "--help" || value === "-h";
+}
+
+function isVersionFlag(value: string): boolean {
+  return value === "--version" || value === "-v";
 }
 
 function isMissingPathError(error: unknown): boolean {
