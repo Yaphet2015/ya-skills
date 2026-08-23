@@ -1,5 +1,8 @@
 import { detectSkillTargets, type FunctionCommand } from "@ya-skills/core";
 import runnerSkillMarkdown from "../assets/pbench-runner/SKILL.md" with { type: "text" };
+import { createCodexAgentRunner, createCodexSessionSource } from "./adapters/codex.js";
+import { createClaudeAgentRunner, createClaudeSessionSource } from "./adapters/claude.js";
+import type { AgentRunner, JsonObject, NormalizedSession, SessionSource } from "./adapters/types.js";
 import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
@@ -8,8 +11,6 @@ import { arch, homedir, platform, release } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
-
-type JsonObject = Record<string, unknown>;
 
 const MAX_PUBLIC_TEXT_FILE_BYTES = 64 * 1024;
 const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
@@ -21,6 +22,29 @@ const PUBLIC_COMMAND_OBSERVATIONS_PATH = "public/command-observations.md";
 const PBENCH_RUNNER_SKILL_NAME = "pbench-runner";
 const PRIVATE_PATH_PLACEHOLDER = "<private-path>";
 const SUBJECT_REPO_PLACEHOLDER = "<subject-repo>";
+
+function indexById<T extends { id: string }>(items: T[]): Record<string, T> {
+  if (items.length === 0) {
+    throw new Error("Adapter registry cannot be empty.");
+  }
+  const entries = new Map<string, T>();
+  for (const item of items) {
+    if (!item.id || entries.has(item.id)) {
+      throw new Error(`Adapter registry contains an empty or duplicate id: ${item.id}`);
+    }
+    entries.set(item.id, item);
+  }
+  return Object.fromEntries(entries);
+}
+
+const SESSION_SOURCES = indexById<SessionSource>([
+  createCodexSessionSource(),
+  createClaudeSessionSource()
+]);
+const AGENT_RUNNERS = indexById<AgentRunner>([
+  createCodexAgentRunner(),
+  createClaudeAgentRunner()
+]);
 
 type ReplayRequirements = {
   profile: "local" | "live-integration";
@@ -1396,30 +1420,6 @@ function renderAgentPrompt(): string {
   ].join("\n");
 }
 
-function parseCodexJsonlSummary(stdoutText: string): { lastMessage: string | null; tokenUsage: JsonObject | null } {
-  let last: string | null = null;
-  let tokenUsage: JsonObject | null = null;
-  for (const line of stdoutText.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      const record = JSON.parse(line) as JsonObject;
-      const payload = asObject(record.payload);
-      const usage = asObject(record.usage) ?? asObject(payload?.usage);
-      if (usage) {
-        tokenUsage = usage;
-      }
-      const content = record.content ?? payload?.content;
-      const text = valueToText(content);
-      if (text) {
-        last = text;
-      }
-    } catch {
-      // Non-JSON output is still stored as stdout.
-    }
-  }
-  return { lastMessage: last, tokenUsage };
-}
-
 async function copyAgentProbeFiles(worktree: string, artifactDir: string, redactor: (text: string) => string): Promise<void> {
   for (const [source, destination] of [
     [join(worktree, ".pbench", "fake-codex-stdin.txt"), join(artifactDir, "agent-stdin.txt")],
@@ -1431,112 +1431,6 @@ async function copyAgentProbeFiles(worktree: string, artifactDir: string, redact
     }
   }
 }
-
-function spawnCodexAgent(worktree: string, prompt: string): { exitCode: number | null; stdout: string; stderr: string } {
-  const result = spawnSync(
-    "codex",
-    ["--ask-for-approval", "never", "exec", "--json", "--ephemeral", "--cd", worktree, "--sandbox", "workspace-write", "-"],
-    {
-      cwd: worktree,
-      input: prompt,
-      encoding: "utf8",
-      env: publicRunnerEnv(worktree),
-      timeout: 30 * 60 * 1000
-    }
-  );
-  return {
-    exitCode: result.status ?? (result.signal ? 124 : null),
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? ""
-  };
-}
-
-function spawnClaudeAgent(worktree: string, prompt: string): { exitCode: number | null; stdout: string; stderr: string } {
-  // Headless Claude Code: print mode, stream-json output, prompt on stdin, no permission prompts.
-  // Integrity rests on the public/private worktree boundary (the agent only sees .pbench/public),
-  // not on a Codex-style sandbox; Claude has no equivalent, so isolation is recorded as "none".
-  const result = spawnSync(
-    "claude",
-    ["-p", "--output-format", "stream-json", "--input-format", "text", "--dangerously-skip-permissions"],
-    {
-      cwd: worktree,
-      input: prompt,
-      encoding: "utf8",
-      env: publicRunnerEnv(worktree),
-      timeout: 30 * 60 * 1000
-    }
-  );
-  return {
-    exitCode: result.status ?? (result.signal ? 124 : null),
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? ""
-  };
-}
-
-function parseClaudeStreamJsonSummary(stdoutText: string): { lastMessage: string | null; tokenUsage: JsonObject | null; cost: number | null } {
-  let lastMessage: string | null = null;
-  let tokenUsage: JsonObject | null = null;
-  let cost: number | null = null;
-  for (const line of stdoutText.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      const event = JSON.parse(line) as JsonObject;
-      const message = asObject(event.message);
-      const usage = asObject(event.usage) ?? asObject(message?.usage);
-      if (usage) {
-        tokenUsage = usage;
-      }
-      if (event.type === "result") {
-        if (typeof event.result === "string") {
-          lastMessage = event.result;
-        }
-        if (typeof event.total_cost_usd === "number") {
-          cost = event.total_cost_usd;
-        }
-      } else if (event.type === "assistant" && message && Array.isArray(message.content)) {
-        for (const block of message.content) {
-          const textBlock = asObject(block);
-          if (textBlock?.type === "text" && typeof textBlock.text === "string") {
-            lastMessage = textBlock.text;
-          }
-        }
-      }
-    } catch {
-      // Non-JSON output is still stored as stdout.
-    }
-  }
-  return { lastMessage, tokenUsage, cost };
-}
-
-// A harness runner drives one coding agent headlessly against a replay worktree and parses its
-// output into a normalized summary. Add a runner here to teach `yk pbench run --agent <id>` a new
-// agent. The Codex runner reuses the existing spawn + JSONL parser; the public/private worktree
-// boundary (not the agent's own sandbox) is what protects evaluator integrity, so any agent that
-// can be driven headlessly is a valid target.
-type AgentRunner = {
-  id: string;
-  launch(options: { worktree: string; prompt: string }): { exitCode: number | null; stdout: string; stderr: string };
-  parseSummary(stdout: string): { lastMessage: string | null; tokenUsage: JsonObject | null; cost?: number | null };
-  defaultIsolation: PbenchIsolation;
-  versionProbe(): string | null;
-};
-
-const AGENT_RUNNERS: Record<string, AgentRunner> = {
-  codex: {
-    id: "codex",
-    launch: ({ worktree, prompt }) => spawnCodexAgent(worktree, prompt),
-    parseSummary: (stdout) => parseCodexJsonlSummary(stdout),
-    defaultIsolation: "workspace-write",
-    versionProbe: () => commandVersion("codex", ["--version"])
-  },
-  claude: {
-    id: "claude",
-    launch: ({ worktree, prompt }) => spawnClaudeAgent(worktree, prompt),
-    parseSummary: (stdout) => parseClaudeStreamJsonSummary(stdout),
-    defaultIsolation: "none",
-    versionProbe: () => commandVersion("claude", ["--version"])
-  }
-};
 
 async function createStartedRun(options: {
   caseDir: string;
@@ -1572,7 +1466,7 @@ async function createStartedRun(options: {
     isolation,
     integrity: contaminated ? "contaminated" : "instruction-only",
     validatorExecuted: false,
-    agentVersion: AGENT_RUNNERS[options.agentMode]?.versionProbe() ?? null,
+    agentVersion: AGENT_RUNNERS[options.agentMode]?.versionProbe(process.env) ?? null,
     attemptNumber: prior.runIds.length + 1,
     priorRunIds: prior.runIds,
     contaminated,
@@ -1688,7 +1582,12 @@ async function runPbenchCase(options: {
   const prompt = renderAgentPrompt();
   await writeFile(join(state.artifactDir, "agent-stdin.txt"), redactor(prompt));
   const startedAt = Date.now();
-  const agentResult = runner.launch({ worktree: state.worktree, prompt });
+  const agentResult = runner.launch({
+    worktree: state.worktree,
+    prompt,
+    env: publicRunnerEnv(state.worktree),
+    timeoutMs: 30 * 60 * 1000
+  });
   const durationMs = Date.now() - startedAt;
   await writeFile(join(state.artifactDir, "agent.stdout.log"), redactor(agentResult.stdout));
   await writeFile(join(state.artifactDir, "agent.stderr.log"), redactor(agentResult.stderr));
@@ -2459,491 +2358,11 @@ async function ensureCaseSkeleton(caseDir: string): Promise<void> {
   );
 }
 
-function parseJsonlLines(text: string): JsonObject[] {
-  return text
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .map((line, index) => {
-      try {
-        return JSON.parse(line) as JsonObject;
-      } catch (error) {
-        throw new Error(`Invalid JSONL at line ${index + 1}: ${(error as Error).message}`);
-      }
-    });
-}
-
-function valueToText(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(valueToText).filter(Boolean).join("\n");
-  }
-  if (value && typeof value === "object") {
-    const object = value as JsonObject;
-    if (typeof object.text === "string") {
-      return object.text;
-    }
-    if (typeof object.content === "string") {
-      return object.content;
-    }
-    if (Array.isArray(object.content)) {
-      return valueToText(object.content);
-    }
-  }
-  return "";
-}
-
-type ExtractedCodexSession = {
-  meta: JsonObject;
-  userMessages: string[];
-  assistantMessages: string[];
-  toolCalls: JsonObject[];
-  errorRecords: JsonObject[];
-  approvalSandboxRecords: JsonObject[];
-  touchedFiles: string[];
-  timeline: string[];
-};
-
-// The agent-neutral shape every capture source must produce. The Codex extractor already returns
-// this shape, so it doubles as the canonical normalized session for all sources.
-type NormalizedSession = ExtractedCodexSession;
-
-type SessionSource = {
-  id: string;
-  sourceKind: string;
-  locate(options: { cwd: string; sessionId?: string; home: string }): Promise<string>;
-  extract(rawText: string): NormalizedSession;
-};
-
-// Registry of capture sources. Add a source here to teach `yk pbench capture --source <id>` a new
-// agent's transcript format. The Codex source reuses the existing extractor + filename locator.
-const SESSION_SOURCES: Record<string, SessionSource> = {
-  codex: {
-    id: "codex",
-    sourceKind: "codex-session",
-    locate: findSessionFromIndex,
-    extract: (rawText) => extractCodexSession(parseJsonlLines(rawText))
-  },
-  claude: {
-    id: "claude",
-    sourceKind: "claude-session",
-    locate: async (opts) => {
-      if (!opts.sessionId) {
-        throw new Error("Capturing a Claude Code session requires --session-id <id> or --input <transcript>.");
-      }
-      const projectsRoot = join(opts.home, ".claude", "projects");
-      const path = await findSessionFileByName(projectsRoot, opts.sessionId);
-      if (!path) {
-        throw new Error(`No Claude Code transcript found for session id "${opts.sessionId}". Pass --input <jsonl> to capture it directly.`);
-      }
-      return path;
-    },
-    extract: (rawText) => extractClaudeSession(rawText)
-  }
-};
-
 type CaptureSubject = {
   sourceRepoRoot: string;
   sourceCwd: string;
   warnings: string[];
 };
-
-function extractCodexSession(records: JsonObject[]): ExtractedCodexSession {
-  const meta = extractSessionMeta(records);
-  const userMessages: string[] = [];
-  const assistantMessages: string[] = [];
-  const toolCalls: JsonObject[] = [];
-  const errorRecords: JsonObject[] = [];
-  const approvalSandboxRecords: JsonObject[] = [];
-  const touched = new Set<string>();
-  const timeline: string[] = [];
-  const callsById = new Map<string, JsonObject>();
-
-  for (const [index, record] of records.entries()) {
-    const normalized = normalizeCodexRecord(record);
-    const role = normalized.role;
-    const type = String(normalized.type ?? "event");
-    const content = valueToText(normalized.content);
-    if (role === "user" && content && !isInjectedUserContext(content)) {
-      userMessages.push(content);
-    }
-    if (role === "assistant" && content) {
-      assistantMessages.push(content);
-    }
-    if (isToolCallRecord(normalized)) {
-      toolCalls.push(normalized);
-      const callId = getCallId(normalized);
-      if (callId) callsById.set(callId, normalized);
-      collectTouchedPaths(normalized, touched);
-    } else if (isToolCallOutputRecord(normalized)) {
-      const callId = getCallId(normalized);
-      const target = callId ? callsById.get(callId) : undefined;
-      if (target) {
-        const outputText = valueToText(normalized.output ?? normalized.content);
-        if (outputText) {
-          target.stdout = [String(target.stdout ?? ""), outputText].filter(Boolean).join("\n");
-        }
-        const exitCode = parseProcessExitCode(outputText);
-        if (exitCode !== null) {
-          target.exit_code = exitCode;
-          target.status = exitCode === 0 ? "success" : "failed";
-        }
-        if (isErrorRecord(target) && !errorRecords.includes(target)) {
-          errorRecords.push(target);
-        }
-      }
-    }
-    if (isErrorRecord(normalized)) {
-      errorRecords.push(normalized);
-    }
-    if (isApprovalSandboxRecord(normalized)) {
-      approvalSandboxRecords.push(normalized);
-    }
-    const label = role ? String(role) : type;
-    timeline.push(`- ${index + 1}. ${label}${content ? `: ${content.slice(0, 200).replace(/\s+/g, " ")}` : ""}`);
-  }
-
-  return {
-    meta,
-    userMessages,
-    assistantMessages,
-    toolCalls,
-    errorRecords,
-    approvalSandboxRecords,
-    touchedFiles: [...touched].sort(),
-    timeline
-  };
-}
-
-function extractSessionMeta(records: JsonObject[]): JsonObject {
-  const record = records.find((item) => item.type === "session_meta" || item.type === "session");
-  if (!record) return {};
-  return asObject(record.payload) ?? record;
-}
-
-function normalizeCodexRecord(record: JsonObject): JsonObject {
-  const payload = asObject(record.payload);
-  const body = payload ?? record;
-  const message = asObject(body.message) ?? asObject(record.message);
-  const item = asObject(body.item) ?? asObject(record.item);
-  const rawArguments = body.arguments ?? record.arguments;
-  const parsedArguments = parseToolArguments(rawArguments);
-  const normalized: JsonObject = {
-    ...body,
-    type: body.type ?? record.type,
-    role: body.role ?? record.role ?? message?.role,
-    content: body.content ?? record.content ?? message?.content ?? item?.content,
-    name: body.name ?? record.name,
-    arguments: parsedArguments ?? rawArguments,
-    call_id: body.call_id ?? record.call_id,
-    status: body.status ?? record.status,
-    output: body.output ?? record.output,
-    stdout: body.stdout ?? record.stdout,
-    stderr: body.stderr ?? record.stderr,
-    exit_code: body.exit_code ?? record.exit_code ?? body.exitCode ?? record.exitCode,
-    cwd: body.cwd ?? record.cwd,
-    workdir: body.workdir ?? record.workdir
-  };
-  if (body.input !== undefined) {
-    normalized.input = body.input;
-  }
-  return normalized;
-}
-
-function parseToolArguments(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-function getCallId(record: JsonObject): string | null {
-  return typeof record.call_id === "string" ? record.call_id : typeof record.callId === "string" ? record.callId : null;
-}
-
-function isToolCallRecord(record: JsonObject): boolean {
-  const type = String(record.type ?? "").toLowerCase();
-  return (
-    type === "function_call" ||
-    type === "custom_tool_call" ||
-    type === "local_shell_call" ||
-    type === "exec_command" ||
-    (type.includes("tool") && !type.includes("output")) ||
-    Boolean(record.name && (record.arguments !== undefined || record.input !== undefined)) ||
-    Boolean(record.arguments !== undefined && !type.includes("output"))
-  );
-}
-
-function isToolCallOutputRecord(record: JsonObject): boolean {
-  const type = String(record.type ?? "").toLowerCase();
-  return type === "function_call_output" || type === "custom_tool_call_output" || type.includes("call_output");
-}
-
-function parseProcessExitCode(text: string): number | null {
-  const match = text.match(/Process exited with code\s+(-?\d+)/i);
-  return match ? Number(match[1]) : null;
-}
-
-function isInjectedUserContext(content: string): boolean {
-  const trimmed = content.trimStart();
-  return (
-    trimmed.startsWith("# AGENTS.md instructions") ||
-    trimmed.startsWith("<environment_context>") ||
-    trimmed.startsWith("<turn_aborted>")
-  );
-}
-
-function isInjectedClaudeContext(content: string): boolean {
-  const trimmed = content.trimStart();
-  return (
-    trimmed.startsWith("Caveat:") ||
-    trimmed.startsWith("<command-name>") ||
-    trimmed.startsWith("<local-command") ||
-    trimmed.startsWith("<user-memory") ||
-    trimmed.startsWith("<system-reminder") ||
-    trimmed.startsWith("[Request interrupted") ||
-    trimmed.startsWith("This is your task:")
-  );
-}
-
-function claudeToolResultText(result: JsonObject): string {
-  const content = result.content;
-  if (typeof content === "string") {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content
-      .map((block) => {
-        const textBlock = asObject(block);
-        return textBlock && typeof textBlock.text === "string" ? textBlock.text : "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
-}
-
-function claudeToolResultExitCode(result: JsonObject): number | null {
-  const match = claudeToolResultText(result).match(/exit\s*code\s*[:=]?\s*(-?\d+)/i);
-  return match ? Number(match[1]) : null;
-}
-
-// Extracts a Claude Code transcript (~/.claude/projects/**/<sessionId>.jsonl) into the same
-// NormalizedSession shape the Codex extractor produces, so all downstream authoring is reused.
-// Claude transcripts carry top-level cwd/gitBranch/sessionId; user prompts are string message
-// content; assistant turns are content arrays of text/tool_use blocks with message.usage; tool
-// results ride in later user messages as tool_result blocks keyed by tool_use id. Git commit is
-// not recorded, so the baseline falls back to the repository HEAD at capture time.
-function extractClaudeSession(rawText: string): NormalizedSession {
-  const records = parseJsonlLines(rawText);
-  const userMessages: string[] = [];
-  const assistantMessages: string[] = [];
-  const toolCalls: JsonObject[] = [];
-  const errorRecords: JsonObject[] = [];
-  const approvalSandboxRecords: JsonObject[] = [];
-  const touched = new Set<string>();
-  const timeline: string[] = [];
-  const toolResultsById = new Map<string, JsonObject>();
-
-  for (const record of records) {
-    const message = asObject(record.message);
-    if (record.type === "user" && message && Array.isArray(message.content)) {
-      for (const rawBlock of message.content) {
-        const block = asObject(rawBlock);
-        if (block?.type === "tool_result") {
-          const id = typeof block.tool_use_id === "string" ? block.tool_use_id : null;
-          if (id) {
-            toolResultsById.set(id, block);
-          }
-        }
-      }
-    }
-  }
-
-  let metaCwd: string | undefined;
-  let metaId: string | undefined;
-  let metaModel: string | undefined;
-  let metaBranch: string | undefined;
-
-  for (const [index, record] of records.entries()) {
-    const type = String(record.type ?? "");
-    if (typeof record.cwd === "string" && !metaCwd) {
-      metaCwd = record.cwd;
-    }
-    if (typeof record.sessionId === "string" && !metaId) {
-      metaId = record.sessionId;
-    }
-    if (typeof record.gitBranch === "string" && !metaBranch) {
-      metaBranch = record.gitBranch;
-    }
-    const message = asObject(record.message);
-
-    if (type === "user" && message && typeof message.content === "string") {
-      const text = message.content;
-      if (text.trim() && !isInjectedClaudeContext(text)) {
-        userMessages.push(text);
-        timeline.push(`- ${index + 1}. user: ${text.slice(0, 200).replace(/\s+/g, " ")}`);
-      }
-    }
-
-    if (type === "assistant" && message) {
-      if (typeof message.model === "string" && !metaModel) {
-        metaModel = message.model;
-      }
-      const content = Array.isArray(message.content) ? message.content : [];
-      for (const rawBlock of content) {
-        const block = asObject(rawBlock);
-        if (!block) continue;
-        if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
-          assistantMessages.push(block.text);
-        }
-        if (block.type === "tool_use") {
-          const name = String(block.name ?? "");
-          const input = (asObject(block.input) ?? {}) as JsonObject;
-          const callId = typeof block.id === "string" ? block.id : null;
-          const command =
-            typeof input.command === "string" ? input.command : typeof input.cmd === "string" ? input.cmd : undefined;
-          const filePath =
-            typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : undefined;
-          const toolCall: JsonObject = {
-            type: "tool_call",
-            name,
-            call_id: callId,
-            command,
-            arguments: input,
-            cwd: metaCwd
-          };
-          if (filePath) {
-            toolCall.file_path = filePath;
-            touched.add(filePath);
-          }
-          if (callId) {
-            const result = toolResultsById.get(callId);
-            if (result) {
-              const outputText = claudeToolResultText(result);
-              if (outputText) {
-                toolCall.stdout = outputText;
-              }
-              const exitCode = claudeToolResultExitCode(result);
-              if (exitCode !== null) {
-                toolCall.exit_code = exitCode;
-                toolCall.status = exitCode === 0 ? "success" : "failed";
-              } else if (result.is_error === true) {
-                toolCall.status = "failed";
-              }
-              if (isErrorRecord(toolCall) && !errorRecords.includes(toolCall)) {
-                errorRecords.push(toolCall);
-              }
-            }
-          }
-          toolCalls.push(toolCall);
-          timeline.push(`- ${index + 1}. tool: ${name}${command ? `: ${command.slice(0, 120)}` : ""}`);
-        }
-      }
-    }
-
-    if (type === "permission-mode" || type === "mode") {
-      approvalSandboxRecords.push(record);
-    }
-  }
-
-  const meta: JsonObject = { cwd: metaCwd, id: metaId, model: metaModel, cli_version: "claude-code" };
-  if (metaBranch) {
-    meta.git = { branch: metaBranch };
-  }
-
-  return {
-    meta,
-    userMessages,
-    assistantMessages,
-    toolCalls,
-    errorRecords,
-    approvalSandboxRecords,
-    touchedFiles: [...touched].sort(),
-    timeline
-  };
-}
-
-function collectTouchedPaths(record: JsonObject, touched: Set<string>): void {
-  const serialized = JSON.stringify(record);
-  for (const match of serialized.matchAll(/(?:path|file|cwd|workdir)"?\s*[:=]\s*"([^"\n]+)"/g)) {
-    touched.add(match[1]);
-  }
-  const text = [String(record.input ?? ""), commandText(record)].join("\n");
-  for (const match of text.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)) {
-    touched.add(match[1].trim());
-  }
-}
-
-function isErrorRecord(record: JsonObject): boolean {
-  const status = String(record.status ?? record.outcome ?? "").toLowerCase();
-  const exitCode = record.exit_code ?? record.exitCode;
-  return (
-    status === "failed" ||
-    status === "error" ||
-    (typeof exitCode === "number" && exitCode !== 0) ||
-    (typeof record.stderr === "string" && record.stderr.length > 0 && status !== "success")
-  );
-}
-
-function isApprovalSandboxRecord(record: JsonObject): boolean {
-  const serialized = JSON.stringify(record).toLowerCase();
-  return serialized.includes("approval") || serialized.includes("sandbox");
-}
-
-async function findSessionFromIndex(options: { cwd: string; sessionId?: string; home: string }): Promise<string> {
-  const sessionsRoot = join(options.home, ".codex", "sessions");
-
-  if (options.sessionId) {
-    // Codex names session transcripts `rollout-<timestamp>-<sessionId>.jsonl`, so the session id is
-    // embedded in the filename. Resolve by filename instead of opening every transcript: the prior
-    // implementation read, parsed, and fully extracted every session file under ~/.codex/sessions
-    // (hundreds of multi-MB files) just to read a single id field, which made `--session-id`
-    // captures extremely slow. The chosen file is read and extracted once, downstream in capture.
-    const byName = await findSessionFileByName(sessionsRoot, options.sessionId);
-    if (byName) {
-      return byName;
-    }
-    throw new Error(
-      `No Codex session file found for session id "${options.sessionId}". Pass --input <jsonl> to capture it directly.`
-    );
-  }
-
-  // No session id: the codex session index records only {id, thread_name, updated_at} with no file
-  // path or working directory, so the current repository cannot be mapped to a specific session
-  // without scanning every transcript. Require an explicit session id or input path.
-  throw new Error(
-    "Pass --session-id <id> or --input <jsonl> to identify which Codex session to capture; the session index does not record file paths or working directories."
-  );
-}
-
-async function findSessionFileByName(sessionsRoot: string, sessionId: string): Promise<string | null> {
-  if (!(await pathExists(sessionsRoot))) {
-    return null;
-  }
-  const matches: { path: string; mtimeMs: number }[] = [];
-  async function visit(dir: string): Promise<void> {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await visit(path);
-      } else if (entry.isFile() && entry.name.endsWith(".jsonl") && entry.name.includes(sessionId)) {
-        matches.push({ path, mtimeMs: (await stat(path)).mtimeMs });
-      }
-    }
-  }
-  await visit(sessionsRoot);
-  if (matches.length === 0) {
-    return null;
-  }
-  // If a partial id matches several files, prefer the most recently modified transcript.
-  matches.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return matches[0].path;
-}
 
 function resolveGitRootOrNull(cwdInput: string): string | null {
   try {
@@ -3234,7 +2653,7 @@ async function writeAuthoringChecklist(
   );
 }
 
-function selectedTaskTitle(extracted: ExtractedCodexSession): string | null {
+function selectedTaskTitle(extracted: NormalizedSession): string | null {
   const first = extracted.userMessages[0]?.split(/\r?\n/)[0]?.trim();
   return first ? first.slice(0, 80) : null;
 }
@@ -3258,7 +2677,7 @@ type VerificationCommand = {
   stdout: string;
 };
 
-function buildAuthoringArtifacts(title: string, extracted: ExtractedCodexSession, sourceRepoRoot: string): GeneratedAuthoringArtifacts {
+function buildAuthoringArtifacts(title: string, extracted: NormalizedSession, sourceRepoRoot: string): GeneratedAuthoringArtifacts {
   const prompt = extracted.userMessages[0]?.trim() ?? "";
   const corrections = extracted.userMessages.slice(1).map(evidenceLine).filter(Boolean);
   const errors = extracted.errorRecords.map(errorEvidenceLine).filter(Boolean);
@@ -3379,7 +2798,7 @@ function replayCwdFromCapturedCwd(cwd: string, sourceRepoRoot: string): { replay
   return { replayCwd: safe };
 }
 
-function findFailedVerificationCommand(extracted: ExtractedCodexSession, sourceRepoRoot: string): VerificationCommand | null {
+function findFailedVerificationCommand(extracted: NormalizedSession, sourceRepoRoot: string): VerificationCommand | null {
   const candidates: VerificationCommand[] = [];
   for (const record of extracted.errorRecords) {
     const command = commandText(record).trim();
@@ -3460,7 +2879,7 @@ type ReplayContextOptions = {
   captureCwd: string;
   baselineCommit: string;
   setupCommands: JsonObject[];
-  extracted: ExtractedCodexSession;
+  extracted: NormalizedSession;
   sourceKind: string;
   replayRequirements: ReplayRequirements;
   sanitizePublicText: (text: string) => string;
@@ -3645,7 +3064,7 @@ async function listSkillNames(root: string): Promise<string[]> {
 
 async function writeKeyObservations(
   caseDir: string,
-  extracted: ExtractedCodexSession,
+  extracted: NormalizedSession,
   sanitizePublicText: (text: string) => string
 ): Promise<string> {
   const lines = ["# Key Observations", ""];
@@ -3703,7 +3122,7 @@ function isSkippedObservationCommand(command: string): boolean {
 
 async function writeCommandObservations(
   caseDir: string,
-  extracted: ExtractedCodexSession,
+  extracted: NormalizedSession,
   sanitizePublicText: (text: string) => string
 ): Promise<string> {
   const lines = ["# Command Observations", ""];
@@ -3812,7 +3231,7 @@ function isUtf8Text(bytes: Uint8Array): boolean {
   }
 }
 
-async function writeFailureDraft(caseDir: string, extracted: ExtractedCodexSession): Promise<void> {
+async function writeFailureDraft(caseDir: string, extracted: NormalizedSession): Promise<void> {
   const laterUserMessages = extracted.userMessages.slice(1);
   const lines = ["# Failure Draft", "", "This draft is generated from deterministic capture heuristics. Rewrite `private/failure.md` with the final failure statement.", ""];
   if (laterUserMessages.length > 0) {
