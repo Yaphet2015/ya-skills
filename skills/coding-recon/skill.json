@@ -1,0 +1,4 @@
+{
+  "name": "coding-recon",
+  "description": "Use when implementing a non-trivial feature, fixing a non-obvious bug, refactoring unfamiliar code, changing behavior across modules, or when repository evidence could materially change the implementation."
+}
