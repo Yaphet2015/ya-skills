@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { readdir } from "node:fs/promises";
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { stdin as input, stdout as output } from "node:process";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { installSkills, loadCatalog, uninstallSkills, type FunctionCommand, type SkillCatalog } from "@ya-skills/core";
 import { createCliFunctionRegistry } from "./function-registry.js";
@@ -38,7 +39,8 @@ async function main(argv: string[]) {
       printInstallHelp();
       return;
     }
-    await installCommand(args);
+    const installGlobally = args.some(isGlobalInstallFlag);
+    await installCommand(args.filter((arg) => !isGlobalInstallFlag(arg)), installGlobally);
     return;
   }
 
@@ -79,7 +81,7 @@ async function listSkills() {
   }
 }
 
-async function installCommand(skillNames: string[]) {
+async function installCommand(skillNames: string[], installGlobally: boolean) {
   const catalog = await loadDefaultCatalog();
   const selected = skillNames.length > 0 ? skillNames : await promptForSkills(catalog);
   if (selected.length === 0) {
@@ -88,7 +90,7 @@ async function installCommand(skillNames: string[]) {
 
   const result = await installSkills({
     catalog,
-    projectDir: process.cwd(),
+    projectDir: installGlobally ? homedir() : process.cwd(),
     skillNames: selected
   });
 
@@ -175,7 +177,7 @@ Options:
 
 Commands:
   yk list
-  yk install [skill...]
+  yk install [options] [skill...]
   yk uninstall <skill...>
   yk <domain> <action> [...args]
 `);
@@ -195,9 +197,12 @@ function printInstallHelp() {
   console.log(`yk install
 
 Usage:
-  yk install [skill...]
+  yk install [options] [skill...]
 
-Install selected skills into this repository. If no skills are provided, yk prompts interactively.
+Options:
+  -g, --global    Install into user-level skill targets.
+
+Install selected skills into this repository by default. If no skills are provided, yk prompts interactively.
 `);
 }
 
@@ -252,6 +257,10 @@ function isHelpFlag(value: string): boolean {
 
 function isVersionFlag(value: string): boolean {
   return value === "--version" || value === "-v";
+}
+
+function isGlobalInstallFlag(value: string): boolean {
+  return value === "--global" || value === "-g";
 }
 
 function isMissingPathError(error: unknown): boolean {

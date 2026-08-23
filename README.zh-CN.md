@@ -127,10 +127,11 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 
 - `yk list` —— 列出本地目录中的 Skill。
 - `yk install [skill...]` —— 把选中的 Skill 安装到当前仓库。
+- `yk install -g [skill...]` —— 把选中的 Skill 安装到用户级目标；也支持 `--global`。
 - `yk uninstall <skill...>` —— 从当前仓库已有的 Skill 目标中移除选中的 Skill。
 - `yk <domain> <action> [...args]` —— 运行一个底层函数（例如 `yk pbench capture`）。
 
-**安装目标检测** —— `yk install` 会写入当前工作仓库：
+**安装目标检测** —— `yk install` 默认使用当前工作仓库。使用 `-g` 或 `--global` 时，它使用用户主目录。在选定的根目录中：
 
 - 若 `.claude/skills` 和 `.agents/skills` 都存在 → 安装到**两者**。
 - 若只存在其中一个 → 安装到**那个目录**。

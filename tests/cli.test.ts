@@ -1,10 +1,16 @@
 import { expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import packageJson from "../package.json" with { type: "json" };
 
-async function runYk(args: string[]) {
+async function runYk(args: string[], env: Record<string, string | undefined> = {}) {
   const process = Bun.spawn(["bun", "packages/cli/src/cli.ts", ...args], {
     cwd: resolve("."),
+    env: {
+      ...Bun.env,
+      ...env
+    },
     stderr: "pipe",
     stdout: "pipe"
   });
@@ -39,10 +45,46 @@ test("yk exposes conventional version flags", async () => {
   }
 });
 
+test("yk install -g uses the user-level default target", async () => {
+  const homeDir = await mkdtemp(join(tmpdir(), "yk-global-home-"));
+
+  try {
+    const result = await runYk(["install", "-g", "coding-recon"], { HOME: homeDir });
+    const target = join(homeDir, ".agents", "skills", "coding-recon");
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain(`Targets: ${join(homeDir, ".agents", "skills")}`);
+    expect((await stat(target)).isDirectory()).toBe(true);
+  } finally {
+    await rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test("yk install --global uses every existing user-level target", async () => {
+  const homeDir = await mkdtemp(join(tmpdir(), "yk-global-home-"));
+  const targets = [join(homeDir, ".claude", "skills"), join(homeDir, ".agents", "skills")];
+
+  try {
+    await Promise.all(targets.map((target) => mkdir(target, { recursive: true })));
+
+    const result = await runYk(["install", "coding-recon", "--global"], { HOME: homeDir });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    for (const target of targets) {
+      expect((await stat(join(target, "coding-recon"))).isDirectory()).toBe(true);
+    }
+  } finally {
+    await rm(homeDir, { recursive: true, force: true });
+  }
+});
+
 test("yk prints subcommand and function help without side effects", async () => {
   const installHelp = await runYk(["install", "-h"]);
   expect(installHelp.exitCode).toBe(0);
-  expect(installHelp.stdout).toContain("yk install [skill...]");
+  expect(installHelp.stdout).toContain("yk install [options] [skill...]");
+  expect(installHelp.stdout).toContain("-g, --global");
 
   const pbenchHelp = await runYk(["pbench", "-h"]);
   expect(pbenchHelp.exitCode).toBe(0);

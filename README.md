@@ -127,10 +127,11 @@ Global options:
 
 - `yk list` — list skills in the local catalog.
 - `yk install [skill...]` — install selected skills into the current repository.
+- `yk install -g [skill...]` — install selected skills into user-level targets. `--global` is also supported.
 - `yk uninstall <skill...>` — remove selected skills from existing skill targets in the current repository.
 - `yk <domain> <action> [...args]` — run an underlying function (e.g. `yk pbench capture`).
 
-**Install target detection** — `yk install` writes to the current working repository:
+**Install target detection** — `yk install` uses the current working repository by default. With `-g` or `--global`, it uses the user's home directory. Within the selected root:
 
 - If both `.claude/skills` and `.agents/skills` exist → installs to **both**.
 - If only one exists → installs **there**.

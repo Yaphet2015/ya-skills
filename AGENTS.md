@@ -9,7 +9,8 @@
 
 ## CLI Contract
 - `yk install [skill...]` installs skills into the current working repository.
-- Install target detection:
+- `yk install -g [skill...]` and `yk install --global [skill...]` install skills into the user's home directory.
+- Install target detection applies within the selected repository or home-directory root:
   - If `.claude/skills` and `.agents/skills` both exist, install to both.
   - If only one exists, install there.
   - If neither exists, create `.agents/skills`.
