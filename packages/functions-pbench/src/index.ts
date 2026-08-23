@@ -2988,7 +2988,7 @@ function detectSetupCommands(repoRoot: string): JsonObject[] {
   return [];
 }
 
-export async function captureCodexSession(options: CaptureOptions = {}): Promise<CaptureResult> {
+export async function captureSession(options: CaptureOptions = {}): Promise<CaptureResult> {
   const cwd = absolutePath(options.cwd ?? process.cwd());
   const home = options.home ?? homedir();
   const workspaceRoot = options.workspaceRoot
@@ -3187,6 +3187,8 @@ export async function captureCodexSession(options: CaptureOptions = {}): Promise
 
   return { transactionPath, caseDir, caseId, workspaceRoot, authoringChecklistPath, warnings: subject.warnings };
 }
+
+export const captureCodexSession = captureSession;
 
 async function writeAuthoringChecklist(
   path: string,
