@@ -28,7 +28,16 @@ type ReplayRequirements = {
   notes: string[];
 };
 
-type PbenchRunStatus = "running" | "finishing" | "passed" | "blocked" | "setup_failed" | "agent_failed" | "validator_failed";
+const PBENCH_RUN_STATUSES = [
+  "running",
+  "finishing",
+  "passed",
+  "blocked",
+  "setup_failed",
+  "agent_failed",
+  "validator_failed"
+] as const;
+type PbenchRunStatus = (typeof PBENCH_RUN_STATUSES)[number];
 
 // Write isolation used by the benchmarked agent. This does not prove private-read isolation:
 // current runners remain instruction-only until a read-whitelist sandbox is enforced.
@@ -1862,7 +1871,7 @@ async function readRunArtifact(path: string): Promise<JsonObject> {
       typeof run.caseId !== "string" ||
       run.caseId.length === 0 ||
       typeof run.status !== "string" ||
-      run.status.length === 0
+      !PBENCH_RUN_STATUSES.some((status) => status === run.status)
     ) {
       throw new Error("missing required run fields");
     }

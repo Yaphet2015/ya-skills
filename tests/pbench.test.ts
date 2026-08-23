@@ -2882,20 +2882,34 @@ describe("pbench codex capture flow", () => {
       join(invalidSchemaDir, "run.json"),
       `${JSON.stringify({ secret: "PRIVATE_SCHEMA_SECRET" })}\n`
     );
+    const invalidStatusDir = join(workspaceRoot, "runs", "run_status_invalid");
+    await mkdir(invalidStatusDir, { recursive: true });
+    await writeFile(
+      join(invalidStatusDir, "run.json"),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        runId: "run_status_invalid",
+        caseId: "case_invalid_20260612T000000Z",
+        status: "typo",
+        secret: "PRIVATE_STATUS_SECRET"
+      })}\n`
+    );
 
     const output = String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]));
     const report = JSON.parse(output);
 
     expect(report.totals.runs).toBe(1);
-    expect(report.warnings).toHaveLength(2);
+    expect(report.warnings).toHaveLength(3);
     expect(report.warnings).toEqual(
       expect.arrayContaining([
         { category: "MALFORMED_RUN_ARTIFACT", runId: "run_malformed" },
-        { category: "MALFORMED_RUN_ARTIFACT", runId: "run_schema_invalid" }
+        { category: "MALFORMED_RUN_ARTIFACT", runId: "run_schema_invalid" },
+        { category: "MALFORMED_RUN_ARTIFACT", runId: "run_status_invalid" }
       ])
     );
     expect(output).not.toContain("PRIVATE_ARTIFACT_CONTENT");
     expect(output).not.toContain("PRIVATE_SCHEMA_SECRET");
+    expect(output).not.toContain("PRIVATE_STATUS_SECRET");
   });
 
   test("treats legacy runs without integrity evidence as unknown and unevaluated", async () => {
