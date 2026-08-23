@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
+
+
+### Features
+
+* add global skill installation ([2d93031](https://github.com/Yaphet2015/ya-skills/commit/2d9303147378d403a549ac473087fee3e78a0ac0))
+
 ## [0.7.0](https://github.com/Yaphet2015/ya-skills/compare/v0.6.0...v0.7.0) (2026-08-23)
 
 
