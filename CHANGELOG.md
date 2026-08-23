@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/Yaphet2015/ya-skills/compare/v0.6.0...v0.7.0) (2026-08-23)
+
+
+### Features
+
+* add coding recon skill ([52b66de](https://github.com/Yaphet2015/ya-skills/commit/52b66deab3aa22dea89baa2bcd2beb9308bf27f9))
+
 ## [0.6.0](https://github.com/Yaphet2015/ya-skills/compare/v0.5.0...v0.6.0) (2026-06-30)
 
 
