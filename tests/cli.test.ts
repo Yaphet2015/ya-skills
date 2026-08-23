@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import packageJson from "../package.json" with { type: "json" };
@@ -78,6 +78,28 @@ test("yk install --global uses every existing user-level target", async () => {
   } finally {
     await rm(homeDir, { recursive: true, force: true });
   }
+});
+
+test("pbench documentation matches registered cross-agent workflows", async () => {
+  const [readme, english, chinese, platformDesign] = await Promise.all([
+    readFile(resolve("README.md"), "utf8"),
+    readFile(resolve("docs", "pbench.md"), "utf8"),
+    readFile(resolve("docs", "pbench.zh-CN.md"), "utf8"),
+    readFile(resolve("docs", "superpowers", "specs", "2026-06-24-pbench-platform-agnostic-design.md"), "utf8")
+  ]);
+
+  for (const document of [readme, english, chinese]) {
+    expect(document).toContain("codex");
+    expect(document).toContain("claude");
+    expect(document).toContain("run --manual");
+    expect(document).toContain("--format json");
+  }
+  expect(english).toContain("registered capture source");
+  expect(chinese).toContain("已注册的 capture source");
+  expect(english).not.toContain("Other sources require `--input");
+  expect(chinese).not.toContain("其他 source 需要 `--input");
+  expect(platformDesign).toContain("Status: Implemented");
+  expect(platformDesign).toContain("internal canonical asset");
 });
 
 test("yk prints subcommand and function help without side effects", async () => {

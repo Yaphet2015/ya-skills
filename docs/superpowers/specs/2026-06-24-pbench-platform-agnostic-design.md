@@ -1,7 +1,7 @@
 # pbench: Platform-Agnostic Capture & Rerun — Design
 
 Date: 2026-06-24
-Status: Approved (verbal). Implementation in progress.
+Status: Implemented.
 
 ## Problem
 
@@ -12,8 +12,7 @@ pbench was hard-bound to Codex:
 - Capture latency was catastrophic when `--session-id` was used (resolved separately by the
   `fix/pbench-capture-session-id-scan` hotfix — filename-based resolution).
 
-Goal: capture and rerun benchmark cases for **any** coding agent (Claude Code, Codex, OpenCode, …),
-with full automation on the rerun side.
+Goal: capture and rerun benchmark cases through registered coding-agent adapters, with Codex and Claude Code as the current built-ins.
 
 ## What is already agent-neutral (reused, not rebuilt)
 
@@ -48,10 +47,7 @@ type NormalizedSession = {
 };
 ```
 
-`NormalizedSession` is the existing `ExtractedCodexSession` shape, generalised. The Codex source
-is the current `extractCodexSession` + the (fixed) filename locator. Capture dispatches via a
-registry keyed by `--source`. **Non-Codex sources require `--input <transcript>`** (per-agent
-locators are deferred — YAGNI); the existing `--input` hatch and all downstream authoring are reused.
+`NormalizedSession` is the existing `ExtractedCodexSession` shape, generalised. Capture dispatches through a registry keyed by `--source`. Codex and Claude are the current registered capture sources and both support locators plus explicit `--input`. An input transcript is still parsed by the selected registered source; it does not create an arbitrary source adapter.
 
 ### 2. Rerun side — `AgentRunner`
 
@@ -71,13 +67,7 @@ pipeline is reused; the two agent-specific call sites become `runner.launch` / `
 
 ## Integrity: the boundary is agent-independent
 
-The replay worktree stages **only `.pbench/public/`**. Private evaluator material (failure/success/
-verification docs, validators, raw transcript) lives in the case directory and is never present in
-the worktree. Therefore evaluator integrity comes from the public/private boundary — which is
-agent-independent and already enforced — **not** from the Codex sandbox. The Codex
-`--sandbox workspace-write` contains the agent's *side effects* on the world; it does not protect
-pbench secrets. Full-auto runs against any agent are integrity-safe; `isolation` simply records the
-real containment level for honest provenance.
+The replay worktree stages **only `.pbench/public/`**. Private evaluator material lives outside the worktree. This separation reduces accidental disclosure, but it is not a private-read sandbox. Codex `--sandbox workspace-write` constrains writes, not arbitrary reads. Current built-in and manual runners therefore record `instruction-only` integrity. A runner may record `enforced` only when it enforces the required read boundary; default reports keep other runs outside the trusted denominator.
 
 ## Storage changes (small, localized)
 
@@ -94,10 +84,7 @@ real containment level for honest provenance.
 
 ## Runner skill SSOT
 
-`skills/pbench-runner/SKILL.md` is duplicated verbatim as `PBENCH_RUNNER_SKILL_MARKDOWN` in
-`index.ts`. Rather than introduce a build-time asset step, we enforce SSOT with a test that asserts
-the embedded constant equals the checked-in file — divergence fails CI instead of silently shipping
-a divergent installed skill.
+`packages/functions-pbench/assets/pbench-runner/SKILL.md` is the internal canonical asset. `index.ts` imports it as text, and Bun embeds it in both the JavaScript bundle and compiled binary. The public skill catalog does not expose a second runner copy.
 
 ## Second agent: Claude Code (proves platform-independence)
 
@@ -109,11 +96,11 @@ a divergent installed skill.
 - **Runner:** `claude -p <prompt> --output-format stream-json --input-format text --dangerously-skip-permissions --model <m>`,
   run in the worktree. `parseSummary` reads the stream-json `result` event for `result` (lastMessage)
   + `usage` (tokenUsage) + `total_cost_usd` (cost). `defaultIsolation = "none"` (Claude has no
-  Codex-equivalent workspace sandbox; integrity rests on the public/private boundary as above).
+  Codex-equivalent workspace sandbox; the run records `instruction-only` integrity).
 
 ## Non-goals
 
 - Per-agent session locators beyond Codex/Claude filename matching (use `--input`).
 - A/B multi-agent comparison in a single run (`runnerId` is per-run).
-- A read-whitelist sandbox for skill-mediated mode (existing best-effort + access-audit remains).
+- A read-whitelist sandbox for current runners; until one exists, their integrity remains `instruction-only`.
 - Declarative/manual capture (Approach C) — deferred.

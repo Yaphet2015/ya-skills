@@ -61,9 +61,9 @@ yk pbench capture --source codex --yes   # run a domain command
 | **a-share-data** | Fetch Chinese A-share quotes, K-lines, financial indicators, cash flow, and announcements from public data sources with provenance and no fabricated fields. | `yk install a-share-data` |
 | **design-grill** | Stress-test an idea, design, plan, architecture, PRD, or implementation approach before coding, with a running `DESIGN-GRILL.md` decision summary. | `yk install design-grill` |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
-| **pbench** | Capture real Codex workflow misses as local, private personal-benchmark cases, then replay finalized cases through a harness-managed runner without cloud sync or leaderboard upload. | `yk install pbench` |
+| **pbench** | Capture real Codex or Claude workflow misses as local, private benchmark cases, then replay finalized cases through registered runners without cloud sync or leaderboard upload. | `yk install pbench` |
 
-> `pbench-runner` is installed automatically by `yk pbench start` into each prepared benchmark worktree — you don't install it manually.
+> `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 
 Browse the full catalog at any time with `yk list`.
 
@@ -141,7 +141,7 @@ Global options:
 
 ### PBench
 
-`yk pbench` captures real Codex workflow misses into fully local, private personal-benchmark cases, then replays finalized cases through a harness-managed runner. Use it to answer whether a model, skill, rules package, or harness change actually improves *your* workflow.
+`yk pbench` captures real Codex or Claude workflow misses through a registered capture source, then replays finalized cases through a registered runner. Use it to answer whether a model, skill, rules package, or harness change actually improves *your* workflow.
 
 PBench is privacy-first by design: cases, raw transcripts, evaluator notes, private validators, and run reports stay in your local workspace. It does not upload cases to a hosted benchmark service, sync them to the cloud, or publish them to a public leaderboard. Benchmarked agents only receive the sanitized public replay capsule.
 
@@ -154,7 +154,7 @@ flowchart TD
   setup["One-time setup<br/>workspace-init + project-link"]:::support
   capture["1. Capture failed session<br/>yk pbench capture --source codex<br/>or the pbench skill recognizes the mismatch"]
   authoring["Harness authoring gate<br/>validate + finalize<br/>fails loud if evidence or validators are incomplete"]:::internal
-  trigger["2. Trigger benchmark<br/>use the pbench skill in an agent<br/>or yk pbench run --case <case> --agent codex"]
+  trigger["2. Trigger benchmark<br/>yk pbench run --case <case> --agent codex<br/>or yk pbench run --manual"]
   capsule["Runner exposes only public input<br/>.pbench/public + case.public.json"]:::internal
   validate["One-shot private validation<br/>private validators stay outside agent view"]:::internal
   results["Private run artifacts<br/><workspace>/runs/<run-id>/"]
@@ -171,17 +171,18 @@ flowchart TD
 
 - `yk pbench workspace-init <path>` — initialize a local pbench workspace.
 - `yk pbench project-link --workspace <path>` — link the current project to a workspace.
-- `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` — create an authoring transaction under `~/.ya-skills/pbench`, ask for confirmation unless `--yes` is passed, write a private authoring checklist, and print initial authoring validation warnings.
+- `yk pbench capture --source <source> [--yes] [--input <jsonl>] [--session-id <id>]` — capture through a registered source (`codex` or `claude`), write a private authoring checklist, and print one next action. `--input` supplies a transcript to that selected source; it does not enable arbitrary sources.
 - `yk pbench validate --transaction <path> --strict` — strict-validate a transaction.
 - `yk pbench finalize --transaction <path>` — finalize a strict-validated transaction into the workspace.
 - `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` — export a public-only replay capsule for an agent. Copies only sanitized `public/` files plus `case.public.json`; never exports private evaluator docs, validators, raw transcripts, or capture-only source paths.
-- `yk pbench run --case <case-dir-or-case-id> --agent codex [--workspace <path>] [--profile <name>]` — run a finalized case through Codex in `<workspace>/.personal-bench/replays/<run-id>/worktree`, then run private validators and record the result under the workspace `runs/` directory. Profiles are user-supplied comparison labels (`baseline`, `current-model`, `current-skills`); omitted profiles are recorded as `default`.
-- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` — prepare a skill-mediated benchmark worktree at `<workspace>/.personal-bench/replays/<run-id>/worktree` for agents that cannot be launched by CLI. The prepared worktree contains `.pbench/public/`, `.pbench/case.public.json`, `.pbench/run.json`, and an installed `pbench-runner` skill.
-- `yk pbench finish --run <run-id>` — perform the one-shot private validation for a skill-mediated run and print only the run id, status, and summary path.
-- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` — aggregate existing run artifacts into status, case, profile, duration, and token summaries. JSON is the default; Markdown adds concise case and recent-run tables for human review.
+- `yk pbench run --case <case-dir-or-case-id> --agent <agent> [--workspace <path>] [--profile <name>]` — run a finalized case through a registered runner. Current built-ins are `codex` and `claude`.
+- `yk pbench run --case <case-dir-or-case-id> --manual [--workspace <path>] [--profile <name>]` — prepare a manual benchmark worktree with the internal `pbench-runner` asset for an agent that cannot be launched headlessly.
+- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` — compatibility command for the manual preparation path.
+- `yk pbench finish --run <run-id>` — perform one-shot private validation for a manual run and print only the run id and status.
+- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` — render a Markdown comparison report by default. Use `yk pbench report --format json` for automation.
 - `yk pbench audit [--case <case-dir-or-case-id>] [--workspace <path>]` — check case quality without running private validators. With `--case`, audits one case; without `--case`, audits all finalized cases in the workspace. Reports invalid case shape, authoring warnings, and public replay references to private evaluator paths.
 
-Install the capture workflow with `yk install pbench`. `yk pbench start` installs `pbench-runner` into each prepared benchmark worktree automatically.
+Install the operator workflow with `yk install pbench`. `yk pbench run --manual` installs the internal `pbench-runner` asset into each prepared benchmark worktree automatically.
 
 </details>
 
