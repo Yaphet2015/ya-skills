@@ -1,7 +1,7 @@
 # PBench Simplification and Integrity Design
 
 Date: 2026-08-23
-Status: Proposed from the approved repository review
+Status: Approved
 
 ## Goal
 
@@ -52,17 +52,17 @@ Current repository state at capture time is not proof of the task's starting sta
 - changes made by the failed agent;
 - changes made while repairing the failed result.
 
-Therefore capture must not silently publish `git diff HEAD` as `public/starting.patch`.
+Therefore capture must not silently publish `git diff HEAD` as `public/starting.patch` or copy current untracked files into the public capsule.
 
 ### Required behavior
 
-1. Save a detected dirty patch as private authoring evidence.
+1. Save detected tracked and bounded untracked dirty state as private authoring evidence.
 2. Mark the starting-state decision unresolved.
 3. Require the author to choose one of:
    - baseline commit only;
-   - an explicitly curated public starting patch.
+   - an explicitly curated public starting patch and curated context files.
 4. Record the choice and provenance in the case manifest.
-5. Strict validation fails while a detected dirty state is unresolved.
+5. Strict validation fails while detected dirty state is unresolved.
 
 For a clean repository, capture remains automatic. The operator skill asks for capture approval before starting repair so later changes cannot be mistaken for starting context.
 
