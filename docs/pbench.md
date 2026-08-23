@@ -188,17 +188,18 @@ They include status, duration, metrics, events, runner environment, redacted log
 
 ## How PBench Works
 
-### 1. Capture reads a Codex session
+### 1. Capture reads a registered agent session
 
-Current capture supports Codex JSONL sessions:
+Current registered capture sources are Codex and Claude:
 
 ```sh
 yk pbench capture --source codex --yes
 yk pbench capture --source codex --input /path/to/session.jsonl --yes
-yk pbench capture --source codex --session-id <id> --yes
+yk pbench capture --source claude --session-id <id> --yes
+yk pbench capture --source claude --input /path/to/transcript.jsonl --yes
 ```
 
-Capture can read both legacy and current Codex JSONL shapes. It extracts:
+The Codex adapter supports legacy and current Codex JSONL. The Claude adapter supports Claude Code project transcripts. Both normalize and extract:
 
 - session metadata, including cwd, model, CLI version, sandbox, approval policy, and Git metadata when present;
 - user messages, excluding injected AGENTS/environment context;

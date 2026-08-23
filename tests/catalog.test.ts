@@ -98,6 +98,10 @@ test("root catalog exposes pbench as a thin capture and replay router", async ()
   expect(pbench?.functions).toEqual([]);
   expect(skill).toContain("user approval");
   expect(skill).toContain("before repair");
+  expect(skill).toContain("registered source");
+  expect(skill).toContain("codex");
+  expect(skill).toContain("claude");
+  expect(skill).not.toContain("<current-agent>");
   expect(skill).toContain("authoring-checklist.md");
   expect(skill).toContain("yk pbench run");
   expect(skill).toContain("yk pbench report");

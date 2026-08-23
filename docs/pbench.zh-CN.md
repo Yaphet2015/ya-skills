@@ -188,17 +188,18 @@ run artifacts 存在：
 
 ## PBench 如何工作
 
-### 1. Capture 读取 Codex session
+### 1. Capture 读取已注册 agent session
 
-当前 capture 支持 Codex JSONL session：
+当前已注册的 capture source 是 Codex 和 Claude：
 
 ```sh
 yk pbench capture --source codex --yes
 yk pbench capture --source codex --input /path/to/session.jsonl --yes
-yk pbench capture --source codex --session-id <id> --yes
+yk pbench capture --source claude --session-id <id> --yes
+yk pbench capture --source claude --input /path/to/transcript.jsonl --yes
 ```
 
-capture 支持旧版和新版 Codex JSONL 结构，会抽取：
+Codex adapter 支持旧版和新版 Codex JSONL；Claude adapter 支持 Claude Code project transcripts。两者都会规范化并抽取：
 
 - session metadata，包括 cwd、model、CLI version、sandbox、approval policy，以及存在时的 Git metadata；
 - 用户消息，排除注入的 AGENTS/environment context；

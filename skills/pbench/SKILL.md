@@ -9,7 +9,7 @@ description: Use when a coding-agent outcome is wrong or incomplete, or when the
 
 1. Stop claiming completion.
 2. Ask for user approval to snapshot the failure **before repair**.
-3. If approved, run `yk pbench capture --source <current-agent> --yes` from the subject repository. Current built-in capture sources are `codex` and `claude`.
+3. Select the registered source that produced the transcript: `codex` or `claude`. Run `yk pbench capture --source <registered-source> --yes` from the subject repository. If the transcript source is not registered, stop and report that direct capture is unsupported.
 4. Repair the user task.
 5. Read the generated `private/authoring-checklist.md` and follow the single printed recovery or finalization action.
 
