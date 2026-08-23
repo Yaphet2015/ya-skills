@@ -31,4 +31,21 @@ yk pbench report --profile current-skills
 
 ## Post-change observation
 
-Pending.
+- Date: 2026-08-23
+- Model: gpt-5.6-sol
+- Guidance: Updated `skills/pbench/SKILL.md`
+
+The description triggered immediately for explicit run/report operations. The agent selected the two shortest commands without consulting a long reference.
+
+### Exact command choice
+
+```sh
+yk pbench run --case case_login --agent claude --profile current-skills
+yk pbench report --profile current-skills
+```
+
+### Exact rationalization
+
+> 会立即触发 `pbench` skill。原因：请求明确包含 **run** 和 **report** PBench，直接匹配 skill description。
+
+Result: pass.

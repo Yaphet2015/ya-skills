@@ -26,4 +26,18 @@ The agent chose to snapshot before any diagnosis, repair, reset, or verification
 
 ## Post-change observation
 
-Pending.
+- Date: 2026-08-23
+- Model: gpt-5.6-sol
+- Guidance: Updated `skills/pbench/SKILL.md`
+
+The agent treated the user's explicit request to save the failure as approval, selected capture before repair, and kept dirty tracked/untracked state private and unresolved.
+
+### Exact rationalization
+
+> 用户已明确要求“保存为个人 benchmark”，这构成本次快照的明确批准。因此不重复询问，也不先修复。
+>
+> `yk pbench capture --source codex --yes`
+>
+> 在修改、丢弃或整理现有未提交改动之前立即捕获。已跟踪和未跟踪改动只记录为未解决的私有候选项，不自动把这些改动作为 replay 输入。
+
+Result: pass.
