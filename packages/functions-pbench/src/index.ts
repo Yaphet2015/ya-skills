@@ -195,9 +195,14 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
           title: getString(parsed, "title"),
           home: options.home
         });
+        const initialValidation = await validateAuthoringDraft(result.caseDir);
         return printJson({
           ...result,
-          initialValidation: await validateAuthoringDraft(result.caseDir),
+          initialValidation,
+          state: initialValidation.ok ? "ready-to-finalize" : "needs-authoring",
+          nextAction: initialValidation.ok
+            ? `yk pbench finalize --transaction ${result.transactionPath}`
+            : `Read ${result.authoringChecklistPath}`,
           next: [
             `Review ${result.caseDir}`,
             `yk pbench validate --transaction ${result.transactionPath} --strict`,
@@ -260,7 +265,11 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
       run: async (args) => {
         const parsed = parseArgs(args);
         const caseInput = requireString(parsed, "case", "yk pbench run requires --case <case-dir-or-case-id>");
-        const agent = getString(parsed, "agent") ?? "codex";
+        const manual = getBoolean(parsed, "manual");
+        const requestedAgent = getString(parsed, "agent");
+        if (manual && requestedAgent) {
+          throw new Error("yk pbench run --manual and --agent cannot be used together.");
+        }
         const workspaceRoot = await resolveWorkspaceRoot({
           workspace: getString(parsed, "workspace"),
           cwd: process.cwd(),
@@ -272,13 +281,25 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
           home: options.home,
           workspace: workspaceRoot
         });
+        const profile = normalizeRunProfile(getString(parsed, "profile"));
+        if (manual) {
+          return printJson(
+            await startSkillMediatedRun({
+              caseDir,
+              workspaceRoot,
+              home: options.home,
+              profile,
+              contaminated: getBoolean(parsed, "contaminated")
+            })
+          );
+        }
         return printJson(
           await runPbenchCase({
             caseDir,
             workspaceRoot,
             home: options.home,
-            agent,
-            profile: normalizeRunProfile(getString(parsed, "profile"))
+            agent: requestedAgent ?? "codex",
+            profile
           })
         );
       }
@@ -353,7 +374,7 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
           profileFilter: getString(parsed, "profile") ? normalizeRunProfile(getString(parsed, "profile")) : undefined,
           includeUntrusted: getBoolean(parsed, "include-untrusted")
         });
-        const format = getString(parsed, "format") ?? "json";
+        const format = getString(parsed, "format") ?? "markdown";
         if (format === "markdown") {
           return renderPbenchReportMarkdown(report);
         }

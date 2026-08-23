@@ -754,6 +754,8 @@ describe("pbench codex capture flow", () => {
       expect(checklist).toContain("- Failure evidence present: yes");
       expect(checklist).toContain("- Replayable verification found: no");
       expect(checklist).toContain("- Generated validator: needs manual authoring");
+      expect(result.state).toBe("needs-authoring");
+      expect(result.nextAction).toBe(`Read ${result.authoringChecklistPath}`);
       expect(result.next).toContain(`Review ${result.caseDir}`);
     } finally {
       process.chdir(originalCwd);
@@ -1267,6 +1269,8 @@ describe("pbench codex capture flow", () => {
     expect(prompt).toContain("Fix the login bug");
     expect(observations).toContain("bun run test");
     expect(observations).toContain("exitCode: 1");
+    expect(result.state).toBe("ready-to-finalize");
+    expect(result.nextAction).toBe(`yk pbench finalize --transaction ${result.transactionPath}`);
     await expect(
       readFile(join(result.caseDir, "private", "artifacts", "raw", "claude-session.jsonl"), "utf8")
     ).resolves.toContain("claude-test");
@@ -1916,6 +1920,37 @@ describe("pbench codex capture flow", () => {
     }
   });
 
+  test("run --manual prepares the skill-mediated worktree", async () => {
+    const prepared = await finalizedRunnableCase();
+
+    const output = JSON.parse(
+      String(
+        await pbenchCommand("run", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot,
+          "--manual"
+        ])
+      )
+    );
+
+    expect(output.status).toBe("running");
+    expect(output.worktree).toContain(output.runId);
+    await expect(stat(join(output.worktree, ".pbench", "run.json"))).resolves.toBeTruthy();
+    await expect(
+      pbenchCommand("run", prepared.home).run([
+        "--case",
+        prepared.caseId,
+        "--workspace",
+        prepared.workspaceRoot,
+        "--manual",
+        "--agent",
+        "claude"
+      ])
+    ).rejects.toThrow("cannot be used together");
+  });
+
   test("installs the manual runner into the worktree's existing Claude skill target", async () => {
     const prepared = await finalizedRunnableCase({ skillTargets: "claude" });
     const started = JSON.parse(
@@ -2363,7 +2398,9 @@ describe("pbench codex capture flow", () => {
       "probe",
       "--contaminated"
     ]);
-    const report = JSON.parse(String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot])));
+    const report = JSON.parse(
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"]))
+    );
     expect(report.totals.contaminated).toBe(1);
     const recent = report.recentRuns.find((run: { contaminated: boolean }) => run.contaminated === true);
     expect(recent).toBeTruthy();
@@ -2616,14 +2653,18 @@ describe("pbench codex capture flow", () => {
     }
   });
 
-  test("reports empty totals when the workspace has no runs", async () => {
+  test("defaults reports to Markdown and preserves explicit JSON output", async () => {
     const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
 
-    const output = await pbenchCommand("report", home).run(["--workspace", workspaceRoot]);
-    const report = JSON.parse(String(output));
+    const markdown = String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]));
+    const json = String(
+      await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"])
+    );
+    const report = JSON.parse(json);
 
+    expect(markdown.startsWith("# PBench Report")).toBe(true);
     expect(report).toMatchObject({
       schemaVersion: 1,
       workspaceRoot,
@@ -2676,12 +2717,32 @@ describe("pbench codex capture flow", () => {
       durationMs: 400
     });
 
-    const report = JSON.parse(String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot])));
+    const report = JSON.parse(
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"]))
+    );
     const current = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--profile", "current"]))
+      String(
+        await pbenchCommand("report", home).run([
+          "--workspace",
+          workspaceRoot,
+          "--profile",
+          "current",
+          "--format",
+          "json"
+        ])
+      )
     );
     const oneCase = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--case", "case_one_20260612T000000Z"]))
+      String(
+        await pbenchCommand("report", home).run([
+          "--workspace",
+          workspaceRoot,
+          "--case",
+          "case_one_20260612T000000Z",
+          "--format",
+          "json"
+        ])
+      )
     );
 
     expect(report.totals).toMatchObject({
@@ -2765,14 +2826,16 @@ describe("pbench codex capture flow", () => {
     });
 
     const report = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]))
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"]))
     );
     const inclusive = JSON.parse(
       String(
         await pbenchCommand("report", home).run([
           "--workspace",
           workspaceRoot,
-          "--include-untrusted"
+          "--include-untrusted",
+          "--format",
+          "json"
         ])
       )
     );
@@ -2853,7 +2916,7 @@ describe("pbench codex capture flow", () => {
     });
 
     const report = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]))
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"]))
     );
     const cohorts = Object.values(report.cohorts) as Array<{ evaluated: number }>;
 
@@ -2893,7 +2956,9 @@ describe("pbench codex capture flow", () => {
       })}\n`
     );
 
-    const output = String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]));
+    const output = String(
+      await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"])
+    );
     const report = JSON.parse(output);
 
     expect(report.totals.runs).toBe(1);
@@ -2932,7 +2997,7 @@ describe("pbench codex capture flow", () => {
     );
 
     const report = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]))
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"]))
     );
 
     expect(report.recentRuns[0]).toMatchObject({
