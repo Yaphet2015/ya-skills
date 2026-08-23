@@ -4005,7 +4005,7 @@ export async function strictValidateTransaction(transactionPathInput: string): P
 export async function finalizeTransaction(transactionPathInput: string): Promise<{ casePath: string; caseId: string }> {
   const transactionPath = absolutePath(transactionPathInput);
   const transaction = await readTransaction(transactionPath);
-  const validation = transaction.strictValidatedAt ? ({ ok: true } as ValidationResult) : await strictValidateTransaction(transactionPath);
+  const validation = await strictValidateTransaction(transactionPath);
   if (!validation.ok) {
     throw new Error(`Cannot finalize: strict validation failed:\n${validation.errors.join("\n")}`);
   }

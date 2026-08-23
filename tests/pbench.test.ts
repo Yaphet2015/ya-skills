@@ -91,11 +91,13 @@ async function makeRepoWithFailingTest(): Promise<string> {
   return repo;
 }
 
-async function finalizedRunnableCase(options: {
+type RunnableCaseOptions = {
   requiredEnv?: string[];
   dirtyStart?: boolean;
   workspaceRoot?: string;
-} = {}): Promise<{ repo: string; home: string; workspaceRoot: string; casePath: string; caseId: string }> {
+};
+
+async function runnableTransaction(options: RunnableCaseOptions = {}) {
   const repo = await makeRepoWithFailingTest();
   if (options.dirtyStart) {
     await writeFile(
@@ -156,10 +158,23 @@ async function finalizedRunnableCase(options: {
       await writeFile(replayManifestPath, `${JSON.stringify(replayManifest, null, 2)}\n`);
     }
   }
-  const validation = await strictValidateTransaction(tx.transactionPath);
+  return { repo, home, workspaceRoot, tx };
+}
+
+async function finalizedRunnableCase(
+  options: RunnableCaseOptions = {}
+): Promise<{ repo: string; home: string; workspaceRoot: string; casePath: string; caseId: string }> {
+  const prepared = await runnableTransaction(options);
+  const validation = await strictValidateTransaction(prepared.tx.transactionPath);
   expect(validation.ok).toBe(true);
-  const finalized = await finalizeTransaction(tx.transactionPath);
-  return { repo, home, workspaceRoot, casePath: finalized.casePath, caseId: finalized.caseId };
+  const finalized = await finalizeTransaction(prepared.tx.transactionPath);
+  return {
+    repo: prepared.repo,
+    home: prepared.home,
+    workspaceRoot: prepared.workspaceRoot,
+    casePath: finalized.casePath,
+    caseId: finalized.caseId
+  };
 }
 
 async function writeRunArtifact(
@@ -994,6 +1009,22 @@ describe("pbench codex capture flow", () => {
     expect(finalized.casePath).toBe(join(workspaceRoot, "cases", manifest.id));
     await expect(stat(finalized.casePath)).resolves.toBeTruthy();
     await expect(stat(tx.transactionPath)).rejects.toThrow();
+  });
+
+  test("finalize rejects a bundle changed after strict validation", async () => {
+    const prepared = await runnableTransaction();
+    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+    expect(validation.ok).toBe(true);
+
+    await writeFile(
+      join(prepared.tx.caseDir, "private", "validators", "check-completion.mjs"),
+      "console.error('PBENCH_AUTHORING_REQUIRED'); process.exit(1);\n"
+    );
+
+    await expect(finalizeTransaction(prepared.tx.transactionPath)).rejects.toThrow(
+      "Cannot finalize: strict validation failed"
+    );
+    await expect(stat(prepared.tx.transactionPath)).resolves.toBeTruthy();
   });
 
   test("stores capture authoring transactions under the ya-skills home cache", async () => {
