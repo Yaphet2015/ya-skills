@@ -1,15 +1,4 @@
 {
   "name": "pbench",
-  "description": "Capture task/session-level outcome mismatch into a local private personal benchmark case.",
-  "functions": [
-    { "domain": "pbench", "action": "capture" },
-    { "domain": "pbench", "action": "validate" },
-    { "domain": "pbench", "action": "export-replay" },
-    { "domain": "pbench", "action": "run" },
-    { "domain": "pbench", "action": "start" },
-    { "domain": "pbench", "action": "finish" },
-    { "domain": "pbench", "action": "finalize" },
-    { "domain": "pbench", "action": "workspace-init" },
-    { "domain": "pbench", "action": "project-link" }
-  ]
+  "description": "Use when a coding-agent outcome is wrong or incomplete, or when the user asks to capture, run, replay, compare, report, or operate PBench."
 }
