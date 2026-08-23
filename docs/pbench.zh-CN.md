@@ -154,7 +154,7 @@ public/
   context-files/untracked/
 ```
 
-并不是每个文件都会出现。例如，只有当 capture 发现体积合适的 tracked dirty changes 时，才会生成 `starting.patch`。
+只有作者明确把 dirty repository state 选为 replay input 后，才会出现 `starting.patch` 和 `context-files/untracked/`。在记录这个决定之前，capture 会把当前 tracked 和体积受限的 untracked 状态保留在 private authoring evidence 中。
 
 ### Private Evaluator Material
 
@@ -223,9 +223,9 @@ capture 会解析 subject Git 仓库和 baseline commit，把该 commit 同步�
 - `public/replay.md` 是未来 agent 的上下文索引；
 - `public/agent-instructions.md` 来自 repo root 到 capture cwd 之间的 AGENTS.md，以及已安装 skill 名称；
 - `public/key-observations.md` 来自 failed commands 和 replayable verification commands；
-- `public/command-observations.md` 来自有长度限制的命令和工具上下文；
-- `public/starting.patch` 保存体积合适的 tracked dirty changes；
-- 小型、未被 ignore 的 UTF-8 untracked 文件会复制到 `public/context-files/untracked/`。
+- `public/command-observations.md` 来自有长度限制的命令和工具上下文。
+
+当前 tracked 和体积受限的 untracked 状态不会自动进入 public，因为它们可能包含任务开始后产生的工作。capture 会把它们保存为 private authoring evidence，并把 replay start 标记为 unresolved。strict validation 通过前，作者必须选择只使用 baseline commit，或明确整理 `public/starting.patch` 和 public context files。
 
 它也会生成 private authoring 和 evaluator material：
 

@@ -39,6 +39,23 @@ async function captureTestCodexSession(
   return captureCodexSession({ ...options, home });
 }
 
+async function captureRepoTransaction(repo: string) {
+  const home = await temp("home");
+  const workspaceRoot = join(await temp("workspace-root"), "workspace");
+  await initWorkspace(workspaceRoot);
+  const commit = git(repo, ["rev-parse", "HEAD"]);
+  const input = await writeCodexSession(repo, commit);
+  const tx = await captureTestCodexSession({
+    cwd: repo,
+    home,
+    workspaceRoot,
+    input,
+    yes: true,
+    title: "Done file missing"
+  });
+  return { home, workspaceRoot, tx };
+}
+
 function git(cwd: string, args: string[]): string {
   return execFileSync("git", args, {
     cwd,
@@ -122,6 +139,22 @@ async function finalizedRunnableCase(options: {
     };
     manifest.validators[0].requiredEnv = options.requiredEnv;
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
+  if (options.dirtyStart) {
+    const manifestPath = join(tx.caseDir, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.replayStart = { status: "curated" };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await cp(
+      join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"),
+      join(tx.caseDir, "public", "starting.patch")
+    );
+    for (const name of ["context.manifest.json", "replay.manifest.json"]) {
+      const replayManifestPath = join(tx.caseDir, "public", name);
+      const replayManifest = JSON.parse(await readFile(replayManifestPath, "utf8"));
+      replayManifest.replayFiles.startingPatch = "public/starting.patch";
+      await writeFile(replayManifestPath, `${JSON.stringify(replayManifest, null, 2)}\n`);
+    }
   }
   const validation = await strictValidateTransaction(tx.transactionPath);
   expect(validation.ok).toBe(true);
@@ -1423,60 +1456,104 @@ describe("pbench codex capture flow", () => {
     expect(instructions).toContain(".claude/skills: reviewer");
   });
 
-  test("captures tracked dirty changes as public starting patch", async () => {
+  test("keeps unproven tracked changes private until replay-start authoring resolves them", async () => {
     const repo = await makeRepo();
-    await writeFile(join(repo, "ok.mjs"), "console.log('dirty starting point');\nprocess.exit(0);\n");
-    const workspaceRoot = join(await temp("workspace-root"), "workspace");
-    await initWorkspace(workspaceRoot);
-    const commit = git(repo, ["rev-parse", "HEAD"]);
-    const sessionJsonl = await writeCodexSession(repo, commit);
+    await writeFile(join(repo, "ok.mjs"), "console.log('possible repair');\n");
+    const { tx } = await captureRepoTransaction(repo);
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
 
-    const tx = await captureTestCodexSession({
-      cwd: repo,
-      workspaceRoot,
-      input: sessionJsonl,
-      yes: true,
-      title: "Done file missing"
-    });
-    const patch = await readFile(join(tx.caseDir, "public", "starting.patch"), "utf8");
-    const contextManifest = JSON.parse(await readFile(join(tx.caseDir, "public", "context.manifest.json"), "utf8"));
+    await expect(readFile(join(tx.caseDir, "public", "starting.patch"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"), "utf8"))
+      .resolves.toContain("possible repair");
+    expect(manifest.replayStart.status).toBe("unresolved");
 
-    expect(patch).toContain("dirty starting point");
-    expect(contextManifest.replayFiles.startingPatch).toBe("public/starting.patch");
+    const validation = await strictValidateTransaction(tx.transactionPath);
+    expect(validation.errors).toContain("START_STATE_UNRESOLVED: choose baseline or curate replay-start files");
+    const checklist = await readFile(join(tx.caseDir, "private", "authoring-checklist.md"), "utf8");
+    expect(checklist).toContain("Replay start needs authoring");
+    expect(checklist).toContain("baseline");
+    expect(checklist).toContain("curated");
   });
 
-  test("copies non-ignored untracked text files and warns about ignored files", async () => {
+  test("keeps unproven untracked files out of the public replay capsule", async () => {
     const repo = await makeRepo();
     await writeFile(join(repo, ".gitignore"), "ignored.txt\n");
     git(repo, ["add", ".gitignore"]);
     git(repo, ["commit", "-m", "add ignore rules"]);
     await mkdir(join(repo, "notes"), { recursive: true });
-    await writeFile(join(repo, "notes", "context.txt"), "Important local context\n");
+    await writeFile(join(repo, "notes", "answer.txt"), "possible repair\n");
     await writeFile(join(repo, "ignored.txt"), "Do not capture\n");
-    const workspaceRoot = join(await temp("workspace-root"), "workspace");
-    await initWorkspace(workspaceRoot);
-    const commit = git(repo, ["rev-parse", "HEAD"]);
-    const sessionJsonl = await writeCodexSession(repo, commit);
-
-    const tx = await captureTestCodexSession({
-      cwd: repo,
-      workspaceRoot,
-      input: sessionJsonl,
-      yes: true,
-      title: "Done file missing"
-    });
-    const copied = await readFile(join(tx.caseDir, "public", "context-files", "untracked", "notes", "context.txt"), "utf8");
+    const { tx } = await captureRepoTransaction(repo);
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
     const contextManifest = JSON.parse(await readFile(join(tx.caseDir, "public", "context.manifest.json"), "utf8"));
 
-    expect(copied).toBe("Important local context\n");
-    expect(contextManifest.contextFiles).toEqual([
-      {
-        source: "notes/context.txt",
-        publicPath: "public/context-files/untracked/notes/context.txt",
-        kind: "untracked"
-      }
-    ]);
+    await expect(
+      readFile(join(tx.caseDir, "public", "context-files", "untracked", "notes", "answer.txt"), "utf8")
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "untracked", "notes", "answer.txt"), "utf8")
+    ).resolves.toBe("possible repair\n");
+    expect(manifest.replayStart.status).toBe("unresolved");
+    expect(manifest.replayStart.candidateUntrackedManifest).toBe(
+      "private/artifacts/extracted/untracked.manifest.json"
+    );
+    expect(contextManifest.contextFiles).toEqual([]);
     expect(JSON.stringify(contextManifest)).not.toContain("ignored.txt");
+  });
+
+  test("accepts baseline-only replay-start authoring", async () => {
+    const repo = await makeRepo();
+    await writeFile(join(repo, "ok.mjs"), "console.log('discard this dirty state');\n");
+    const { tx } = await captureRepoTransaction(repo);
+    const manifestPath = join(tx.caseDir, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.replayStart = { status: "baseline" };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    const validation = await strictValidateTransaction(tx.transactionPath);
+    expect(validation.errors).not.toContain(
+      "START_STATE_UNRESOLVED: choose baseline or curate replay-start files"
+    );
+  });
+
+  test("accepts explicitly curated replay-start files", async () => {
+    const repo = await makeRepo();
+    await writeFile(join(repo, "ok.mjs"), "console.log('curated tracked context');\n");
+    await mkdir(join(repo, "notes"), { recursive: true });
+    await writeFile(join(repo, "notes", "context.txt"), "curated untracked context\n");
+    const { tx } = await captureRepoTransaction(repo);
+    const manifestPath = join(tx.caseDir, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.replayStart = { status: "curated" };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    const privatePatch = await readFile(
+      join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"),
+      "utf8"
+    );
+    await writeFile(join(tx.caseDir, "public", "starting.patch"), privatePatch);
+    const publicContextPath = join(tx.caseDir, "public", "context-files", "untracked", "notes", "context.txt");
+    await mkdir(join(tx.caseDir, "public", "context-files", "untracked", "notes"), { recursive: true });
+    await writeFile(publicContextPath, "curated untracked context\n");
+
+    for (const name of ["context.manifest.json", "replay.manifest.json"]) {
+      const publicManifestPath = join(tx.caseDir, "public", name);
+      const publicManifest = JSON.parse(await readFile(publicManifestPath, "utf8"));
+      publicManifest.replayFiles.startingPatch = "public/starting.patch";
+      publicManifest.contextFiles = [
+        {
+          source: "notes/context.txt",
+          publicPath: "public/context-files/untracked/notes/context.txt",
+          kind: "untracked"
+        }
+      ];
+      await writeFile(publicManifestPath, `${JSON.stringify(publicManifest, null, 2)}\n`);
+    }
+
+    const validation = await strictValidateTransaction(tx.transactionPath);
+    expect(validation.errors).not.toContain(
+      "START_STATE_UNRESOLVED: choose baseline or curate replay-start files"
+    );
   });
 
   test("writes bounded public command observations and private failure draft", async () => {

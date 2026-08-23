@@ -154,7 +154,7 @@ public/
   context-files/untracked/
 ```
 
-Not every file is always present. For example, `starting.patch` appears only when capture found tracked dirty changes small enough to expose publicly.
+`starting.patch` and `context-files/untracked/` appear only after the author explicitly curates dirty repository state as replay input. Capture keeps current tracked and bounded untracked state private until that decision is recorded.
 
 ### Private Evaluator Material
 
@@ -223,9 +223,9 @@ It generates public replay input from the session and repository:
 - `public/replay.md` as the future agent's context index;
 - `public/agent-instructions.md` from AGENTS.md files between repo root and capture cwd, plus installed skill names;
 - `public/key-observations.md` from failed commands and replayable verification commands;
-- `public/command-observations.md` from bounded command/tool context;
-- `public/starting.patch` when tracked dirty changes are small enough;
-- small non-ignored untracked UTF-8 files under `public/context-files/untracked/`.
+- `public/command-observations.md` from bounded command/tool context.
+
+Current tracked and bounded untracked state is not automatically public because it may contain work produced after the task began. Capture saves it as private authoring evidence and marks replay start as unresolved. The author must choose the baseline commit alone or explicitly curate `public/starting.patch` and public context files before strict validation can pass.
 
 It generates private authoring and evaluator material:
 
