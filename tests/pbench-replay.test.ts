@@ -32,5 +32,5 @@ test("manual replay delegates case validation through its lifecycle boundary", a
       profile: "manual"
     })
   ).rejects.toThrow("Invalid pbench case:\ninvalid fixture");
-  expect(validatedCase).toBe("/cases/bad");
+  expect(validatedCase as string | null).toBe("/cases/bad");
 });
