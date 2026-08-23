@@ -457,8 +457,8 @@ bun test tests/pbench.test.ts --test-name-pattern "cohort denominator|malformed 
 
 - [ ] **Step 4: Record integrity and validator execution**
 
-- Codex sandboxed runner: `enforced`.
-- Claude headless and manual skill runner: `instruction-only`.
+- Current Codex, Claude headless, and manual skill runners: `instruction-only`, because none enforces a private-read whitelist.
+- A future runner may use `enforced` only when its sandbox enforces the recorded read policy.
 - `--contaminated`: `contaminated`.
 - old artifacts without a field: `unknown`.
 - persist the selected runner's version probe as `agentVersion`; old artifacts default to `null`.

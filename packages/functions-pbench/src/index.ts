@@ -2,7 +2,7 @@ import { detectSkillTargets, type FunctionCommand } from "@ya-skills/core";
 import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, open, readdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { arch, homedir, platform, release } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -30,9 +30,8 @@ type ReplayRequirements = {
 
 type PbenchRunStatus = "running" | "finishing" | "passed" | "blocked" | "setup_failed" | "agent_failed" | "validator_failed";
 
-// Sandbox/enforcement level the benchmarked agent ran under. Harness-agnostic: it describes the
-// mechanism, not which harness. codex runs under `workspace-write`; skill-mediated runs are `none`
-// until a read-whitelist sandbox lands (see docs/pbench-leak-handoff.md P1.3 follow-up).
+// Write isolation used by the benchmarked agent. This does not prove private-read isolation:
+// current runners remain instruction-only until a read-whitelist sandbox is enforced.
 type PbenchIsolation = "none" | "workspace-write";
 type PbenchIntegrity = "enforced" | "instruction-only" | "unknown" | "contaminated";
 
@@ -61,6 +60,7 @@ type RunState = JsonObject & {
   accessAuditSuspicious?: boolean;
   requiredEnv: string[];
   runnerSkillDirs?: string[];
+  runnerSkillParentDirs?: string[];
   events?: RunEvent[];
   createdAt: string;
   updatedAt: string;
@@ -881,11 +881,30 @@ function runnerSkillManifest(): JsonObject {
   };
 }
 
-type InstalledRunnerSkill = { directories: string[] };
+type InstalledRunnerSkill = { directories: string[]; createdParentDirectories: string[] };
 
 async function installRunnerSkill(worktree: string): Promise<InstalledRunnerSkill> {
+  const knownPaths = [
+    join(worktree, ".claude"),
+    join(worktree, ".claude", "skills"),
+    join(worktree, ".agents"),
+    join(worktree, ".agents", "skills")
+  ];
+  const preexistingPaths = new Set<string>();
+  for (const path of knownPaths) {
+    if (await pathExists(path)) {
+      preexistingPaths.add(path);
+    }
+  }
   const targets = await detectSkillTargets(worktree);
   const directories = targets.map((target) => join(target, PBENCH_RUNNER_SKILL_NAME));
+  const createdParentDirectories = [
+    ...new Set(
+      targets.flatMap((target) =>
+        [target, dirname(target)].filter((path) => !preexistingPaths.has(path))
+      )
+    )
+  ];
   for (const directory of directories) {
     if (await pathExists(directory)) {
       throw new Error(`Refusing to overwrite existing ${PBENCH_RUNNER_SKILL_NAME} skill: ${directory}`);
@@ -900,9 +919,9 @@ async function installRunnerSkill(worktree: string): Promise<InstalledRunnerSkil
       await writeJson(join(directory, "skill.json"), runnerSkillManifest());
       await writeFile(join(directory, "SKILL.md"), PBENCH_RUNNER_SKILL_MARKDOWN);
     }
-    return { directories };
+    return { directories, createdParentDirectories };
   } catch (error) {
-    await removeInstalledRunnerSkill({ directories: created });
+    await removeInstalledRunnerSkill({ directories: created, createdParentDirectories });
     throw error;
   }
 }
@@ -911,8 +930,7 @@ async function removeInstalledRunnerSkill(installed: InstalledRunnerSkill): Prom
   for (const directory of installed.directories) {
     await rm(directory, { recursive: true, force: true });
   }
-  const parentDirectories = [...new Set(installed.directories.flatMap((directory) => [dirname(directory), dirname(dirname(directory))]))]
-    .sort((left, right) => right.length - left.length);
+  const parentDirectories = [...installed.createdParentDirectories].sort((left, right) => right.length - left.length);
   for (const directory of parentDirectories) {
     try {
       await rmdir(directory);
@@ -1312,8 +1330,8 @@ async function writeAgentDiff(
   artifactDir: string,
   redactor: (text: string) => string = (text) => text
 ): Promise<string> {
-  const tracked = execGitOptional(worktree, ["diff", "--binary", "HEAD", "--", "."]);
-  const untracked = execGitOptional(worktree, ["ls-files", "--others", "--exclude-standard"])
+  const tracked = execGitRaw(worktree, ["diff", "--binary", "HEAD", "--", "."]);
+  const untracked = execGit(worktree, ["ls-files", "--others", "--exclude-standard"])
     .split(/\r?\n/)
     .map((file) => file.trim())
     .filter((file) => file.length > 0)
@@ -1562,7 +1580,7 @@ async function createStartedRun(options: {
     terminal: false,
     manualIntervention: options.agentMode === "skill",
     isolation,
-    integrity: contaminated ? "contaminated" : isolation === "workspace-write" ? "enforced" : "instruction-only",
+    integrity: contaminated ? "contaminated" : "instruction-only",
     validatorExecuted: false,
     agentVersion: AGENT_RUNNERS[options.agentMode]?.versionProbe() ?? null,
     attemptNumber: prior.runIds.length + 1,
@@ -1573,7 +1591,7 @@ async function createStartedRun(options: {
     updatedAt: nowIso()
   };
 
-  let installedRunnerSkill: InstalledRunnerSkill = { directories: [] };
+  let installedRunnerSkill: InstalledRunnerSkill = { directories: [], createdParentDirectories: [] };
   try {
     await writeRunnerEnvironment(state);
     await preparePublicCapsule(options.caseDir, manifest, worktree, runId);
@@ -1601,6 +1619,7 @@ async function createStartedRun(options: {
     if (options.agentMode === "skill") {
       installedRunnerSkill = await installRunnerSkill(worktree);
       state.runnerSkillDirs = installedRunnerSkill.directories;
+      state.runnerSkillParentDirs = installedRunnerSkill.createdParentDirectories;
     }
     await assertPreparedAgentVisibleInputs({ worktree, caseDir: options.caseDir, agentPrompt: renderAgentPrompt() });
     await saveRunState(state, options.home);
@@ -1774,8 +1793,32 @@ async function summarizeAccessAudit(worktree: string): Promise<{ readCount: numb
   return { readCount, sensitiveReads, suspicious: sensitiveReads.length > 0 };
 }
 
+async function acquireFinishLock(runId: string, home?: string): Promise<void> {
+  const lockPath = `${runStatePath(home, runId)}.finish.lock`;
+  let handle;
+  try {
+    handle = await open(lockPath, "wx");
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
+    if (code === "EEXIST") {
+      throw new Error(`PBench run already finished: ${runId} (finishing)`);
+    }
+    throw error;
+  }
+  try {
+    await handle.writeFile(`${nowIso()}\n`);
+  } finally {
+    await handle.close();
+  }
+}
+
 async function finishPbenchRun(options: { runId: string; home?: string }): Promise<JsonObject> {
-  const state = await readRunState(options.runId, options.home);
+  let state = await readRunState(options.runId, options.home);
+  if (state.terminal || state.status !== "running") {
+    throw new Error(`PBench run already finished: ${state.runId} (${state.status})`);
+  }
+  await acquireFinishLock(options.runId, options.home);
+  state = await readRunState(options.runId, options.home);
   if (state.terminal || state.status !== "running") {
     throw new Error(`PBench run already finished: ${state.runId} (${state.status})`);
   }
@@ -1783,7 +1826,10 @@ async function finishPbenchRun(options: { runId: string; home?: string }): Promi
   await saveRunState(state, options.home);
 
   try {
-    await removeInstalledRunnerSkill({ directories: state.runnerSkillDirs ?? [] });
+    await removeInstalledRunnerSkill({
+      directories: state.runnerSkillDirs ?? [],
+      createdParentDirectories: state.runnerSkillParentDirs ?? []
+    });
     const manifest = await readJson(join(state.caseDir, "case.json"));
     // P1.3-lite: copy the skill agent's voluntary access-audit log out of the worktree BEFORE
     // completeRunWithValidators deletes the worktree, and flag sensitive reads for post-hoc review.
@@ -1793,8 +1839,8 @@ async function finishPbenchRun(options: { runId: string; home?: string }): Promi
       await writeJson(join(state.artifactDir, "access-audit.json"), accessAudit);
     }
     const finished = await completeRunWithValidators(state, manifest, options.home);
-    // P1.1: skill finish returns only minimal signal — no summaryPath / validator-outcomes pointer.
-    return { runId: finished.runId, status: finished.status, failingValidatorId: finished.failingValidatorId ?? null };
+    // Skill finish returns only terminal status; validator identities remain private.
+    return { runId: finished.runId, status: finished.status };
   } catch {
     state.status = "blocked";
     state.terminal = true;
@@ -1802,13 +1848,25 @@ async function finishPbenchRun(options: { runId: string; home?: string }): Promi
     await writeRunSummary(state, ["Run blocked by validation infrastructure."]);
     await saveRunState(state, options.home);
     await cleanupReplayWorktree(state.repoCache, state.worktree);
-    return { runId: state.runId, status: state.status, failingValidatorId: null };
+    return { runId: state.runId, status: state.status };
   }
 }
 
 async function readRunArtifact(path: string): Promise<JsonObject> {
   try {
-    return await readJson(path);
+    const run = await readJson(path);
+    if (
+      run.schemaVersion !== 1 ||
+      typeof run.runId !== "string" ||
+      run.runId.length === 0 ||
+      typeof run.caseId !== "string" ||
+      run.caseId.length === 0 ||
+      typeof run.status !== "string" ||
+      run.status.length === 0
+    ) {
+      throw new Error("missing required run fields");
+    }
+    return run;
   } catch (error) {
     throw new Error(`Malformed pbench run artifact: ${path}: ${(error as Error).message}`);
   }
@@ -3696,7 +3754,7 @@ async function captureReplayStartCandidates(
   warnings: string[]
 ): Promise<ReplayStart> {
   const replayStart: ReplayStart = { status: "clean" };
-  const trackedPatch = execGitRawOptional(repoRoot, ["diff", "--binary", "HEAD", "--", "."]);
+  const trackedPatch = execGitRaw(repoRoot, ["diff", "--binary", "HEAD", "--", "."]);
   if (trackedPatch) {
     const candidatePath = "private/artifacts/extracted/starting.patch" as const;
     await writeFile(join(caseDir, candidatePath), trackedPatch);
@@ -3704,7 +3762,7 @@ async function captureReplayStartCandidates(
     replayStart.candidateTrackedPatch = candidatePath;
   }
 
-  const files = execGitOptional(repoRoot, ["ls-files", "--others", "--exclude-standard"])
+  const files = execGit(repoRoot, ["ls-files", "--others", "--exclude-standard"])
     .split(/\r?\n/)
     .map((file) => file.trim())
     .filter(Boolean);
@@ -3720,7 +3778,12 @@ async function captureReplayStartCandidates(
         continue;
       }
       const sourcePath = join(repoRoot, safe);
-      const info = await stat(sourcePath).catch(() => null);
+      const info = await lstat(sourcePath).catch(() => null);
+      if (info?.isSymbolicLink()) {
+        warnings.push(`Skipped symbolic-link untracked file: ${safe}`);
+        candidates.push({ source: safe, status: "skipped", reason: "symbolic link" });
+        continue;
+      }
       if (!info?.isFile()) {
         candidates.push({ source: safe, status: "skipped", reason: "not a file" });
         continue;
@@ -3783,20 +3846,8 @@ async function writeFailureDraft(caseDir: string, extracted: ExtractedCodexSessi
   await writeFile(join(caseDir, "private", "failure-draft.md"), lines.join("\n"));
 }
 
-function execGitOptional(cwd: string, args: string[]): string {
-  try {
-    return execGit(cwd, args);
-  } catch {
-    return "";
-  }
-}
-
-function execGitRawOptional(cwd: string, args: string[]): string {
-  try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch {
-    return "";
-  }
+function execGitRaw(cwd: string, args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
 function relativePathFrom(root: string, path: string): string {
@@ -3965,7 +4016,10 @@ function validateManifestShape(manifest: JsonObject, errors: string[]): void {
     errors.push("At least one validator is required.");
   }
   const replayStart = asObject(manifest.replayStart);
-  if (replayStart?.status === "unresolved") {
+  const replayStartStatus = replayStart?.status;
+  if (!(["clean", "unresolved", "baseline", "curated"] as unknown[]).includes(replayStartStatus)) {
+    errors.push("/replayStart.status must be clean, unresolved, baseline, or curated");
+  } else if (replayStartStatus === "unresolved") {
     errors.push("START_STATE_UNRESOLVED: choose baseline or curate replay-start files");
   }
 }

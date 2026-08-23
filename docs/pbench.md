@@ -381,7 +381,7 @@ Exports the public replay capsule for external inspection or manual agent setup.
 
 ### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-Runs a finalized case headlessly through a registered agent runner. Built-in agents: `codex` (sandboxed, `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Codex runs record `enforced` integrity. Claude and skill-mediated runs record `instruction-only` integrity and are excluded from the default pass-rate denominator.
+Runs a finalized case headlessly through a registered agent runner. Built-in agents: `codex` (write-isolated with `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Write isolation does not enforce a private-read whitelist, so all current built-in and skill-mediated runners record `instruction-only` integrity and are excluded from the default pass-rate denominator. A future runner may record `enforced` only when it enforces the required read boundary.
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 

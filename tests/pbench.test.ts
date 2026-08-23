@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -79,6 +79,7 @@ async function makeRepo(): Promise<string> {
 type RunnableCaseOptions = {
   requiredEnv?: string[];
   dirtyStart?: boolean;
+  dirtyStartResolution?: "baseline" | "curated";
   workspaceRoot?: string;
   skillTargets?: "claude" | "agents" | "both";
   existingRunnerSkill?: boolean;
@@ -157,19 +158,22 @@ async function runnableTransaction(options: RunnableCaseOptions = {}) {
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   }
   if (options.dirtyStart) {
+    const resolution = options.dirtyStartResolution ?? "curated";
     const manifestPath = join(tx.caseDir, "case.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    manifest.replayStart = { status: "curated" };
+    manifest.replayStart = { status: resolution };
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-    await cp(
-      join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"),
-      join(tx.caseDir, "public", "starting.patch")
-    );
-    for (const name of ["context.manifest.json", "replay.manifest.json"]) {
-      const replayManifestPath = join(tx.caseDir, "public", name);
-      const replayManifest = JSON.parse(await readFile(replayManifestPath, "utf8"));
-      replayManifest.replayFiles.startingPatch = "public/starting.patch";
-      await writeFile(replayManifestPath, `${JSON.stringify(replayManifest, null, 2)}\n`);
+    if (resolution === "curated") {
+      await cp(
+        join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"),
+        join(tx.caseDir, "public", "starting.patch")
+      );
+      for (const name of ["context.manifest.json", "replay.manifest.json"]) {
+        const replayManifestPath = join(tx.caseDir, "public", name);
+        const replayManifest = JSON.parse(await readFile(replayManifestPath, "utf8"));
+        replayManifest.replayFiles.startingPatch = "public/starting.patch";
+        await writeFile(replayManifestPath, `${JSON.stringify(replayManifest, null, 2)}\n`);
+      }
     }
   }
   return { repo, home, workspaceRoot, tx };
@@ -1556,59 +1560,62 @@ describe("pbench codex capture flow", () => {
     expect(JSON.stringify(contextManifest)).not.toContain("ignored.txt");
   });
 
-  test("accepts baseline-only replay-start authoring", async () => {
+  test("does not capture repository-external files through untracked symlinks", async () => {
     const repo = await makeRepo();
-    await writeFile(join(repo, "ok.mjs"), "console.log('discard this dirty state');\n");
-    const { tx } = await captureRepoTransaction(repo);
-    const manifestPath = join(tx.caseDir, "case.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    manifest.replayStart = { status: "baseline" };
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const externalDir = await temp("external-secret");
+    await writeFile(join(externalDir, "secret.txt"), "PRIVATE_SYMLINK_SECRET\n");
+    await symlink(join(externalDir, "secret.txt"), join(repo, "linked-secret.txt"));
 
-    const validation = await strictValidateTransaction(tx.transactionPath);
-    expect(validation.errors).not.toContain(
-      "START_STATE_UNRESOLVED: choose baseline or curate replay-start files"
+    const { tx } = await captureRepoTransaction(repo);
+    const candidateManifest = await readFile(
+      join(tx.caseDir, "private", "artifacts", "extracted", "untracked.manifest.json"),
+      "utf8"
     );
+
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "untracked", "linked-secret.txt"), "utf8")
+    ).rejects.toThrow();
+    expect(candidateManifest).toContain('"reason": "symbolic link"');
+    expect(candidateManifest).not.toContain("PRIVATE_SYMLINK_SECRET");
+  });
+
+  test("accepts baseline-only replay-start authoring", async () => {
+    const prepared = await runnableTransaction({ dirtyStart: true, dirtyStartResolution: "baseline" });
+
+    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+
+    expect(validation.ok).toBe(true);
+    await expect(readFile(join(prepared.tx.caseDir, "public", "starting.patch"), "utf8")).rejects.toThrow();
   });
 
   test("accepts explicitly curated replay-start files", async () => {
-    const repo = await makeRepo();
-    await writeFile(join(repo, "ok.mjs"), "console.log('curated tracked context');\n");
-    await mkdir(join(repo, "notes"), { recursive: true });
-    await writeFile(join(repo, "notes", "context.txt"), "curated untracked context\n");
-    const { tx } = await captureRepoTransaction(repo);
-    const manifestPath = join(tx.caseDir, "case.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    manifest.replayStart = { status: "curated" };
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const prepared = await runnableTransaction({ dirtyStart: true, dirtyStartResolution: "curated" });
 
-    const privatePatch = await readFile(
-      join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"),
-      "utf8"
+    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+
+    expect(validation.ok).toBe(true);
+    await expect(readFile(join(prepared.tx.caseDir, "public", "starting.patch"), "utf8")).resolves.toContain(
+      "dirty starting point"
     );
-    await writeFile(join(tx.caseDir, "public", "starting.patch"), privatePatch);
-    const publicContextPath = join(tx.caseDir, "public", "context-files", "untracked", "notes", "context.txt");
-    await mkdir(join(tx.caseDir, "public", "context-files", "untracked", "notes"), { recursive: true });
-    await writeFile(publicContextPath, "curated untracked context\n");
+  });
 
-    for (const name of ["context.manifest.json", "replay.manifest.json"]) {
-      const publicManifestPath = join(tx.caseDir, "public", name);
-      const publicManifest = JSON.parse(await readFile(publicManifestPath, "utf8"));
-      publicManifest.replayFiles.startingPatch = "public/starting.patch";
-      publicManifest.contextFiles = [
-        {
-          source: "notes/context.txt",
-          publicPath: "public/context-files/untracked/notes/context.txt",
-          kind: "untracked"
-        }
-      ];
-      await writeFile(publicManifestPath, `${JSON.stringify(publicManifest, null, 2)}\n`);
+  test("rejects missing or unknown replay-start decisions", async () => {
+    for (const status of [undefined, "typo"] as const) {
+      const prepared = await runnableTransaction();
+      const manifestPath = join(prepared.tx.caseDir, "case.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      if (status === undefined) {
+        delete manifest.replayStart;
+      } else {
+        manifest.replayStart = { status };
+      }
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+      const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+      expect(validation.errors).toContain(
+        "/replayStart.status must be clean, unresolved, baseline, or curated"
+      );
     }
-
-    const validation = await strictValidateTransaction(tx.transactionPath);
-    expect(validation.errors).not.toContain(
-      "START_STATE_UNRESOLVED: choose baseline or curate replay-start files"
-    );
   });
 
   test("writes bounded public command observations and private failure draft", async () => {
@@ -1958,6 +1965,46 @@ describe("pbench codex capture flow", () => {
     expect(untracked).not.toContain("pbench-runner");
   });
 
+  test("preserves a skill target created by setup when removing the injected runner", async () => {
+    const prepared = await finalizedRunnableCase();
+    const manifestPath = join(prepared.casePath, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.setupCommands = [
+      {
+        command: "node -e \"require('node:fs').mkdirSync('.agents/skills', { recursive: true })\"",
+        cwd: ".",
+        timeoutSeconds: 10
+      }
+    ];
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await writeFile(
+      join(prepared.casePath, "private", "validators", "check-completion.mjs"),
+      [
+        "import { existsSync } from 'node:fs';",
+        "import { join } from 'node:path';",
+        "const root = process.env.PB_REPLAY_DIR;",
+        "process.exit(existsSync(join(root, 'done.txt')) && existsSync(join(root, '.agents', 'skills')) ? 0 : 1);"
+      ].join("\n") + "\n"
+    );
+
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+
+    const finished = JSON.parse(
+      String(await pbenchCommand("finish", prepared.home).run(["--run", started.runId]))
+    );
+    expect(finished.status).toBe("passed");
+  });
+
   test("refuses to overwrite an existing runner skill", async () => {
     const prepared = await finalizedRunnableCase({ existingRunnerSkill: true });
 
@@ -2051,12 +2098,16 @@ describe("pbench codex capture flow", () => {
         ])
       )
     );
-    await writeFile(join(prepared.casePath, "case.json"), "not-json\n");
+    const privateMarker = "PRIVATE_INFRASTRUCTURE_SECRET";
+    await writeFile(join(prepared.casePath, "case.json"), `${privateMarker} is not JSON\n`);
 
-    const first = JSON.parse(
-      String(await pbenchCommand("finish", prepared.home).run(["--run", started.runId]))
+    const firstOutput = String(
+      await pbenchCommand("finish", prepared.home).run(["--run", started.runId])
     );
+    const first = JSON.parse(firstOutput);
     expect(first.status).toBe("blocked");
+    expect(firstOutput).not.toContain(privateMarker);
+    await expect(readFile(join(started.artifactDir, "summary.md"), "utf8")).resolves.not.toContain(privateMarker);
     await expect(
       pbenchCommand("finish", prepared.home).run(["--run", started.runId])
     ).rejects.toThrow("already finished");
@@ -2098,6 +2149,41 @@ describe("pbench codex capture flow", () => {
     await expect(
       pbenchCommand("finish", prepared.home).run(["--run", started.runId])
     ).rejects.toThrow("already finished");
+  });
+
+  test("allows only one concurrent finish to execute private validators", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const counterPath = join(prepared.casePath, "private", "finish-count.txt");
+    await writeFile(
+      join(prepared.casePath, "private", "validators", "check-completion.mjs"),
+      [
+        "import { appendFileSync, existsSync } from 'node:fs';",
+        "import { join } from 'node:path';",
+        "appendFileSync(join(process.env.PB_PRIVATE_DIR, 'finish-count.txt'), 'run\\n');",
+        "process.exit(existsSync(join(process.env.PB_REPLAY_DIR, 'done.txt')) ? 0 : 1);"
+      ].join("\n") + "\n"
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+      )
+    );
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(3);
+    expect((await readFile(counterPath, "utf8")).trim().split("\n")).toHaveLength(1);
   });
 
   test("preserves profile and writes normalized metrics for a skill-mediated run", async () => {
@@ -2144,9 +2230,8 @@ describe("pbench codex capture flow", () => {
     const finishOutput = await pbenchCommand("finish", home).run(["--run", started.runId]);
     const finished = JSON.parse(String(finishOutput));
 
-    expect(Object.keys(finished).sort()).toEqual(["failingValidatorId", "runId", "status"]);
+    expect(Object.keys(finished).sort()).toEqual(["runId", "status"]);
     expect(finished.status).toBe("validator_failed");
-    expect(finished.failingValidatorId).toBeTruthy();
     expect(String(finishOutput)).not.toContain("summary.md");
     expect(String(finishOutput)).not.toContain("validator-outcomes");
 
@@ -2189,7 +2274,7 @@ describe("pbench codex capture flow", () => {
       const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
       expect(runJson).toMatchObject({
         isolation: "workspace-write",
-        integrity: "enforced",
+        integrity: "instruction-only",
         validatorExecuted: true,
         agentVersion: "codex-test 0.0.0",
         attemptNumber: 1
@@ -2729,7 +2814,56 @@ describe("pbench codex capture flow", () => {
     });
   });
 
-  test("skips a malformed run artifact and returns a safe warning", async () => {
+  test("separates cohorts by agent mode, isolation, and manual intervention", async () => {
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const common = {
+      caseId: "case_dimensions_20260612T000000Z",
+      profile: "current",
+      status: "passed",
+      agentVersion: "1.0.0",
+      integrity: "enforced" as const
+    };
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_base",
+      agentMode: "codex",
+      isolation: "workspace-write",
+      manualIntervention: false
+    });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_agent",
+      agentMode: "claude",
+      isolation: "workspace-write",
+      manualIntervention: false
+    });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_isolation",
+      agentMode: "codex",
+      isolation: "none",
+      manualIntervention: false
+    });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_manual",
+      agentMode: "codex",
+      isolation: "workspace-write",
+      manualIntervention: true
+    });
+
+    const report = JSON.parse(
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]))
+    );
+    const cohorts = Object.values(report.cohorts) as Array<{ evaluated: number }>;
+
+    expect(cohorts).toHaveLength(4);
+    expect(cohorts.every((cohort) => cohort.evaluated === 1)).toBe(true);
+  });
+
+  test("skips malformed run artifacts and returns safe warnings", async () => {
     const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
@@ -2742,15 +2876,26 @@ describe("pbench codex capture flow", () => {
     const malformedDir = join(workspaceRoot, "runs", "run_malformed");
     await mkdir(malformedDir, { recursive: true });
     await writeFile(join(malformedDir, "run.json"), "PRIVATE_ARTIFACT_CONTENT is not JSON\n");
+    const invalidSchemaDir = join(workspaceRoot, "runs", "run_schema_invalid");
+    await mkdir(invalidSchemaDir, { recursive: true });
+    await writeFile(
+      join(invalidSchemaDir, "run.json"),
+      `${JSON.stringify({ secret: "PRIVATE_SCHEMA_SECRET" })}\n`
+    );
 
     const output = String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]));
     const report = JSON.parse(output);
 
     expect(report.totals.runs).toBe(1);
-    expect(report.warnings).toEqual([
-      { category: "MALFORMED_RUN_ARTIFACT", runId: "run_malformed" }
-    ]);
+    expect(report.warnings).toHaveLength(2);
+    expect(report.warnings).toEqual(
+      expect.arrayContaining([
+        { category: "MALFORMED_RUN_ARTIFACT", runId: "run_malformed" },
+        { category: "MALFORMED_RUN_ARTIFACT", runId: "run_schema_invalid" }
+      ])
+    );
     expect(output).not.toContain("PRIVATE_ARTIFACT_CONTENT");
+    expect(output).not.toContain("PRIVATE_SCHEMA_SECRET");
   });
 
   test("treats legacy runs without integrity evidence as unknown and unevaluated", async () => {

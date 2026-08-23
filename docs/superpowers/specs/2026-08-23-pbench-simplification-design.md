@@ -110,7 +110,7 @@ enforced | instruction-only | unknown | contaminated
 - `unknown`: required integrity evidence is unavailable.
 - `contaminated`: a known invalidating event occurred.
 
-Manual runs and unsandboxed runners are not silently treated as equivalent to sandboxed runs.
+Manual runs and unsandboxed runners are not silently treated as equivalent to sandboxed runs. Write-only isolation such as `workspace-write` does not prove the private-read boundary; current built-in runners remain `instruction-only` until a read whitelist is enforced.
 
 The default report:
 

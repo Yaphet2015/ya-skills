@@ -381,7 +381,7 @@ public/
 
 ### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-通过已注册的 agent runner 以 headless 方式运行 finalized case。内置 agent：`codex`（沙箱 `--sandbox workspace-write`）与 `claude`（Claude Code `-p` headless）。Codex run 记录为 `enforced` integrity。Claude 与 skill-mediated run 记录为 `instruction-only` integrity，因此默认不进入 pass-rate 分母。
+通过已注册的 agent runner 以 headless 方式运行 finalized case。内置 agent：`codex`（使用 `--sandbox workspace-write` 限制写入）与 `claude`（Claude Code `-p` headless）。写入隔离不能强制 private-read 白名单，因此当前所有内置 runner 和 skill-mediated runner 都记录为 `instruction-only` integrity，默认不进入 pass-rate 分母。只有真正强制读取边界的未来 runner 才能记录为 `enforced`。
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 
