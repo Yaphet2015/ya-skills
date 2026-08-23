@@ -129,6 +129,9 @@ jobs:
           text = re.sub(r'url "[^"]+"', f'url "{url}"', text, count=1)
           text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
           text = re.sub(r'sha256 "[^"]+"', f'sha256 "{sha256}"', text, count=1)
+          text = re.sub(r'assert_match "[^"]+", shell_output\("\#\{bin\}/yk --version"\)',
+                        f'assert_match "{version}", shell_output("#{{bin}}/yk --version")',
+                        text, count=1)
           formula.write_text(text)
           PY
           git diff -- Formula/ya-skills.rb
