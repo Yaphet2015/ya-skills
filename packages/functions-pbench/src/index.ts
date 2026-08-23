@@ -1,8 +1,8 @@
-import type { FunctionCommand } from "@ya-skills/core";
+import { detectSkillTargets, type FunctionCommand } from "@ya-skills/core";
 import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { arch, homedir, platform, release } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -56,6 +56,7 @@ type RunState = JsonObject & {
   failingValidatorId?: string | null;
   accessAuditSuspicious?: boolean;
   requiredEnv: string[];
+  runnerSkillDirs?: string[];
   events?: RunEvent[];
   createdAt: string;
   updatedAt: string;
@@ -871,11 +872,48 @@ function runnerSkillManifest(): JsonObject {
   };
 }
 
-async function installRunnerSkill(worktree: string): Promise<void> {
-  const skillDir = join(worktree, ".agents", "skills", PBENCH_RUNNER_SKILL_NAME);
-  await mkdir(skillDir, { recursive: true });
-  await writeJson(join(skillDir, "skill.json"), runnerSkillManifest());
-  await writeFile(join(skillDir, "SKILL.md"), PBENCH_RUNNER_SKILL_MARKDOWN);
+type InstalledRunnerSkill = { directories: string[] };
+
+async function installRunnerSkill(worktree: string): Promise<InstalledRunnerSkill> {
+  const targets = await detectSkillTargets(worktree);
+  const directories = targets.map((target) => join(target, PBENCH_RUNNER_SKILL_NAME));
+  for (const directory of directories) {
+    if (await pathExists(directory)) {
+      throw new Error(`Refusing to overwrite existing ${PBENCH_RUNNER_SKILL_NAME} skill: ${directory}`);
+    }
+  }
+
+  const created: string[] = [];
+  try {
+    for (const directory of directories) {
+      await mkdir(directory, { recursive: true });
+      created.push(directory);
+      await writeJson(join(directory, "skill.json"), runnerSkillManifest());
+      await writeFile(join(directory, "SKILL.md"), PBENCH_RUNNER_SKILL_MARKDOWN);
+    }
+    return { directories };
+  } catch (error) {
+    await removeInstalledRunnerSkill({ directories: created });
+    throw error;
+  }
+}
+
+async function removeInstalledRunnerSkill(installed: InstalledRunnerSkill): Promise<void> {
+  for (const directory of installed.directories) {
+    await rm(directory, { recursive: true, force: true });
+  }
+  const parentDirectories = [...new Set(installed.directories.flatMap((directory) => [dirname(directory), dirname(dirname(directory))]))]
+    .sort((left, right) => right.length - left.length);
+  for (const directory of parentDirectories) {
+    try {
+      await rmdir(directory);
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
+      if (code !== "ENOENT" && code !== "ENOTEMPTY" && code !== "EEXIST") {
+        throw error;
+      }
+    }
+  }
 }
 
 function ensureRequiredReplayEnv(manifest: JsonObject): string[] {
@@ -1190,9 +1228,11 @@ async function assertPreparedAgentVisibleInputs(options: {
     { label: ".pbench/run.json", text: await readFile(join(pbenchDir, "run.json"), "utf8") },
     { label: "codex prompt", text: options.agentPrompt }
   ];
-  const runnerSkillPath = join(options.worktree, ".agents", "skills", PBENCH_RUNNER_SKILL_NAME, "SKILL.md");
-  if (await pathExists(runnerSkillPath)) {
-    surfaces.push({ label: ".agents/skills/pbench-runner/SKILL.md", text: await readFile(runnerSkillPath, "utf8") });
+  for (const target of [join(".claude", "skills"), join(".agents", "skills")]) {
+    const runnerSkillPath = join(options.worktree, target, PBENCH_RUNNER_SKILL_NAME, "SKILL.md");
+    if (await pathExists(runnerSkillPath)) {
+      surfaces.push({ label: join(target, PBENCH_RUNNER_SKILL_NAME, "SKILL.md"), text: await readFile(runnerSkillPath, "utf8") });
+    }
   }
   await assertPublicReplayHasNoPrivateReferences(join(pbenchDir, "public"), {
     caseDir: options.caseDir,
@@ -1516,14 +1556,11 @@ async function createStartedRun(options: {
     updatedAt: nowIso()
   };
 
+  let installedRunnerSkill: InstalledRunnerSkill = { directories: [] };
   try {
     await writeRunnerEnvironment(state);
     await preparePublicCapsule(options.caseDir, manifest, worktree, runId);
     await applyStartingPatch(options.caseDir, worktree);
-    if (options.agentMode === "skill") {
-      await installRunnerSkill(worktree);
-    }
-    await assertPreparedAgentVisibleInputs({ worktree, caseDir: options.caseDir, agentPrompt: renderAgentPrompt() });
     const setupOutcomes = runSetupCommands(manifest, worktree, publicRunnerEnv(worktree));
     state.events = [setupRunEvent(setupOutcomes)];
     if (setupOutcomes.length > 0) {
@@ -1544,15 +1581,25 @@ async function createStartedRun(options: {
         return { state, manifest, redactor };
       }
     }
+    if (options.agentMode === "skill") {
+      installedRunnerSkill = await installRunnerSkill(worktree);
+      state.runnerSkillDirs = installedRunnerSkill.directories;
+    }
+    await assertPreparedAgentVisibleInputs({ worktree, caseDir: options.caseDir, agentPrompt: renderAgentPrompt() });
     await saveRunState(state, options.home);
     return { state, manifest, redactor };
   } catch (error) {
-    await cleanupReplayWorktree(repoCache, worktree);
+    try {
+      await removeInstalledRunnerSkill(installedRunnerSkill);
+    } finally {
+      await cleanupReplayWorktree(repoCache, worktree);
+    }
     throw error;
   }
 }
 
 async function completeRunWithValidators(state: RunState, manifest: JsonObject, home?: string): Promise<RunState> {
+  await removeInstalledRunnerSkill({ directories: state.runnerSkillDirs ?? [] });
   const errors: string[] = [];
   const redactor = makeRedactor(state.requiredEnv, runnerPathAliases(state.worktree));
   const outcomes = await runValidators({

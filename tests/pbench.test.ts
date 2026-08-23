@@ -76,7 +76,15 @@ async function makeRepo(): Promise<string> {
   return repo;
 }
 
-async function makeRepoWithFailingTest(): Promise<string> {
+type RunnableCaseOptions = {
+  requiredEnv?: string[];
+  dirtyStart?: boolean;
+  workspaceRoot?: string;
+  skillTargets?: "claude" | "agents" | "both";
+  existingRunnerSkill?: boolean;
+};
+
+async function makeRepoWithFailingTest(options: RunnableCaseOptions = {}): Promise<string> {
   const repo = await temp("repo");
   git(repo, ["init"]);
   git(repo, ["config", "user.email", "pbench@example.local"]);
@@ -86,19 +94,25 @@ async function makeRepoWithFailingTest(): Promise<string> {
     join(repo, "check-done.mjs"),
     "import { existsSync } from 'node:fs';\nprocess.exit(existsSync('done.txt') ? 0 : 1);\n"
   );
+  if (options.skillTargets === "claude" || options.skillTargets === "both") {
+    await mkdir(join(repo, ".claude", "skills"), { recursive: true });
+    await writeFile(join(repo, ".claude", "skills", ".keep"), "");
+  }
+  if (options.skillTargets === "agents" || options.skillTargets === "both") {
+    await mkdir(join(repo, ".agents", "skills"), { recursive: true });
+    await writeFile(join(repo, ".agents", "skills", ".keep"), "");
+  }
+  if (options.existingRunnerSkill) {
+    await mkdir(join(repo, ".agents", "skills", "pbench-runner"), { recursive: true });
+    await writeFile(join(repo, ".agents", "skills", "pbench-runner", "SKILL.md"), "project-owned\n");
+  }
   git(repo, ["add", "."]);
   git(repo, ["commit", "-m", "baseline"]);
   return repo;
 }
 
-type RunnableCaseOptions = {
-  requiredEnv?: string[];
-  dirtyStart?: boolean;
-  workspaceRoot?: string;
-};
-
 async function runnableTransaction(options: RunnableCaseOptions = {}) {
-  const repo = await makeRepoWithFailingTest();
+  const repo = await makeRepoWithFailingTest(options);
   if (options.dirtyStart) {
     await writeFile(
       join(repo, "check-done.mjs"),
@@ -1880,6 +1894,90 @@ describe("pbench codex capture flow", () => {
         process.env[secretName] = originalSecret;
       }
     }
+  });
+
+  test("installs the manual runner into the worktree's existing Claude skill target", async () => {
+    const prepared = await finalizedRunnableCase({ skillTargets: "claude" });
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+
+    await expect(
+      stat(join(started.worktree, ".claude", "skills", "pbench-runner", "SKILL.md"))
+    ).resolves.toBeTruthy();
+    await expect(
+      stat(join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md"))
+    ).rejects.toThrow();
+  });
+
+  test("installs and removes the manual runner across both existing skill targets", async () => {
+    const prepared = await finalizedRunnableCase({ skillTargets: "both" });
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+
+    for (const target of [".claude", ".agents"]) {
+      await expect(
+        stat(join(started.worktree, target, "skills", "pbench-runner", "SKILL.md"))
+      ).resolves.toBeTruthy();
+    }
+
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+    await pbenchCommand("finish", prepared.home).run(["--run", started.runId]);
+
+    const diff = await readFile(join(started.artifactDir, "agent.diff"), "utf8");
+    const untracked = await readFile(join(started.artifactDir, "candidate", "untracked.json"), "utf8");
+    expect(diff).not.toContain("pbench-runner");
+    expect(untracked).not.toContain("pbench-runner");
+  });
+
+  test("refuses to overwrite an existing runner skill", async () => {
+    const prepared = await finalizedRunnableCase({ existingRunnerSkill: true });
+
+    await expect(
+      pbenchCommand("start", prepared.home).run([
+        "--case",
+        prepared.caseId,
+        "--workspace",
+        prepared.workspaceRoot
+      ])
+    ).rejects.toThrow("Refusing to overwrite existing pbench-runner skill");
+  });
+
+  test("candidate artifacts exclude the injected runner skill", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+
+    await pbenchCommand("finish", prepared.home).run(["--run", started.runId]);
+
+    const diff = await readFile(join(started.artifactDir, "agent.diff"), "utf8");
+    const untracked = await readFile(join(started.artifactDir, "candidate", "untracked.json"), "utf8");
+    expect(diff).not.toContain("pbench-runner");
+    expect(untracked).not.toContain("pbench-runner");
   });
 
   test("starts a skill-mediated run with public capsule, runner skill, and one-shot finish", async () => {
