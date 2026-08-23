@@ -2026,6 +2026,67 @@ describe("pbench codex capture flow", () => {
     ).rejects.toThrow("already finished");
   });
 
+  test("finish consumes the attempt when validation infrastructure fails", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    await writeFile(join(prepared.casePath, "case.json"), "not-json\n");
+
+    const first = JSON.parse(
+      String(await pbenchCommand("finish", prepared.home).run(["--run", started.runId]))
+    );
+    expect(first.status).toBe("blocked");
+    await expect(
+      pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    ).rejects.toThrow("already finished");
+
+    const statePath = join(
+      prepared.home,
+      ".ya-skills",
+      "pbench",
+      "runs",
+      `${started.runId}.json`
+    );
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(state.terminal).toBe(true);
+  });
+
+  test("rejects a second finish while the first attempt is marked finishing", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const statePath = join(
+      prepared.home,
+      ".ya-skills",
+      "pbench",
+      "runs",
+      `${started.runId}.json`
+    );
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.status = "finishing";
+    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+    await expect(
+      pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    ).rejects.toThrow("already finished");
+  });
+
   test("preserves profile and writes normalized metrics for a skill-mediated run", async () => {
     const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
     const startOutput = await pbenchCommand("start", home).run([

@@ -28,7 +28,7 @@ type ReplayRequirements = {
   notes: string[];
 };
 
-type PbenchRunStatus = "running" | "passed" | "blocked" | "setup_failed" | "agent_failed" | "validator_failed";
+type PbenchRunStatus = "running" | "finishing" | "passed" | "blocked" | "setup_failed" | "agent_failed" | "validator_failed";
 
 // Sandbox/enforcement level the benchmarked agent ran under. Harness-agnostic: it describes the
 // mechanism, not which harness. codex runs under `workspace-write`; skill-mediated runs are `none`
@@ -1599,7 +1599,6 @@ async function createStartedRun(options: {
 }
 
 async function completeRunWithValidators(state: RunState, manifest: JsonObject, home?: string): Promise<RunState> {
-  await removeInstalledRunnerSkill({ directories: state.runnerSkillDirs ?? [] });
   const errors: string[] = [];
   const redactor = makeRedactor(state.requiredEnv, runnerPathAliases(state.worktree));
   const outcomes = await runValidators({
@@ -1761,17 +1760,31 @@ async function finishPbenchRun(options: { runId: string; home?: string }): Promi
   if (state.terminal || state.status !== "running") {
     throw new Error(`PBench run already finished: ${state.runId} (${state.status})`);
   }
-  const manifest = await readJson(join(state.caseDir, "case.json"));
-  // P1.3-lite: copy the skill agent's voluntary access-audit log out of the worktree BEFORE
-  // completeRunWithValidators deletes the worktree, and flag sensitive reads for post-hoc review.
-  const accessAudit = await summarizeAccessAudit(state.worktree);
-  if (accessAudit) {
-    state.accessAuditSuspicious = accessAudit.suspicious;
-    await writeJson(join(state.artifactDir, "access-audit.json"), accessAudit);
+  state.status = "finishing";
+  await saveRunState(state, options.home);
+
+  try {
+    await removeInstalledRunnerSkill({ directories: state.runnerSkillDirs ?? [] });
+    const manifest = await readJson(join(state.caseDir, "case.json"));
+    // P1.3-lite: copy the skill agent's voluntary access-audit log out of the worktree BEFORE
+    // completeRunWithValidators deletes the worktree, and flag sensitive reads for post-hoc review.
+    const accessAudit = await summarizeAccessAudit(state.worktree);
+    if (accessAudit) {
+      state.accessAuditSuspicious = accessAudit.suspicious;
+      await writeJson(join(state.artifactDir, "access-audit.json"), accessAudit);
+    }
+    const finished = await completeRunWithValidators(state, manifest, options.home);
+    // P1.1: skill finish returns only minimal signal — no summaryPath / validator-outcomes pointer.
+    return { runId: finished.runId, status: finished.status, failingValidatorId: finished.failingValidatorId ?? null };
+  } catch {
+    state.status = "blocked";
+    state.terminal = true;
+    state.finishedAt = nowIso();
+    await writeRunSummary(state, ["Run blocked by validation infrastructure."]);
+    await saveRunState(state, options.home);
+    await cleanupReplayWorktree(state.repoCache, state.worktree);
+    return { runId: state.runId, status: state.status, failingValidatorId: null };
   }
-  const finished = await completeRunWithValidators(state, manifest, options.home);
-  // P1.1: skill finish returns only minimal signal — no summaryPath / validator-outcomes pointer.
-  return { runId: finished.runId, status: finished.status, failingValidatorId: finished.failingValidatorId ?? null };
 }
 
 async function readRunArtifact(path: string): Promise<JsonObject> {
