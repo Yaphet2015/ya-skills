@@ -106,12 +106,10 @@ test("root catalog exposes the pbench skill and its yk function refs", async () 
   ]);
 });
 
-test("root catalog exposes the pbench runner skill", async () => {
+test("root catalog does not expose the internal pbench runner", async () => {
   const catalog = await loadCatalog(resolve("skills"));
-  const runner = catalog.byName.get("pbench-runner");
 
-  expect(runner?.description).toContain("pbench");
-  expect(runner?.functions).toEqual([]);
+  expect(catalog.byName.has("pbench-runner")).toBe(false);
 });
 
 test("root catalog exposes the video-transcript skill", async () => {

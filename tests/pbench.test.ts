@@ -2430,23 +2430,21 @@ describe("pbench codex capture flow", () => {
     ]);
   });
 
-  test("installs the runner skill with integrity boundaries and the access-audit rule (P3)", async () => {
+  test("installs the canonical internal runner skill", async () => {
     const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
     const started = JSON.parse(
       String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
     );
     const skill = await readFile(join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md"), "utf8");
-    expect(skill).toContain("Integrity boundaries");
-    expect(skill).toContain("access-audit.jsonl");
-    expect(skill).toContain("one-shot");
-    expect(skill).toContain("run-artifacts");
-    expect(skill).toContain("harness implementation");
-    // The integrity prose must not itself trip the fail-closed private-reference gate.
+    expect(skill).toContain("name: pbench-runner");
+    expect(skill).toContain("A failed finish is terminal");
+    expect(skill).not.toContain("access-audit.jsonl");
     expectNoAgentVisiblePrivateReferences(skill);
-    // SSOT: the installed runner skill must match the checked-in source verbatim, so the embedded
-    // install copy cannot silently diverge from skills/pbench-runner/SKILL.md.
-    const checkedInSource = await readFile(join(process.cwd(), "skills", "pbench-runner", "SKILL.md"), "utf8");
-    expect(skill).toBe(checkedInSource);
+    const canonicalAsset = await readFile(
+      join(process.cwd(), "packages", "functions-pbench", "assets", "pbench-runner", "SKILL.md"),
+      "utf8"
+    );
+    expect(skill).toBe(canonicalAsset);
   });
 
   test("redacts setup-outcomes stdout/stderr in skill mode (review)", async () => {
