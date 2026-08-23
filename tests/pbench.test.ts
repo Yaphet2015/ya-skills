@@ -199,7 +199,13 @@ async function writeRunArtifact(
     profile?: string;
     status: string;
     agentMode?: string;
+    agentVersion?: string | null;
     manualIntervention?: boolean;
+    isolation?: string;
+    integrity?: "enforced" | "instruction-only" | "unknown" | "contaminated";
+    terminal?: boolean;
+    validatorExecuted?: boolean;
+    contaminated?: boolean;
     durationMs?: number;
     tokenUsage?: Record<string, number>;
     createdAt?: string;
@@ -217,7 +223,11 @@ async function writeRunArtifact(
         workspaceRoot,
         terminal: true,
         agentMode: "codex",
+        agentVersion: "codex-test 0.0.0",
         manualIntervention: false,
+        isolation: "workspace-write",
+        integrity: "enforced",
+        validatorExecuted: true,
         createdAt: "2026-06-12T00:00:00Z",
         updatedAt: "2026-06-12T00:00:00Z",
         ...run
@@ -1776,6 +1786,9 @@ describe("pbench codex capture flow", () => {
       expect(result.status).toBe("passed");
       expect(runJson.agentMode).toBe("claude");
       expect(runJson.isolation).toBe("none");
+      expect(runJson.integrity).toBe("instruction-only");
+      expect(runJson.validatorExecuted).toBe(true);
+      expect(runJson.agentVersion).toBe("claude-test 0.0.0");
       expect(runJson.tokenUsage).toEqual({ input_tokens: 11, output_tokens: 7 });
       expect(runJson.cost).toBe(0.0012);
       expect(metrics.agentMode).toBe("claude");
@@ -2105,7 +2118,12 @@ describe("pbench codex capture flow", () => {
     const runJson = JSON.parse(await readFile(join(started.artifactDir, "run.json"), "utf8"));
     const metrics = JSON.parse(await readFile(join(started.artifactDir, "metrics.json"), "utf8"));
 
-    expect(runJson.profile).toBe("manual-agent");
+    expect(runJson).toMatchObject({
+      profile: "manual-agent",
+      integrity: "instruction-only",
+      validatorExecuted: true,
+      agentVersion: null
+    });
     expect(metrics).toMatchObject({
       runId: started.runId,
       caseId,
@@ -2169,8 +2187,13 @@ describe("pbench codex capture flow", () => {
       expect(outcomes[0]).toHaveProperty("stdout");
       expect(outcomes[0]).toHaveProperty("stderr");
       const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
-      expect(runJson.isolation).toBe("workspace-write");
-      expect(runJson.attemptNumber).toBe(1);
+      expect(runJson).toMatchObject({
+        isolation: "workspace-write",
+        integrity: "enforced",
+        validatorExecuted: true,
+        agentVersion: "codex-test 0.0.0",
+        attemptNumber: 1
+      });
     } finally {
       process.env.PATH = originalPath;
     }
@@ -2187,7 +2210,10 @@ describe("pbench codex capture flow", () => {
       isolation: "none",
       attemptNumber: 1,
       priorRunIds: [],
-      contaminated: false
+      contaminated: false,
+      integrity: "instruction-only",
+      validatorExecuted: false,
+      agentVersion: null
     });
     // Finish each run so it becomes a terminal prior attempt before the next start.
     await writeFile(join(first.worktree, "done.txt"), "done\n");
@@ -2217,6 +2243,7 @@ describe("pbench codex capture flow", () => {
     );
     const taintedRun = JSON.parse(await readFile(join(tainted.artifactDir, "run.json"), "utf8"));
     expect(taintedRun.contaminated).toBe(true);
+    expect(taintedRun.integrity).toBe("contaminated");
     expect(taintedRun.attemptNumber).toBe(3);
   });
 
@@ -2612,6 +2639,159 @@ describe("pbench codex capture flow", () => {
     expect(Object.keys(oneCase.cases)).toEqual(["case_one_20260612T000000Z"]);
   });
 
+  test("uses only trusted evaluated runs in the default cohort denominator", async () => {
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const common = {
+      caseId: "case_cohort_20260612T000000Z",
+      profile: "current",
+      agentMode: "codex",
+      isolation: "workspace-write",
+      agentVersion: "0.9.2"
+    } as const;
+
+    await writeRunArtifact(workspaceRoot, { ...common, runId: "run_passed", status: "passed" });
+    await writeRunArtifact(workspaceRoot, { ...common, runId: "run_failed", status: "validator_failed" });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_running",
+      status: "running",
+      terminal: false,
+      validatorExecuted: false
+    });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_setup",
+      status: "setup_failed",
+      validatorExecuted: false
+    });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_contaminated",
+      status: "passed",
+      integrity: "contaminated",
+      contaminated: true
+    });
+    await writeRunArtifact(workspaceRoot, {
+      ...common,
+      runId: "run_instruction_only",
+      status: "passed",
+      agentVersion: "0.9.3",
+      integrity: "instruction-only"
+    });
+
+    const report = JSON.parse(
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]))
+    );
+    const inclusive = JSON.parse(
+      String(
+        await pbenchCommand("report", home).run([
+          "--workspace",
+          workspaceRoot,
+          "--include-untrusted"
+        ])
+      )
+    );
+
+    expect(report.profiles.current).toMatchObject({
+      runs: 6,
+      evaluated: 2,
+      passed: 1,
+      passRate: 0.5,
+      excludedStatusCounts: { running: 1, setup_failed: 1, untrusted: 2 }
+    });
+    expect(Object.values(report.cohorts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          profile: "current",
+          agentMode: "codex",
+          agentVersion: "0.9.2",
+          integrity: "enforced",
+          runs: 4,
+          evaluated: 2
+        }),
+        expect.objectContaining({
+          profile: "current",
+          agentMode: "codex",
+          agentVersion: "0.9.3",
+          runs: 1,
+          evaluated: 0
+        })
+      ])
+    );
+    expect(inclusive.profiles.current).toMatchObject({
+      runs: 6,
+      evaluated: 3,
+      passed: 2,
+      passRate: 2 / 3,
+      excludedStatusCounts: { running: 1, setup_failed: 1, untrusted: 1 }
+    });
+  });
+
+  test("skips a malformed run artifact and returns a safe warning", async () => {
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    await writeRunArtifact(workspaceRoot, {
+      runId: "run_valid",
+      caseId: "case_valid_20260612T000000Z",
+      profile: "current",
+      status: "passed"
+    });
+    const malformedDir = join(workspaceRoot, "runs", "run_malformed");
+    await mkdir(malformedDir, { recursive: true });
+    await writeFile(join(malformedDir, "run.json"), "PRIVATE_ARTIFACT_CONTENT is not JSON\n");
+
+    const output = String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]));
+    const report = JSON.parse(output);
+
+    expect(report.totals.runs).toBe(1);
+    expect(report.warnings).toEqual([
+      { category: "MALFORMED_RUN_ARTIFACT", runId: "run_malformed" }
+    ]);
+    expect(output).not.toContain("PRIVATE_ARTIFACT_CONTENT");
+  });
+
+  test("treats legacy runs without integrity evidence as unknown and unevaluated", async () => {
+    const home = await temp("home");
+    const workspaceRoot = join(await temp("workspace-root"), "workspace");
+    await initWorkspace(workspaceRoot);
+    const artifactDir = join(workspaceRoot, "runs", "run_legacy");
+    await mkdir(artifactDir, { recursive: true });
+    await writeFile(
+      join(artifactDir, "run.json"),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        runId: "run_legacy",
+        caseId: "case_legacy_20260612T000000Z",
+        profile: "legacy",
+        status: "passed",
+        terminal: true,
+        artifactDir,
+        agentMode: "codex",
+        isolation: "workspace-write"
+      })}\n`
+    );
+
+    const report = JSON.parse(
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]))
+    );
+
+    expect(report.recentRuns[0]).toMatchObject({
+      integrity: "unknown",
+      validatorExecuted: false,
+      agentVersion: null,
+      terminal: true
+    });
+    expect(report.profiles.legacy).toMatchObject({
+      runs: 1,
+      evaluated: 0,
+      passed: 0,
+      excludedStatusCounts: { validator_not_executed: 1 }
+    });
+  });
+
   test("renders markdown report with case and recent run tables without private evaluator paths", async () => {
     const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
@@ -2629,7 +2809,11 @@ describe("pbench codex capture flow", () => {
       await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "markdown"])
     );
 
-    expect(markdown).toContain("| current | 1 | 1 | 100.0% | 100 | 10 | 5 |");
+    expect(markdown).toContain("| current | 1 | 1 | 1 | 100.0% |  | 100 | 10 | 5 |");
+    expect(markdown).toContain("## Comparable Cohorts");
+    expect(markdown).toContain(
+      "| current | codex | codex-test 0.0.0 | workspace-write | false | enforced | 1 | 1 | 1 | 100.0% |  |"
+    );
     expect(markdown).toContain("| passed | 1 |");
     expect(markdown).toContain("## Cases");
     expect(markdown).toContain("| Case | Runs | Profiles | Statuses |");

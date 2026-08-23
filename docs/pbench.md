@@ -381,7 +381,7 @@ Exports the public replay capsule for external inspection or manual agent setup.
 
 ### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-Runs a finalized case headlessly through a registered agent runner. Built-in agents: `codex` (sandboxed, `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Evaluator integrity comes from the public/private worktree boundary, not the agent's own sandbox, so any agent with a headless runner is a valid target.
+Runs a finalized case headlessly through a registered agent runner. Built-in agents: `codex` (sandboxed, `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Codex runs record `enforced` integrity. Claude and skill-mediated runs record `instruction-only` integrity and are excluded from the default pass-rate denominator.
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 
@@ -391,9 +391,9 @@ Prepares a skill-mediated replay worktree and installs the `pbench-runner` skill
 
 Finishes a skill-mediated run with private validation. This is one-shot; a finished run cannot be finished again.
 
-### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--format json|markdown]`
+### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--include-untrusted] [--format json|markdown]`
 
-Aggregates run artifacts by status, case, profile, manual intervention, duration, and token usage. JSON is the default; Markdown is for human review.
+Aggregates all observed run artifacts, but calculates the default pass rate only from terminal, validator-executed, non-contaminated runs with `enforced` integrity. Comparable cohorts are separated by profile, agent, agent version, isolation, manual intervention, and integrity. Running, setup-failed, contaminated, instruction-only, and legacy `unknown` runs remain visible as excluded counts. Malformed run artifacts produce safe warnings and do not block the report. Use `--include-untrusted` to include instruction-only and legacy `unknown` runs in the evaluated denominator; contaminated runs remain excluded. JSON is the default; Markdown is for human review.
 
 ### `yk pbench audit [--case <case-id-or-dir>] [--workspace <path>]`
 
@@ -479,7 +479,7 @@ yk pbench run --case <case-id> --agent codex --profile current-model
 yk pbench report --format markdown
 ```
 
-Profiles are labels. They do not change runtime behavior by themselves; they make reports comparable.
+Profiles are labels. They do not change runtime behavior by themselves. Compare the cohort rows, because runs with different agents, versions, isolation, manual mode, or integrity are not combined into one default pass rate.
 
 ## Troubleshooting
 

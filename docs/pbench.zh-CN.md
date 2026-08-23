@@ -381,7 +381,7 @@ public/
 
 ### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-通过已注册的 agent runner 以 headless 方式运行 finalized case。内置 agent：`codex`（沙箱 `--sandbox workspace-write`）与 `claude`（Claude Code `-p` headless）。评估完整性来自 public/private worktree 边界，而非 agent 自带沙箱，因此任何具备 headless runner 的 agent 都可作为目标。
+通过已注册的 agent runner 以 headless 方式运行 finalized case。内置 agent：`codex`（沙箱 `--sandbox workspace-write`）与 `claude`（Claude Code `-p` headless）。Codex run 记录为 `enforced` integrity。Claude 与 skill-mediated run 记录为 `instruction-only` integrity，因此默认不进入 pass-rate 分母。
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 
@@ -391,9 +391,9 @@ public/
 
 对 skill-mediated run 执行 private validation。它是一次性的；已经 finish 的 run 不能再次 finish。
 
-### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--format json|markdown]`
+### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--include-untrusted] [--format json|markdown]`
 
-按 status、case、profile、manual intervention、duration 和 token usage 聚合 run artifacts。默认输出 JSON；Markdown 适合人工阅读。
+报告会聚合所有观测到的 run artifacts，但默认 pass rate 只使用 terminal、已执行 validator、未污染且 integrity 为 `enforced` 的 run。可比较 cohort 会按 profile、agent、agent version、isolation、manual intervention 和 integrity 分组。running、setup-failed、contaminated、instruction-only 和旧版 `unknown` run 仍然可见，但计入 excluded counts。损坏的 run artifact 只产生安全 warning，不会阻断整份报告。使用 `--include-untrusted` 可把 instruction-only 和旧版 `unknown` run 纳入 evaluated 分母；contaminated run 仍然排除。默认输出 JSON；Markdown 适合人工阅读。
 
 ### `yk pbench audit [--case <case-id-or-dir>] [--workspace <path>]`
 
@@ -479,7 +479,7 @@ yk pbench run --case <case-id> --agent codex --profile current-model
 yk pbench report --format markdown
 ```
 
-profile 只是标签，本身不会改变 runtime 行为；它让 report 可以比较不同配置。
+profile 只是标签，本身不会改变 runtime 行为。比较时应查看 cohort 行；不同 agent、version、isolation、manual mode 或 integrity 的 run，不会合并成一个默认 pass rate。
 
 ## 故障排查
 
