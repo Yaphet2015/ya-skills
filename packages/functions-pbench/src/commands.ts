@@ -2,13 +2,11 @@ import type { FunctionCommand } from "@ya-skills/core";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ValidationResult } from "./authoring.js";
+import { normalizeRunProfile } from "./shared.js";
 
 type AuthoringCommandDependencies = Pick<
   typeof import("./authoring.js"),
   | "absolutePath"
-  | "auditPbenchCase"
-  | "auditPbenchWorkspace"
-  | "captureSession"
   | "exportReplayCapsule"
   | "finalizeTransaction"
   | "initWorkspace"
@@ -22,6 +20,9 @@ type AuthoringCommandDependencies = Pick<
 >;
 
 export type PbenchCommandDependencies = AuthoringCommandDependencies & {
+  captureSession: ReturnType<typeof import("./authoring.js").createAuthoring>["captureSession"];
+  auditPbenchCase: ReturnType<typeof import("./reporting.js").createPbenchAudit>["auditCase"];
+  auditPbenchWorkspace: ReturnType<typeof import("./reporting.js").createPbenchAudit>["auditWorkspace"];
   replay: ReturnType<typeof import("./replay.js").createReplay>;
   createPbenchReport: typeof import("./reporting.js").createPbenchReport;
   renderPbenchReportMarkdown: typeof import("./reporting.js").renderPbenchReportMarkdown;
@@ -29,10 +30,6 @@ export type PbenchCommandDependencies = AuthoringCommandDependencies & {
 
 type ParsedArgs = { options: Record<string, string | boolean>; positionals: string[] };
 export type PbenchCommandOptions = { home?: string };
-
-function normalizeRunProfile(value: string | undefined): string {
-  return value?.trim() || "default";
-}
 
 export function createCommands(dependencies: PbenchCommandDependencies, options: PbenchCommandOptions = {}): FunctionCommand[] {
   return [

@@ -1,11 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { asObject } from "../shared.js";
 import type { JsonObject } from "./types.js";
 
-export function asObject(value: unknown): JsonObject | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : null;
-}
+export { asObject } from "../shared.js";
 
 export function parseJsonlLines(text: string): JsonObject[] {
   return text

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, cp, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -662,7 +662,7 @@ describe("pbench case validation", () => {
   });
 });
 
-describe("pbench codex capture flow", () => {
+describe("pbench capture and replay flow", () => {
   test("asks for confirmation with session and baseline details before capture", async () => {
     const repo = await makeRepo();
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
@@ -1262,6 +1262,11 @@ describe("pbench codex capture flow", () => {
     const manifest = JSON.parse(await readFile(join(result.caseDir, "case.json"), "utf8"));
     const prompt = await readFile(join(result.caseDir, "public", "prompt.md"), "utf8");
     const observations = await readFile(join(result.caseDir, "public", "command-observations.md"), "utf8");
+    const privateDocuments = await Promise.all(
+      ["failure.md", "success.md", "verification.md"].map((name) =>
+        readFile(join(result.caseDir, "private", name), "utf8")
+      )
+    );
 
     expect(manifest.metadata.source.kind).toBe("claude-session");
     expect(manifest.metadata.source.sessionId).toBe("claude-session-1");
@@ -1269,6 +1274,8 @@ describe("pbench codex capture flow", () => {
     expect(prompt).toContain("Fix the login bug");
     expect(observations).toContain("bun run test");
     expect(observations).toContain("exitCode: 1");
+    expect(privateDocuments.join("\n")).toContain("coding-agent session history");
+    expect(privateDocuments.join("\n")).not.toContain("Codex session history");
     expect(result.state).toBe("ready-to-finalize");
     expect(result.nextAction).toBe(`yk pbench finalize --transaction ${result.transactionPath}`);
     await expect(
@@ -2184,6 +2191,32 @@ describe("pbench codex capture flow", () => {
     await expect(
       pbenchCommand("finish", prepared.home).run(["--run", started.runId])
     ).rejects.toThrow("already finished");
+  });
+
+  test("treats an atomic finishing marker as a consumed attempt after a crash", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const statePath = join(
+      prepared.home,
+      ".ya-skills",
+      "pbench",
+      "runs",
+      `${started.runId}.json`
+    );
+    await rename(statePath, `${statePath}.finishing`);
+
+    await expect(
+      pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    ).rejects.toThrow(`already finished: ${started.runId} (finishing)`);
   });
 
   test("allows only one concurrent finish to execute private validators", async () => {

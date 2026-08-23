@@ -1,11 +1,14 @@
 import type { FunctionCommand } from "@ya-skills/core";
+import runnerSkillMarkdown from "../assets/pbench-runner/SKILL.md" with { type: "text" };
+import { createCodexAgentRunner, createCodexSessionSource } from "./adapters/codex.js";
+import { createClaudeAgentRunner, createClaudeSessionSource } from "./adapters/claude.js";
+import type { AgentRunner, SessionSource } from "./adapters/types.js";
 import {
   absolutePath,
-  auditPbenchCase,
-  auditPbenchWorkspace,
-  captureSession,
+  createAuthoring,
   exportReplayCapsule,
   finalizeTransaction,
+  findAuthoringWarnings,
   initWorkspace,
   linkProject,
   resolveCaseDirInput,
@@ -16,17 +19,36 @@ import {
   validateCaseBundle
 } from "./authoring.js";
 import { createCommands, type PbenchCommandDependencies, type PbenchCommandOptions } from "./commands.js";
-import { createPbenchReport, renderPbenchReportMarkdown } from "./reporting.js";
+import { createPbenchAudit, createPbenchReport, renderPbenchReportMarkdown } from "./reporting.js";
+import { indexById } from "./registry.js";
 import { createReplay } from "./replay.js";
 
+const sessionSources = indexById<SessionSource>([
+  createCodexSessionSource(),
+  createClaudeSessionSource()
+]);
+const agentRunners = indexById<AgentRunner>([
+  createCodexAgentRunner(),
+  createClaudeAgentRunner()
+]);
+const authoring = createAuthoring({ sessionSources });
 const replay = createReplay({
-  validateCaseBundle: (caseDir) => validateCaseBundle(caseDir, { strict: false })
+  validateCaseBundle: (caseDir) => validateCaseBundle(caseDir, { strict: false }),
+  agentRunners,
+  runnerSkillMarkdown
 });
+const audit = createPbenchAudit({
+  validateCaseBundle: (caseDir) => validateCaseBundle(caseDir, { strict: false }),
+  findAuthoringWarnings
+});
+
+export const captureSession = authoring.captureSession;
+export const captureCodexSession = captureSession;
 
 const commandDependencies: PbenchCommandDependencies = {
   absolutePath,
-  auditPbenchCase,
-  auditPbenchWorkspace,
+  auditPbenchCase: audit.auditCase,
+  auditPbenchWorkspace: audit.auditWorkspace,
   captureSession,
   exportReplayCapsule,
   finalizeTransaction,
@@ -48,8 +70,6 @@ export function createPbenchCommands(options: PbenchCommandOptions = {}): Functi
 }
 
 export {
-  captureCodexSession,
-  captureSession,
   finalizeTransaction,
   initWorkspace,
   linkProject,

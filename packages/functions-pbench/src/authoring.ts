@@ -1,8 +1,29 @@
-import { createCodexSessionSource } from "./adapters/codex.js";
-import { createClaudeSessionSource } from "./adapters/claude.js";
 import type { JsonObject, NormalizedSession, SessionSource } from "./adapters/types.js";
-import { validateReplayBaseline } from "./replay.js";
+import { validateReplayBaseline } from "./evaluation.js";
+import {
+  assertPublicReplayHasNoPrivateReferences,
+  buildPublicCaseManifest,
+  normalizeReplayRequirements,
+  requiredReplayEnv,
+  type ReplayRequirements
+} from "./replay-boundary.js";
+import {
+  asArray,
+  asObject,
+  isMissingPathError,
+  isUtf8Text,
+  normalizeRunProfile,
+  nowIso,
+  pathExists,
+  readJson,
+  relativePathFrom,
+  safeRelativePath,
+  slugify,
+  stamp,
+  writeJson
+} from "./shared.js";
 import type { ValidatorOutcome } from "./run-types.js";
+export { slugify } from "./shared.js";
 export type { ValidatorOutcome } from "./run-types.js";
 import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -14,7 +35,6 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { createInterface } from "node:readline/promises";
 
 const MAX_PUBLIC_TEXT_FILE_BYTES = 64 * 1024;
-const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
 const VALIDATOR_AUTHORING_SENTINEL = "PBENCH_AUTHORING_REQUIRED";
 const PUBLIC_REPLAY_MANIFEST_PATH = "public/replay.manifest.json";
 const PUBLIC_CONTEXT_MANIFEST_PATH = "public/context.manifest.json";
@@ -23,31 +43,6 @@ const PUBLIC_COMMAND_OBSERVATIONS_PATH = "public/command-observations.md";
 const PBENCH_RUNNER_SKILL_NAME = "pbench-runner";
 const PRIVATE_PATH_PLACEHOLDER = "<private-path>";
 const SUBJECT_REPO_PLACEHOLDER = "<subject-repo>";
-
-function indexById<T extends { id: string }>(items: T[]): ReadonlyMap<string, T> {
-  if (items.length === 0) {
-    throw new Error("Adapter registry cannot be empty.");
-  }
-  const entries = new Map<string, T>();
-  for (const item of items) {
-    if (!item.id || entries.has(item.id)) {
-      throw new Error(`Adapter registry contains an empty or duplicate id: ${item.id}`);
-    }
-    entries.set(item.id, item);
-  }
-  return entries;
-}
-
-const SESSION_SOURCES = indexById<SessionSource>([
-  createCodexSessionSource(),
-  createClaudeSessionSource()
-]);
-type ReplayRequirements = {
-  profile: "local" | "live-integration";
-  network: "none" | "optional" | "required" | "unknown";
-  requiredEnv: string[];
-  notes: string[];
-};
 
 export type ValidationResult = {
   ok: boolean;
@@ -95,14 +90,6 @@ export type CapturePlan = {
 
 
 
-function nowIso(now = new Date()): string {
-  return now.toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
-function stamp(now = new Date()): string {
-  return now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-}
-
 function expandHome(path: string, home = homedir()): string {
   if (path === "~") {
     return home;
@@ -126,53 +113,6 @@ function defaultReplayRequirements(): ReplayRequirements {
   return { profile: "local", network: "unknown", requiredEnv: [], notes: [] };
 }
 
-function normalizeReplayRequirements(value: unknown): ReplayRequirements {
-  const object = asObject(value) ?? {};
-  const profile = object.profile === "live-integration" ? "live-integration" : "local";
-  const networkValues = new Set(["none", "optional", "required", "unknown"]);
-  const network = typeof object.network === "string" && networkValues.has(object.network) ? object.network : "unknown";
-  return {
-    profile,
-    network: network as ReplayRequirements["network"],
-    requiredEnv: Array.isArray(object.requiredEnv)
-      ? object.requiredEnv.filter((item): item is string => typeof item === "string" && item.length > 0)
-      : [],
-    notes: Array.isArray(object.notes)
-      ? object.notes.filter((item): item is string => typeof item === "string" && item.length > 0)
-      : []
-  };
-}
-
-function normalizeRunProfile(value: string | undefined): string {
-  const profile = value?.trim();
-  return profile ? profile : "default";
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return false;
-    }
-    throw error;
-  }
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
-}
-
-async function readJson(path: string): Promise<JsonObject> {
-  return JSON.parse(await readFile(path, "utf8")) as JsonObject;
-}
-
-async function writeJson(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
 function execGit(cwd: string, args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
@@ -182,17 +122,6 @@ function execGitDir(gitDir: string, args: string[]): string {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
   }).trim();
-}
-
-export function slugify(input: string): string {
-  const ascii = input
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-  return (ascii || "case").slice(0, 60).replace(/-+$/g, "") || "case";
 }
 
 export function makeCaseId(title: string, now = new Date()): string {
@@ -359,175 +288,6 @@ export async function exportReplayCapsule(options: {
   return { outDir: options.outDir, caseId: String(manifest.id ?? ""), exported: ["case.public.json", "public/"] };
 }
 
-function buildPublicCaseManifest(manifest: JsonObject): JsonObject {
-  const documents = asObject(manifest.documents) ?? {};
-  const publicDocuments = Object.fromEntries(
-    Object.entries(documents).filter(([, value]) => typeof value === "string" && value.startsWith("public/"))
-  );
-  const publicSubjects = asArray(manifest.subjects).map((subject) => {
-    const publicSubject = { ...subject };
-    delete publicSubject.sourceRootAtCapture;
-    return publicSubject;
-  });
-  return {
-    $schema: manifest.$schema,
-    schemaVersion: manifest.schemaVersion,
-    id: manifest.id,
-    title: manifest.title,
-    status: manifest.status,
-    privacy: manifest.privacy,
-    metadata: manifest.metadata,
-    documents: publicDocuments,
-    subjects: publicSubjects,
-    setupCommands: manifest.setupCommands,
-    replayRequirements: normalizeReplayRequirements(manifest.replayRequirements)
-  };
-}
-
-type AgentVisibleSurface = {
-  label: string;
-  text: string;
-};
-
-function forbiddenAgentVisibleHits(text: string, forbiddenPaths: string[]): string[] {
-  const hits: string[] = [];
-  if (/(^|[\s"'`(=:[{])\/private(?:\/[^\s"'`)<>\]}]*)?/.test(text)) {
-    hits.push("absolute /private path");
-  }
-  if (/(^|[\s"'`(=:[{])(?:\.\/)?private[\\/][^\s"'`)<>\]}]*/.test(text)) {
-    hits.push("private evaluator path");
-  }
-  if (/\bPB_PRIVATE_DIR\b/.test(text)) {
-    hits.push("PB_PRIVATE_DIR");
-  }
-  if (/\bPB_CASE_DIR\b/.test(text)) {
-    hits.push("PB_CASE_DIR");
-  }
-  if (/(^|[\s"'`(=:[{])[\w-]+-session\.jsonl\b/.test(text)) {
-    hits.push("raw transcript path");
-  }
-  for (const path of forbiddenPaths) {
-    if (path && text.includes(path)) {
-      hits.push("original case directory");
-    }
-  }
-  return [...new Set(hits)];
-}
-
-function assertNoAgentVisiblePrivateReferences(
-  surfaces: AgentVisibleSurface[],
-  options: { forbiddenPaths?: string[] } = {}
-): void {
-  const labels = new Set<string>();
-  const forbiddenPaths = (options.forbiddenPaths ?? []).filter((path) => path.length > 0);
-  for (const surface of surfaces) {
-    const hits = forbiddenAgentVisibleHits(surface.text, forbiddenPaths);
-    if (hits.length > 0) {
-      labels.add(`${surface.label} (${hits.join(", ")})`);
-    }
-  }
-  if (labels.size > 0) {
-    throw new Error(`Agent-visible pbench replay input contains private evaluator path references: ${[...labels].join(", ")}`);
-  }
-}
-
-async function assertPublicReplayHasNoPrivateReferences(
-  publicDir: string,
-  options: { caseDir?: string; extraSurfaces?: AgentVisibleSurface[] } = {}
-): Promise<void> {
-  const surfaces: AgentVisibleSurface[] = [];
-  for (const file of await listFilesRecursively(publicDir)) {
-    let text: string;
-    try {
-      text = await readFile(file, "utf8");
-    } catch {
-      continue;
-    }
-    surfaces.push({ label: `public/${relativePathFrom(publicDir, file)}`, text });
-  }
-  surfaces.push(...(options.extraSurfaces ?? []));
-  assertNoAgentVisiblePrivateReferences(surfaces, { forbiddenPaths: options.caseDir ? [options.caseDir] : [] });
-}
-
-async function listFilesRecursively(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listFilesRecursively(path)));
-    } else if (entry.isFile()) {
-      files.push(path);
-    }
-  }
-  return files;
-}
-
-export async function auditPbenchCase(caseDir: string): Promise<JsonObject> {
-  const validation = await validateCaseBundle(caseDir, { strict: false });
-  const warnings = [...validation.warnings, ...(await findAuthoringWarnings(caseDir))];
-  const errors = [...validation.errors];
-  try {
-    const manifest = await readJson(join(caseDir, "case.json"));
-    await assertPublicReplayHasNoPrivateReferences(join(caseDir, "public"), {
-      caseDir,
-      extraSurfaces: [{ label: "case.public.json", text: JSON.stringify(buildPublicCaseManifest(manifest), null, 2) }]
-    });
-  } catch (error) {
-    errors.push((error as Error).message);
-  }
-  let caseId = "";
-  try {
-    const manifest = await readJson(join(caseDir, "case.json"));
-    caseId = typeof manifest.id === "string" ? manifest.id : "";
-  } catch {
-    // validateCaseBundle already reports unreadable manifests.
-  }
-  return {
-    schemaVersion: 1,
-    caseId,
-    ok: errors.length === 0 && warnings.length === 0,
-    errors,
-    warnings
-  };
-}
-
-export async function auditPbenchWorkspace(workspaceRoot: string): Promise<JsonObject> {
-  const casesRoot = join(workspaceRoot, "cases");
-  if (!(await pathExists(casesRoot))) {
-    return {
-      schemaVersion: 1,
-      workspaceRoot,
-      ok: true,
-      totals: { cases: 0, passed: 0, failed: 0, warnings: 0 },
-      cases: []
-    };
-  }
-
-  const entries = (await readdir(casesRoot, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory())
-    .sort((left, right) => left.name.localeCompare(right.name));
-  const cases: JsonObject[] = [];
-  for (const entry of entries) {
-    const audit = await auditPbenchCase(join(casesRoot, entry.name));
-    cases.push({ ...audit, caseId: audit.caseId || entry.name });
-  }
-  const failed = cases.filter((audit) => audit.ok !== true).length;
-  const warnings = cases.reduce((total, audit) => total + (Array.isArray(audit.warnings) ? audit.warnings.length : 0), 0);
-  return {
-    schemaVersion: 1,
-    workspaceRoot,
-    ok: failed === 0,
-    totals: {
-      cases: cases.length,
-      passed: cases.length - failed,
-      failed,
-      warnings
-    },
-    cases
-  };
-}
-
 export function resolveGitRoot(cwdInput: string): string {
   try {
     return execGit(absolutePath(cwdInput), ["rev-parse", "--show-toplevel"]);
@@ -585,20 +345,6 @@ function syncRepoCache(
   const ref = `refs/personal-bench/cases/${caseId}/baseline`;
   execGitDir(repoCachePath, ["update-ref", ref, commit]);
   return { repoId, repoCachePath, ref };
-}
-
-function safeRelativePath(pathValue: unknown): string | null {
-  if (typeof pathValue !== "string" || pathValue.length === 0) {
-    return null;
-  }
-  if (isAbsolute(pathValue)) {
-    return null;
-  }
-  const normalized = pathValue.replace(/\\/g, "/");
-  if (normalized.split("/").includes("..")) {
-    return null;
-  }
-  return normalized;
 }
 
 async function ensureCaseSkeleton(caseDir: string): Promise<void> {
@@ -950,7 +696,7 @@ function buildAuthoringArtifacts(title: string, extracted: NormalizedSession, so
 }
 
 function renderFailureDocument(corrections: string[], errors: string[]): string {
-  const lines = ["# Failure", "", "Generated from captured Codex session history.", ""];
+  const lines = ["# Failure", "", "Generated from captured coding-agent session history.", ""];
   if (corrections.length > 0) {
     lines.push("## User Correction Evidence", "");
     lines.push(...corrections.map((message) => `- ${message}`), "");
@@ -966,7 +712,7 @@ function renderFailureDocument(corrections: string[], errors: string[]): string 
 }
 
 function renderSuccessDocument(title: string, prompt: string, corrections: string[]): string {
-  const lines = ["# Success Criteria", "", "Generated from captured Codex session history.", ""];
+  const lines = ["# Success Criteria", "", "Generated from captured coding-agent session history.", ""];
   const task = prompt || title;
   if (task) {
     lines.push("A future agent succeeds when it completes the captured task:", "", `- ${evidenceLine(task)}`, "");
@@ -982,7 +728,7 @@ function renderSuccessDocument(title: string, prompt: string, corrections: strin
 }
 
 function renderVerificationDocument(command: VerificationCommand | null): string {
-  const lines = ["# Verification", "", "Generated from captured Codex session history.", ""];
+  const lines = ["# Verification", "", "Generated from captured coding-agent session history.", ""];
   if (command) {
     if (command.replayCwd) {
       lines.push(
@@ -1473,16 +1219,6 @@ async function captureReplayStartCandidates(
   return replayStart;
 }
 
-function isUtf8Text(bytes: Uint8Array): boolean {
-  if (bytes.includes(0)) return false;
-  try {
-    TEXT_DECODER.decode(bytes);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function writeFailureDraft(caseDir: string, extracted: NormalizedSession): Promise<void> {
   const laterUserMessages = extracted.userMessages.slice(1);
   const lines = ["# Failure Draft", "", "This draft is generated from deterministic capture heuristics. Rewrite `private/failure.md` with the final failure statement.", ""];
@@ -1511,10 +1247,6 @@ async function writeFailureDraft(caseDir: string, extracted: NormalizedSession):
 
 function execGitRaw(cwd: string, args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-}
-
-function relativePathFrom(root: string, path: string): string {
-  return relative(root, path).replace(/\\/g, "/");
 }
 
 function publicRepoPath(path: string, repoRoot: string): string {
@@ -1592,7 +1324,7 @@ export async function validateAuthoringDraft(caseDir: string): Promise<Validatio
   };
 }
 
-async function findAuthoringWarnings(caseDir: string): Promise<string[]> {
+export async function findAuthoringWarnings(caseDir: string): Promise<string[]> {
   const warnings: string[] = [];
   const prompt = await readFile(join(caseDir, "public", "prompt.md"), "utf8");
   if (prompt.trim().length === 0) {
@@ -1640,14 +1372,6 @@ function validatePathField(errors: string[], field: string, value: unknown): str
   return safe;
 }
 
-function asObject(value: unknown): JsonObject | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : null;
-}
-
-function asArray(value: unknown): JsonObject[] {
-  return Array.isArray(value) ? value.filter((item): item is JsonObject => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
 function validateManifestShape(manifest: JsonObject, errors: string[]): void {
   if (manifest.schemaVersion !== 1) {
     errors.push("/schemaVersion must be 1");
@@ -1685,23 +1409,6 @@ function validateManifestShape(manifest: JsonObject, errors: string[]): void {
   } else if (replayStartStatus === "unresolved") {
     errors.push("START_STATE_UNRESOLVED: choose baseline or curate replay-start files");
   }
-}
-
-function requiredReplayEnv(manifest: JsonObject): string[] {
-  const names = new Set<string>();
-  for (const name of normalizeReplayRequirements(manifest.replayRequirements).requiredEnv) {
-    names.add(name);
-  }
-  for (const validator of asArray(manifest.validators)) {
-    if (Array.isArray(validator.requiredEnv)) {
-      for (const name of validator.requiredEnv) {
-        if (typeof name === "string" && name.length > 0) {
-          names.add(name);
-        }
-      }
-    }
-  }
-  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 function validateRequiredReplayEnv(manifest: JsonObject, errors: string[]): void {
@@ -1829,13 +1536,6 @@ export function createAuthoring(dependencies: AuthoringDependencies) {
     validateCaseBundle,
     strictValidateTransaction,
     finalizeTransaction,
-    exportReplayCapsule,
-    auditPbenchCase,
-    auditPbenchWorkspace
+    exportReplayCapsule
   };
 }
-
-const BUILT_IN_AUTHORING = createAuthoring({ sessionSources: SESSION_SOURCES });
-
-export const captureSession = BUILT_IN_AUTHORING.captureSession;
-export const captureCodexSession = captureSession;

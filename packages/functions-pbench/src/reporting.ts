@@ -1,7 +1,12 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { JsonObject } from "./adapters/types.js";
+import {
+  assertPublicReplayHasNoPrivateReferences,
+  buildPublicCaseManifest
+} from "./replay-boundary.js";
 import { PBENCH_RUN_STATUSES, type PbenchIntegrity } from "./run-types.js";
+import { asArray, asObject, normalizeRunProfile, pathExists, readJson } from "./shared.js";
 
 export type ReportQuery = {
   workspaceRoot: string;
@@ -34,39 +39,6 @@ type PbenchReportRun = {
   createdAt: string | null;
   updatedAt: string | null;
 };
-
-function asObject(value: unknown): JsonObject | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : null;
-}
-
-function asArray(value: unknown): JsonObject[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is JsonObject => Boolean(item) && typeof item === "object" && !Array.isArray(item))
-    : [];
-}
-
-function normalizeRunProfile(value: string | undefined): string {
-  const profile = value?.trim();
-  return profile ? profile : "default";
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) return false;
-    throw error;
-  }
-}
-
-async function readJson(path: string): Promise<JsonObject> {
-  return JSON.parse(await readFile(path, "utf8")) as JsonObject;
-}
 
 async function readRunArtifact(path: string): Promise<JsonObject> {
   try {
@@ -394,6 +366,77 @@ function formatCountRecord(value: unknown): string {
   return Object.entries(record)
     .map(([key, count]) => `${key}: ${String(count)}`)
     .join(", ");
+}
+
+export type AuditDependencies = {
+  validateCaseBundle(caseDir: string): Promise<{ errors: string[]; warnings: string[] }>;
+  findAuthoringWarnings(caseDir: string): Promise<string[]>;
+};
+
+export function createPbenchAudit(dependencies: AuditDependencies) {
+  async function auditCase(caseDir: string): Promise<JsonObject> {
+    const validation = await dependencies.validateCaseBundle(caseDir);
+    const warnings = [...validation.warnings, ...await dependencies.findAuthoringWarnings(caseDir)];
+    const errors = [...validation.errors];
+    try {
+      const manifest = await readJson(join(caseDir, "case.json"));
+      await assertPublicReplayHasNoPrivateReferences(join(caseDir, "public"), {
+        caseDir,
+        extraSurfaces: [{ label: "case.public.json", text: JSON.stringify(buildPublicCaseManifest(manifest), null, 2) }]
+      });
+    } catch (error) {
+      errors.push((error as Error).message);
+    }
+    let caseId = "";
+    try {
+      const manifest = await readJson(join(caseDir, "case.json"));
+      caseId = typeof manifest.id === "string" ? manifest.id : "";
+    } catch {
+      // Validation already reports unreadable manifests.
+    }
+    return {
+      schemaVersion: 1,
+      caseId,
+      ok: errors.length === 0 && warnings.length === 0,
+      errors,
+      warnings
+    };
+  }
+
+  async function auditWorkspace(workspaceRoot: string): Promise<JsonObject> {
+    const casesRoot = join(workspaceRoot, "cases");
+    if (!(await pathExists(casesRoot))) {
+      return {
+        schemaVersion: 1,
+        workspaceRoot,
+        ok: true,
+        totals: { cases: 0, passed: 0, failed: 0, warnings: 0 },
+        cases: []
+      };
+    }
+    const entries = (await readdir(casesRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const cases: JsonObject[] = [];
+    for (const entry of entries) {
+      const audit = await auditCase(join(casesRoot, entry.name));
+      cases.push({ ...audit, caseId: audit.caseId || entry.name });
+    }
+    const failed = cases.filter((audit) => audit.ok !== true).length;
+    const warnings = cases.reduce(
+      (total, audit) => total + (Array.isArray(audit.warnings) ? audit.warnings.length : 0),
+      0
+    );
+    return {
+      schemaVersion: 1,
+      workspaceRoot,
+      ok: failed === 0,
+      totals: { cases: cases.length, passed: cases.length - failed, failed, warnings },
+      cases
+    };
+  }
+
+  return { auditCase, auditWorkspace };
 }
 
 export function renderPbenchReportMarkdown(report: JsonObject): string {

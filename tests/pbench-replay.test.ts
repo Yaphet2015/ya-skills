@@ -3,7 +3,9 @@ import { createReplay } from "../packages/functions-pbench/src/replay.js";
 
 test("replay rejects unknown runners before creating run state", async () => {
   const replay = createReplay({
-    validateCaseBundle: async () => ({ ok: true, errors: [] })
+    validateCaseBundle: async () => ({ ok: true, errors: [] }),
+    agentRunners: new Map(),
+    runnerSkillMarkdown: ""
   });
 
   await expect(
@@ -22,7 +24,9 @@ test("manual replay delegates case validation through its lifecycle boundary", a
     validateCaseBundle: async (caseDir) => {
       validatedCase = caseDir;
       return { ok: false, errors: ["invalid fixture"] };
-    }
+    },
+    agentRunners: new Map(),
+    runnerSkillMarkdown: ""
   });
 
   await expect(

@@ -1,18 +1,42 @@
 import { detectSkillTargets } from "@ya-skills/core";
-import runnerSkillMarkdown from "../assets/pbench-runner/SKILL.md" with { type: "text" };
-import { createCodexAgentRunner } from "./adapters/codex.js";
-import { createClaudeAgentRunner } from "./adapters/claude.js";
 import type { AgentRunner, JsonObject } from "./adapters/types.js";
+import {
+  cleanupReplayWorktree,
+  createReplayWorktree,
+  privateValidatorEnv,
+  runSetupCommands,
+  runValidators
+} from "./evaluation.js";
+import {
+  assertPublicReplayHasNoPrivateReferences,
+  buildPublicCaseManifest,
+  requiredReplayEnv,
+  type AgentVisibleSurface
+} from "./replay-boundary.js";
+import {
+  asArray,
+  asObject,
+  decodeUtf8Text,
+  isMissingPathError,
+  isUtf8Text,
+  normalizeRunProfile,
+  nowIso,
+  pathExists,
+  readJson,
+  safeRelativePath,
+  slugify,
+  stamp,
+  writeJson
+} from "./shared.js";
 import type { PbenchIntegrity, PbenchRunStatus, ValidatorOutcome } from "./run-types.js";
 import { randomBytes } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { chmod, cp, mkdir, open, readdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { arch, homedir, platform, release } from "node:os";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 
 const MAX_PUBLIC_TEXT_FILE_BYTES = 64 * 1024;
-const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
 const PUBLIC_REPLAY_MANIFEST_PATH = "public/replay.manifest.json";
 const PBENCH_RUNNER_SKILL_NAME = "pbench-runner";
 
@@ -29,86 +53,13 @@ type RunState = JsonObject & {
 
 type RunEvent = { phase: "setup" | "agent" | "validator" | "finish"; status: string; at: string; message?: string; exitCode?: number | null };
 
-function indexById<T extends { id: string }>(items: T[]): Record<string, T> {
-  return Object.fromEntries(items.map((item) => [item.id, item]));
-}
-const AGENT_RUNNERS = indexById<AgentRunner>([createCodexAgentRunner(), createClaudeAgentRunner()]);
-
 export type RunCaseRequest = { caseDir: string; workspaceRoot: string; home?: string; profile: string; agent: string };
 export type StartManualRunRequest = Omit<RunCaseRequest, "agent"> & { contaminated?: boolean };
 export type ReplayDependencies = {
   validateCaseBundle(caseDir: string): Promise<{ ok: boolean; errors: string[] }>;
+  agentRunners: ReadonlyMap<string, AgentRunner>;
+  runnerSkillMarkdown: string;
 };
-
-type ReplayRequirements = {
-  profile: "local" | "live-integration";
-  network: "none" | "optional" | "required" | "unknown";
-  requiredEnv: string[];
-  notes: string[];
-};
-
-type AgentVisibleSurface = { label: string; text: string };
-
-function asObject(value: unknown): JsonObject | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : null;
-}
-
-function asArray(value: unknown): JsonObject[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is JsonObject => Boolean(item) && typeof item === "object" && !Array.isArray(item))
-    : [];
-}
-
-function nowIso(now = new Date()): string {
-  return now.toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
-function stamp(now = new Date()): string {
-  return now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-}
-
-function slugify(input: string): string {
-  return input
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-") || "untitled";
-}
-
-function normalizeRunProfile(value: string | undefined): string {
-  return value?.trim() || "default";
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) return false;
-    throw error;
-  }
-}
-
-async function readJson(path: string): Promise<JsonObject> {
-  return JSON.parse(await readFile(path, "utf8")) as JsonObject;
-}
-
-async function writeJson(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-function safeRelativePath(value: unknown): string | null {
-  if (typeof value !== "string" || value.length === 0 || isAbsolute(value)) return null;
-  const normalized = value.replace(/\\/g, "/");
-  return normalized.split("/").includes("..") ? null : normalized;
-}
 
 function execGit(cwd: string, args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -125,206 +76,8 @@ function execGitDir(gitDir: string, args: string[]): string {
   }).trim();
 }
 
-function normalizeReplayRequirements(value: unknown): ReplayRequirements {
-  const object = asObject(value) ?? {};
-  const network = ["none", "optional", "required", "unknown"].includes(String(object.network))
-    ? String(object.network) as ReplayRequirements["network"]
-    : "unknown";
-  return {
-    profile: object.profile === "live-integration" ? "live-integration" : "local",
-    network,
-    requiredEnv: Array.isArray(object.requiredEnv)
-      ? object.requiredEnv.filter((item): item is string => typeof item === "string" && item.length > 0)
-      : [],
-    notes: Array.isArray(object.notes)
-      ? object.notes.filter((item): item is string => typeof item === "string" && item.length > 0)
-      : []
-  };
-}
-
-function requiredReplayEnv(manifest: JsonObject): string[] {
-  const names = new Set(normalizeReplayRequirements(manifest.replayRequirements).requiredEnv);
-  for (const validator of asArray(manifest.validators)) {
-    if (!Array.isArray(validator.requiredEnv)) continue;
-    for (const name of validator.requiredEnv) {
-      if (typeof name === "string" && name.length > 0) names.add(name);
-    }
-  }
-  return [...names].sort((left, right) => left.localeCompare(right));
-}
-
-function buildPublicCaseManifest(manifest: JsonObject): JsonObject {
-  const documents = asObject(manifest.documents) ?? {};
-  const publicDocuments = Object.fromEntries(
-    Object.entries(documents).filter(([, value]) => typeof value === "string" && value.startsWith("public/"))
-  );
-  const subjects = asArray(manifest.subjects).map((subject) => {
-    const copy = { ...subject };
-    delete copy.sourceRootAtCapture;
-    return copy;
-  });
-  return {
-    $schema: manifest.$schema,
-    schemaVersion: manifest.schemaVersion,
-    id: manifest.id,
-    title: manifest.title,
-    status: manifest.status,
-    privacy: manifest.privacy,
-    metadata: manifest.metadata,
-    documents: publicDocuments,
-    subjects,
-    setupCommands: manifest.setupCommands,
-    replayRequirements: normalizeReplayRequirements(manifest.replayRequirements)
-  };
-}
-
-function forbiddenAgentVisibleHits(text: string, forbiddenPaths: string[]): string[] {
-  const hits: string[] = [];
-  if (/(^|[\s"'`(=:[{])\/private(?:\/[^\s"'`)>\]}]*)?/.test(text)) hits.push("absolute /private path");
-  if (/(^|[\s"'`(=:[{])(?:\.\/)?private[\\/][^\s"'`)>\]}]*/.test(text)) hits.push("private evaluator path");
-  if (/\bPB_PRIVATE_DIR\b/.test(text)) hits.push("PB_PRIVATE_DIR");
-  if (/\bPB_CASE_DIR\b/.test(text)) hits.push("PB_CASE_DIR");
-  if (/(^|[\s"'`(=:[{])[\w-]+-session\.jsonl\b/.test(text)) hits.push("raw transcript path");
-  for (const path of forbiddenPaths) if (path && text.includes(path)) hits.push("original case directory");
-  return [...new Set(hits)];
-}
-
-function assertNoAgentVisiblePrivateReferences(
-  surfaces: AgentVisibleSurface[],
-  options: { forbiddenPaths?: string[] } = {}
-): void {
-  const labels = new Set<string>();
-  for (const surface of surfaces) {
-    const hits = forbiddenAgentVisibleHits(surface.text, options.forbiddenPaths ?? []);
-    if (hits.length > 0) labels.add(`${surface.label} (${hits.join(", ")})`);
-  }
-  if (labels.size > 0) {
-    throw new Error(`Agent-visible pbench replay input contains private evaluator path references: ${[...labels].join(", ")}`);
-  }
-}
-
-async function listFilesRecursively(root: string): Promise<string[]> {
-  const files: string[] = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...await listFilesRecursively(path));
-    else if (entry.isFile()) files.push(path);
-  }
-  return files;
-}
-
-async function assertPublicReplayHasNoPrivateReferences(
-  publicDir: string,
-  options: { caseDir?: string; extraSurfaces?: AgentVisibleSurface[] } = {}
-): Promise<void> {
-  const surfaces: AgentVisibleSurface[] = [];
-  for (const file of await listFilesRecursively(publicDir)) {
-    try {
-      surfaces.push({ label: `public/${relative(publicDir, file).replace(/\\/g, "/")}`, text: await readFile(file, "utf8") });
-    } catch {
-      // Ignore non-text public files.
-    }
-  }
-  surfaces.push(...(options.extraSurfaces ?? []));
-  assertNoAgentVisiblePrivateReferences(surfaces, { forbiddenPaths: options.caseDir ? [options.caseDir] : [] });
-}
-
 function repoCacheForSubject(workspaceRoot: string, subject: JsonObject): string {
   return join(workspaceRoot, "repos", `${String(subject.repoId)}.git`);
-}
-
-async function createReplayWorktree(repoCache: string, commit: string, workspaceRoot: string, runId: string): Promise<string> {
-  const runRoot = join(workspaceRoot, ".personal-bench", "replays", runId);
-  const worktree = join(runRoot, "worktree");
-  await rm(runRoot, { recursive: true, force: true });
-  await mkdir(runRoot, { recursive: true });
-  execGitDir(repoCache, ["worktree", "add", "--detach", worktree, commit]);
-  return worktree;
-}
-
-async function cleanupReplayWorktree(repoCache: string, worktree: string): Promise<void> {
-  try {
-    execGitDir(repoCache, ["worktree", "remove", "--force", worktree]);
-  } catch {
-    // Fall through to filesystem cleanup.
-  }
-  await rm(basename(worktree) === "worktree" ? dirname(worktree) : worktree, { recursive: true, force: true });
-}
-
-function runShell(command: string, cwd: string, timeoutSeconds: number, env: NodeJS.ProcessEnv): ValidatorOutcome {
-  const result = spawnSync(command, { cwd, shell: true, encoding: "utf8", timeout: timeoutSeconds * 1000, env });
-  const exitCode = result.status ?? (result.signal ? 124 : null);
-  return {
-    id: command,
-    expected: "pass",
-    actual: exitCode === 0 ? "pass" : "fail",
-    exitCode,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? ""
-  };
-}
-
-async function runValidators(options: {
-  caseDir: string;
-  manifest: JsonObject;
-  replayRoot: string;
-  env: NodeJS.ProcessEnv;
-  expectedMode: "baseline" | "candidate";
-  errors: string[];
-}): Promise<ValidatorOutcome[]> {
-  const outcomes: ValidatorOutcome[] = [];
-  const validators = asArray(options.manifest.validators);
-  if (!validators.some((validator) => validator.purpose === "completion")) {
-    options.errors.push("At least one completion validator is required.");
-  }
-  for (const validator of validators) {
-    const expected = options.expectedMode === "candidate"
-      ? "pass"
-      : validator.baselineExpected === "pass" ? "pass" : "fail";
-    let outcome: ValidatorOutcome;
-    if (validator.type === "command") {
-      const command = String(validator.command ?? "");
-      const cwd = join(options.replayRoot, safeRelativePath(validator.cwd ?? ".") ?? ".");
-      outcome = runShell(command, cwd, Number(validator.timeoutSeconds ?? 120), options.env);
-      outcome.id = String(validator.id ?? command);
-    } else {
-      const scriptPath = join(options.caseDir, String(validator.path));
-      await chmod(scriptPath, 0o755).catch(() => undefined);
-      const cwd = join(options.replayRoot, safeRelativePath(validator.cwd ?? ".") ?? ".");
-      const result = spawnSync("node", [scriptPath], {
-        cwd,
-        encoding: "utf8",
-        timeout: Number(validator.timeoutSeconds ?? 120) * 1000,
-        env: options.env
-      });
-      const exitCode = result.status ?? (result.signal ? 124 : null);
-      outcome = {
-        id: String(validator.id ?? validator.path),
-        expected,
-        actual: exitCode === 0 ? "pass" : "fail",
-        exitCode,
-        stdout: result.stdout ?? "",
-        stderr: result.stderr ?? ""
-      };
-    }
-    outcome.expected = expected;
-    outcomes.push(outcome);
-    if (outcome.actual !== expected) {
-      const label = options.expectedMode === "baseline" ? "baseline outcome" : "candidate outcome";
-      options.errors.push(`Validator ${outcome.id} ${label} ${outcome.actual}, expected ${expected}.\n${outcome.stderr || outcome.stdout}`);
-    }
-  }
-  return outcomes;
-}
-
-function isUtf8Text(bytes: Uint8Array): boolean {
-  if (bytes.includes(0)) return false;
-  try {
-    TEXT_DECODER.decode(bytes);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function pbenchRunStateRoot(home = homedir()): string {
@@ -333,6 +86,10 @@ function pbenchRunStateRoot(home = homedir()): string {
 
 function runStatePath(home: string | undefined, runId: string): string {
   return join(pbenchRunStateRoot(home ?? homedir()), `${runId}.json`);
+}
+
+function finishingStatePath(home: string | undefined, runId: string): string {
+  return `${runStatePath(home, runId)}.finishing`;
 }
 
 function makeRunId(caseId: string): string {
@@ -357,7 +114,7 @@ function publicRunFile(runId: string): JsonObject {
 
 type InstalledRunnerSkill = { directories: string[]; createdParentDirectories: string[] };
 
-async function installRunnerSkill(worktree: string): Promise<InstalledRunnerSkill> {
+async function installRunnerSkill(worktree: string, skillMarkdown: string): Promise<InstalledRunnerSkill> {
   const knownPaths = [
     join(worktree, ".claude"),
     join(worktree, ".claude", "skills"),
@@ -390,7 +147,7 @@ async function installRunnerSkill(worktree: string): Promise<InstalledRunnerSkil
     for (const directory of directories) {
       await mkdir(directory, { recursive: true });
       created.push(directory);
-      await writeFile(join(directory, "SKILL.md"), runnerSkillMarkdown);
+      await writeFile(join(directory, "SKILL.md"), skillMarkdown);
     }
     return { directories, createdParentDirectories };
   } catch (error) {
@@ -505,12 +262,25 @@ function runnerPathAliases(worktree: string): Array<{ actual: string; replacemen
 
 async function saveRunState(state: RunState, home?: string): Promise<void> {
   state.updatedAt = nowIso();
-  await writeJson(runStatePath(home, state.runId), state);
+  const statePath = state.status === "finishing" && !state.terminal
+    ? finishingStatePath(home, state.runId)
+    : runStatePath(home, state.runId);
+  await writeJson(statePath, state);
   await writeJson(join(state.artifactDir, "run.json"), state);
+  if (state.terminal) {
+    await rm(finishingStatePath(home, state.runId), { force: true });
+  }
 }
 
 async function readRunState(runId: string, home?: string): Promise<RunState> {
-  return (await readJson(runStatePath(home, runId))) as RunState;
+  try {
+    return (await readJson(runStatePath(home, runId))) as RunState;
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+    const state = (await readJson(finishingStatePath(home, runId))) as RunState;
+    state.status = "finishing";
+    return state;
+  }
 }
 
 async function writeRunSummary(state: RunState, details: string[] = []): Promise<string> {
@@ -544,7 +314,7 @@ function commandVersion(command: string, args: string[] = ["--version"]): string
   }
 }
 
-async function writeRunnerEnvironment(state: RunState): Promise<void> {
+async function writeRunnerEnvironment(state: RunState, agentRunners: ReadonlyMap<string, AgentRunner>): Promise<void> {
   await writeJson(join(state.artifactDir, "runner-environment.json"), {
     schemaVersion: 1,
     runId: state.runId,
@@ -562,7 +332,7 @@ async function writeRunnerEnvironment(state: RunState): Promise<void> {
     },
     tools: {
       git: commandVersion("git", ["--version"]),
-      ...(AGENT_RUNNERS[state.agentMode] ? { [state.agentMode]: state.agentVersion } : {})
+      ...(agentRunners.has(state.agentMode) ? { [state.agentMode]: state.agentVersion } : {})
     },
     requiredEnv: state.requiredEnv.map((name) => ({ name, present: Boolean(process.env[name]) }))
   });
@@ -769,35 +539,6 @@ function publicRunnerEnv(worktree: string): NodeJS.ProcessEnv {
   return env;
 }
 
-function privateValidatorEnv(caseDir: string, worktree: string): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    PB_CASE_DIR: caseDir,
-    PB_PUBLIC_DIR: join(caseDir, "public"),
-    PB_PRIVATE_DIR: join(caseDir, "private"),
-    PB_REPLAY_DIR: worktree
-  };
-}
-
-function runSetupCommands(manifest: JsonObject, worktree: string, env: NodeJS.ProcessEnv): ValidatorOutcome[] {
-  const outcomes: ValidatorOutcome[] = [];
-  for (const setup of asArray(manifest.setupCommands)) {
-    const command = String(setup.command ?? "");
-    if (!command) {
-      continue;
-    }
-    const cwd = join(worktree, safeRelativePath(setup.cwd ?? ".") ?? ".");
-    const outcome = runShell(command, cwd, Number(setup.timeoutSeconds ?? 300), env);
-    outcome.id = command;
-    outcome.expected = "pass";
-    outcomes.push(outcome);
-    if (outcome.actual !== "pass") {
-      break;
-    }
-  }
-  return outcomes;
-}
-
 async function writeAgentDiff(
   worktree: string,
   artifactDir: string,
@@ -860,7 +601,7 @@ async function writeCandidateArtifacts(options: {
     }
     const destination = join(copiedRoot, safe);
     await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, options.redactor(TEXT_DECODER.decode(bytes)));
+    await writeFile(destination, options.redactor(decodeUtf8Text(bytes)));
     files.push({ path: safe, status: "copied", sizeBytes: info.size, artifactPath: `candidate/untracked/${safe}` });
   }
   await writeJson(join(candidateDir, "untracked.json"), {
@@ -910,7 +651,10 @@ async function createStartedRun(options: {
   const worktree = await createReplayWorktree(repoCache, commit, options.workspaceRoot, runId);
   const redactor = makeRedactor(requiredEnv, runnerPathAliases(worktree));
   const prior = await priorAttempts(options.workspaceRoot, caseId, options.profile);
-  const isolation = options.agentMode === "skill" ? "none" : AGENT_RUNNERS[options.agentMode]?.defaultIsolation ?? "none";
+  let isolation: PbenchIsolation = "none";
+  if (options.agentMode !== "skill") {
+    isolation = dependencies.agentRunners.get(options.agentMode)?.defaultIsolation ?? "none";
+  }
   const contaminated = options.contaminated === true;
   const state: RunState = {
     schemaVersion: 1,
@@ -929,7 +673,7 @@ async function createStartedRun(options: {
     isolation,
     integrity: contaminated ? "contaminated" : "instruction-only",
     validatorExecuted: false,
-    agentVersion: AGENT_RUNNERS[options.agentMode]?.versionProbe(process.env) ?? null,
+    agentVersion: dependencies.agentRunners.get(options.agentMode)?.versionProbe(process.env) ?? null,
     attemptNumber: prior.runIds.length + 1,
     priorRunIds: prior.runIds,
     contaminated,
@@ -940,7 +684,7 @@ async function createStartedRun(options: {
 
   let installedRunnerSkill: InstalledRunnerSkill = { directories: [], createdParentDirectories: [] };
   try {
-    await writeRunnerEnvironment(state);
+    await writeRunnerEnvironment(state, dependencies.agentRunners);
     await preparePublicCapsule(options.caseDir, manifest, worktree, runId);
     await applyStartingPatch(options.caseDir, worktree);
     const setupOutcomes = runSetupCommands(manifest, worktree, publicRunnerEnv(worktree));
@@ -964,7 +708,7 @@ async function createStartedRun(options: {
       }
     }
     if (options.agentMode === "skill") {
-      installedRunnerSkill = await installRunnerSkill(worktree);
+      installedRunnerSkill = await installRunnerSkill(worktree, dependencies.runnerSkillMarkdown);
       state.runnerSkillDirs = installedRunnerSkill.directories;
       state.runnerSkillParentDirs = installedRunnerSkill.createdParentDirectories;
     }
@@ -1007,11 +751,14 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
   state.status = passed ? "passed" : "validator_failed";
   state.terminal = true;
   state.finishedAt = nowIso();
-  const summaryDetails = passed
-    ? ["Private validators passed."]
-    : skillMode
-      ? validatorFailureSummaryRedacted(failingValidatorId)
-      : validatorFailureSummary(outcomes);
+  let summaryDetails: string[];
+  if (passed) {
+    summaryDetails = ["Private validators passed."];
+  } else if (skillMode) {
+    summaryDetails = validatorFailureSummaryRedacted(failingValidatorId);
+  } else {
+    summaryDetails = validatorFailureSummary(outcomes);
+  }
   await writeRunSummary(state, summaryDetails);
   await writeTerminalRunArtifacts(state, {
     events: [
@@ -1028,9 +775,9 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
 
 async function runCase(options: RunCaseRequest, dependencies: ReplayDependencies): Promise<JsonObject> {
   const agent = options.agent ?? "codex";
-  const runner = AGENT_RUNNERS[agent];
+  const runner = dependencies.agentRunners.get(agent);
   if (!runner) {
-    throw new Error(`Unknown agent runner "${agent}". Known agents: ${Object.keys(AGENT_RUNNERS).join(", ")}.`);
+    throw new Error(`Unknown agent runner "${agent}". Known agents: ${[...dependencies.agentRunners.keys()].join(", ")}.`);
   }
   const { state, manifest, redactor } = await createStartedRun({ ...options, agentMode: agent }, dependencies);
   if (state.terminal) {
@@ -1133,37 +880,26 @@ async function summarizeAccessAudit(worktree: string): Promise<{ readCount: numb
   return { readCount, sensitiveReads, suspicious: sensitiveReads.length > 0 };
 }
 
-async function acquireFinishLock(runId: string, home?: string): Promise<void> {
-  const lockPath = `${runStatePath(home, runId)}.finish.lock`;
-  let handle;
+async function acquireFinishingState(runId: string, home?: string): Promise<RunState> {
   try {
-    handle = await open(lockPath, "wx");
+    await rename(runStatePath(home, runId), finishingStatePath(home, runId));
   } catch (error) {
-    const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
-    if (code === "EEXIST") {
-      throw new Error(`PBench run already finished: ${runId} (finishing)`);
-    }
-    throw error;
+    if (!isMissingPathError(error)) throw error;
+    const existing = await readRunState(runId, home);
+    throw new Error(`PBench run already finished: ${existing.runId} (${existing.status})`);
   }
-  try {
-    await handle.writeFile(`${nowIso()}\n`);
-  } finally {
-    await handle.close();
-  }
+  const state = (await readJson(finishingStatePath(home, runId))) as RunState;
+  state.status = "finishing";
+  await saveRunState(state, home);
+  return state;
 }
 
 async function finishRun(options: { runId: string; home?: string }): Promise<JsonObject> {
-  let state = await readRunState(options.runId, options.home);
-  if (state.terminal || state.status !== "running") {
-    throw new Error(`PBench run already finished: ${state.runId} (${state.status})`);
+  const initial = await readRunState(options.runId, options.home);
+  if (initial.terminal || initial.status !== "running") {
+    throw new Error(`PBench run already finished: ${initial.runId} (${initial.status})`);
   }
-  await acquireFinishLock(options.runId, options.home);
-  state = await readRunState(options.runId, options.home);
-  if (state.terminal || state.status !== "running") {
-    throw new Error(`PBench run already finished: ${state.runId} (${state.status})`);
-  }
-  state.status = "finishing";
-  await saveRunState(state, options.home);
+  const state = await acquireFinishingState(options.runId, options.home);
 
   try {
     await removeInstalledRunnerSkill({
@@ -1226,73 +962,6 @@ async function priorAttempts(workspaceRoot: string, caseId: string, profile: str
   return { runIds };
 }
 
-export async function validateReplayBaseline(options: {
-  caseDir: string;
-  manifest: JsonObject;
-  workspaceRoot: string;
-  errors: string[];
-}): Promise<ValidatorOutcome[]> {
-  const subject = asArray(options.manifest.subjects)[0];
-  if (!subject) {
-    options.errors.push("V1 requires exactly one git subject.");
-    return [];
-  }
-  const baseline = asObject(subject.baseline);
-  const commit = String(baseline?.commit ?? "");
-  const repoCache = repoCacheForSubject(options.workspaceRoot, subject);
-  if (!(await pathExists(repoCache))) {
-    options.errors.push(`Missing repo cache: ${repoCache}`);
-    return [];
-  }
-  try {
-    execGitDir(repoCache, ["cat-file", "-e", `${commit}^{commit}`]);
-  } catch {
-    options.errors.push(`Baseline commit not present in repo cache: ${commit}`);
-    return [];
-  }
-  if (baseline?.ref) {
-    try {
-      const refCommit = execGitDir(repoCache, ["rev-parse", String(baseline.ref)]);
-      if (refCommit !== commit) {
-        options.errors.push(`Baseline ref ${String(baseline.ref)} points to ${refCommit}, expected ${commit}`);
-      }
-    } catch {
-      options.errors.push(`Missing baseline ref: ${String(baseline.ref)}`);
-    }
-  }
-  if (options.errors.length > 0) return [];
-
-  const replayRoot = await createReplayWorktree(
-    repoCache,
-    commit,
-    options.workspaceRoot,
-    `strict_${slugify(String(options.manifest.id ?? "case"))}_${stamp()}_${randomBytes(4).toString("hex")}`
-  );
-  const outcomes: ValidatorOutcome[] = [];
-  try {
-    const env = privateValidatorEnv(options.caseDir, replayRoot);
-    for (const setupOutcome of runSetupCommands(options.manifest, replayRoot, env)) {
-      if (setupOutcome.actual !== "pass") {
-        options.errors.push(`Setup command failed: ${setupOutcome.id}\n${setupOutcome.stderr || setupOutcome.stdout}`);
-        return outcomes;
-      }
-    }
-    outcomes.push(
-      ...await runValidators({
-        caseDir: options.caseDir,
-        manifest: options.manifest,
-        replayRoot,
-        env,
-        expectedMode: "baseline",
-        errors: options.errors
-      })
-    );
-    return outcomes;
-  } finally {
-    await cleanupReplayWorktree(repoCache, replayRoot);
-  }
-}
-
 export function createReplay(dependencies: ReplayDependencies) {
   return {
     runCase: (request: RunCaseRequest) => runCase(request, dependencies),
@@ -1300,4 +969,3 @@ export function createReplay(dependencies: ReplayDependencies) {
     finishRun
   };
 }
-
