@@ -1,4 +1,4 @@
-import { cp, mkdir, stat } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveSkillInstallOrder } from "./dependencies.js";
 import { detectSkillTargets } from "./targets.js";
@@ -20,36 +20,13 @@ export async function installSkills(options: InstallSkillsOptions): Promise<Inst
   const targets = await detectSkillTargets(options.projectDir);
 
   for (const target of targets) {
-    for (const skill of installed) {
-      const destination = join(target, skill.name);
-      if (await pathExists(destination)) {
-        throw new Error(`Skill '${skill.name}' already exists at ${destination}`);
-      }
-    }
-  }
-
-  for (const target of targets) {
     await mkdir(target, { recursive: true });
     for (const skill of installed) {
-      await cp(skill.dir, join(target, skill.name), { recursive: true });
+      const destination = join(target, skill.name);
+      await rm(destination, { recursive: true, force: true });
+      await cp(skill.dir, destination, { recursive: true });
     }
   }
 
   return { targets, installed };
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return false;
-    }
-    throw error;
-  }
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }

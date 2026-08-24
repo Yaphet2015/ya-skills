@@ -58,21 +58,44 @@ test("installs requested skills and dependencies into every detected target", as
   }
 });
 
-test("refuses to overwrite an already installed skill", async () => {
+test("overwrites an already installed skill with the catalog version", async () => {
   await writeSkill("demo-base", {
     name: "demo-base",
     description: "Base demo skill"
   });
-  await mkdir(join(projectDir, ".agents", "skills", "demo-base"), { recursive: true });
+  const installedDir = join(projectDir, ".agents", "skills", "demo-base");
+  await mkdir(installedDir, { recursive: true });
+  await writeFile(join(installedDir, "SKILL.md"), "# stale local copy\n");
   const catalog = await loadCatalog(catalogDir);
 
-  await expect(
-    installSkills({
-      catalog,
-      projectDir,
-      skillNames: ["demo-base"]
-    })
-  ).rejects.toThrow("Skill 'demo-base' already exists at");
+  const result = await installSkills({
+    catalog,
+    projectDir,
+    skillNames: ["demo-base"]
+  });
+
+  expect(result.installed.map((skill) => skill.name)).toEqual(["demo-base"]);
+  await expect(readFile(join(installedDir, "SKILL.md"), "utf8")).resolves.toBe("# demo-base\n");
+});
+
+test("removes leftover files when overwriting an installed skill", async () => {
+  await writeSkill("demo-base", {
+    name: "demo-base",
+    description: "Base demo skill"
+  });
+  const installedDir = join(projectDir, ".agents", "skills", "demo-base");
+  await mkdir(installedDir, { recursive: true });
+  await writeFile(join(installedDir, "SKILL.md"), "# stale local copy\n");
+  await writeFile(join(installedDir, "local-note.md"), "do not keep me\n");
+  const catalog = await loadCatalog(catalogDir);
+
+  await installSkills({
+    catalog,
+    projectDir,
+    skillNames: ["demo-base"]
+  });
+
+  await expect(readFile(join(installedDir, "local-note.md"), "utf8")).rejects.toThrow();
 });
 
 test("uninstalls requested skills from every existing target without removing dependencies", async () => {

@@ -129,6 +129,7 @@ Global options:
 - `yk install [skill...]` — install selected skills into the current repository.
 - `yk install -g [skill...]` — install selected skills into user-level targets. `--global` is also supported.
 - `yk uninstall <skill...>` — remove selected skills from existing skill targets in the current repository.
+- `yk uninstall -g <skill...>` — remove selected skills from existing user-level targets. `--global` is also supported.
 - `yk <domain> <action> [...args]` — run an underlying function (e.g. `yk pbench capture`).
 
 **Install target detection** — `yk install` uses the current working repository by default. With `-g` or `--global`, it uses the user's home directory. Within the selected root:
@@ -137,7 +138,9 @@ Global options:
 - If only one exists → installs **there**.
 - If neither exists → creates **`.agents/skills`**.
 
-**Uninstall semantics** — `yk uninstall` removes from existing `.claude/skills` and `.agents/skills` targets only. It does **not** create target directories, and it does **not** remove dependency skills automatically.
+**Reinstall** — `yk install` overwrites an already installed skill with the catalog copy. Extra local files in that skill directory are removed.
+
+**Uninstall semantics** — `yk uninstall` removes from existing `.claude/skills` and `.agents/skills` targets only. With `-g` or `--global`, it uses the user's home directory. It does **not** create target directories, and it does **not** remove dependency skills automatically.
 
 ### PBench
 

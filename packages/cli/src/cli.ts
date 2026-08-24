@@ -39,8 +39,8 @@ async function main(argv: string[]) {
       printInstallHelp();
       return;
     }
-    const installGlobally = args.some(isGlobalInstallFlag);
-    await installCommand(args.filter((arg) => !isGlobalInstallFlag(arg)), installGlobally);
+    const parsed = parseGlobalSkillArgs(args);
+    await installCommand(parsed.skillNames, resolveSkillRoot(parsed.globally));
     return;
   }
 
@@ -49,7 +49,8 @@ async function main(argv: string[]) {
       printUninstallHelp();
       return;
     }
-    await uninstallCommand(args);
+    const parsed = parseGlobalSkillArgs(args);
+    await uninstallCommand(parsed.skillNames, resolveSkillRoot(parsed.globally));
     return;
   }
 
@@ -81,7 +82,7 @@ async function listSkills() {
   }
 }
 
-async function installCommand(skillNames: string[], installGlobally: boolean) {
+async function installCommand(skillNames: string[], projectDir: string) {
   const catalog = await loadDefaultCatalog();
   const selected = skillNames.length > 0 ? skillNames : await promptForSkills(catalog);
   if (selected.length === 0) {
@@ -90,7 +91,7 @@ async function installCommand(skillNames: string[], installGlobally: boolean) {
 
   const result = await installSkills({
     catalog,
-    projectDir: installGlobally ? homedir() : process.cwd(),
+    projectDir,
     skillNames: selected
   });
 
@@ -98,13 +99,13 @@ async function installCommand(skillNames: string[], installGlobally: boolean) {
   console.log(`Targets: ${result.targets.join(", ")}`);
 }
 
-async function uninstallCommand(skillNames: string[]) {
+async function uninstallCommand(skillNames: string[], projectDir: string) {
   if (skillNames.length === 0) {
     throw new Error("yk uninstall requires at least one skill name");
   }
 
   const result = await uninstallSkills({
-    projectDir: process.cwd(),
+    projectDir,
     skillNames
   });
 
@@ -178,7 +179,7 @@ Options:
 Commands:
   yk list
   yk install [options] [skill...]
-  yk uninstall <skill...>
+  yk uninstall [options] <skill...>
   yk <domain> <action> [...args]
 `);
 }
@@ -210,9 +211,12 @@ function printUninstallHelp() {
   console.log(`yk uninstall
 
 Usage:
-  yk uninstall <skill...>
+  yk uninstall [options] <skill...>
 
-Remove selected skills from existing .claude/skills and .agents/skills targets in this repository.
+Options:
+  -g, --global    Uninstall from user-level skill targets.
+
+Remove selected skills from existing .claude/skills and .agents/skills targets in this repository by default.
 `);
 }
 
@@ -259,7 +263,18 @@ function isVersionFlag(value: string): boolean {
   return value === "--version" || value === "-v";
 }
 
-function isGlobalInstallFlag(value: string): boolean {
+function parseGlobalSkillArgs(args: string[]): { skillNames: string[]; globally: boolean } {
+  return {
+    skillNames: args.filter((arg) => !isGlobalFlag(arg)),
+    globally: args.some(isGlobalFlag)
+  };
+}
+
+function resolveSkillRoot(globally: boolean): string {
+  return globally ? homedir() : process.cwd();
+}
+
+function isGlobalFlag(value: string): boolean {
   return value === "--global" || value === "-g";
 }
 

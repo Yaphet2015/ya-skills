@@ -129,6 +129,7 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 - `yk install [skill...]` —— 把选中的 Skill 安装到当前仓库。
 - `yk install -g [skill...]` —— 把选中的 Skill 安装到用户级目标；也支持 `--global`。
 - `yk uninstall <skill...>` —— 从当前仓库已有的 Skill 目标中移除选中的 Skill。
+- `yk uninstall -g <skill...>` —— 从用户级已有目标中移除选中的 Skill；也支持 `--global`。
 - `yk <domain> <action> [...args]` —— 运行一个底层函数（例如 `yk pbench capture`）。
 
 **安装目标检测** —— `yk install` 默认使用当前工作仓库。使用 `-g` 或 `--global` 时，它使用用户主目录。在选定的根目录中：
@@ -137,7 +138,9 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 - 若只存在其中一个 → 安装到**那个目录**。
 - 若都不存在 → 创建 **`.agents/skills`**。
 
-**卸载语义** —— `yk uninstall` 只从已有的 `.claude/skills` 和 `.agents/skills` 目标中移除。它**不会**创建目标目录，也**不会**自动移除依赖 Skill。
+**重复安装** —— `yk install` 会用目录中的版本覆盖已安装的 Skill。该 Skill 目录里多出来的本地文件会被删除。
+
+**卸载语义** —— `yk uninstall` 只从已有的 `.claude/skills` 和 `.agents/skills` 目标中移除。使用 `-g` 或 `--global` 时，它使用用户主目录。它**不会**创建目标目录，也**不会**自动移除依赖 Skill。
 
 ### PBench
 

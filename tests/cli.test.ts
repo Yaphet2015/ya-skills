@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import packageJson from "../package.json" with { type: "json" };
 
-async function runYk(args: string[], env: Record<string, string | undefined> = {}) {
-  const process = Bun.spawn(["bun", "packages/cli/src/cli.ts", ...args], {
-    cwd: resolve("."),
+async function runYk(
+  args: string[],
+  env: Record<string, string | undefined> = {},
+  options: { cwd?: string } = {}
+) {
+  const process = Bun.spawn(["bun", resolve("packages/cli/src/cli.ts"), ...args], {
+    cwd: options.cwd ?? resolve("."),
     env: {
       ...Bun.env,
       ...env
@@ -80,6 +84,54 @@ test("yk install --global uses every existing user-level target", async () => {
   }
 });
 
+test("yk uninstall -g removes a user-level skill without touching the current repository", async () => {
+  const homeDir = await mkdtemp(join(tmpdir(), "yk-global-home-"));
+  const projectDir = await mkdtemp(join(tmpdir(), "yk-local-project-"));
+
+  try {
+    const localInstall = await runYk(["install", "coding-recon"], { HOME: homeDir }, { cwd: projectDir });
+    const globalInstall = await runYk(["install", "-g", "coding-recon"], { HOME: homeDir }, { cwd: projectDir });
+    expect(localInstall.exitCode).toBe(0);
+    expect(globalInstall.exitCode).toBe(0);
+
+    const result = await runYk(["uninstall", "-g", "coding-recon"], { HOME: homeDir }, { cwd: projectDir });
+    const homeSkill = join(homeDir, ".agents", "skills", "coding-recon");
+    const projectSkill = join(projectDir, ".agents", "skills", "coding-recon");
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain(`Targets: ${join(homeDir, ".agents", "skills")}`);
+    await expect(stat(homeSkill)).rejects.toThrow();
+    expect((await stat(projectSkill)).isDirectory()).toBe(true);
+  } finally {
+    await rm(homeDir, { recursive: true, force: true });
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("yk uninstall --global removes from every existing user-level target", async () => {
+  const homeDir = await mkdtemp(join(tmpdir(), "yk-global-home-"));
+  const projectDir = await mkdtemp(join(tmpdir(), "yk-local-project-"));
+  const targets = [join(homeDir, ".claude", "skills"), join(homeDir, ".agents", "skills")];
+
+  try {
+    await Promise.all(targets.map((target) => mkdir(target, { recursive: true })));
+    const installResult = await runYk(["install", "coding-recon", "--global"], { HOME: homeDir }, { cwd: projectDir });
+    expect(installResult.exitCode).toBe(0);
+
+    const result = await runYk(["uninstall", "coding-recon", "--global"], { HOME: homeDir }, { cwd: projectDir });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    for (const target of targets) {
+      await expect(stat(join(target, "coding-recon"))).rejects.toThrow();
+    }
+  } finally {
+    await rm(homeDir, { recursive: true, force: true });
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
 test("pbench documentation matches registered cross-agent workflows", async () => {
   const [readme, english, chinese, platformDesign] = await Promise.all([
     readFile(resolve("README.md"), "utf8"),
@@ -107,6 +159,11 @@ test("yk prints subcommand and function help without side effects", async () => 
   expect(installHelp.exitCode).toBe(0);
   expect(installHelp.stdout).toContain("yk install [options] [skill...]");
   expect(installHelp.stdout).toContain("-g, --global");
+
+  const uninstallHelp = await runYk(["uninstall", "-h"]);
+  expect(uninstallHelp.exitCode).toBe(0);
+  expect(uninstallHelp.stdout).toContain("yk uninstall [options] <skill...>");
+  expect(uninstallHelp.stdout).toContain("-g, --global");
 
   const pbenchHelp = await runYk(["pbench", "-h"]);
   expect(pbenchHelp.exitCode).toBe(0);

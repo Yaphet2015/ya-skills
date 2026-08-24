@@ -10,11 +10,13 @@
 ## CLI Contract
 - `yk install [skill...]` installs skills into the current working repository.
 - `yk install -g [skill...]` and `yk install --global [skill...]` install skills into the user's home directory.
+- Reinstalling an already installed skill overwrites that skill directory with the catalog copy.
 - Install target detection applies within the selected repository or home-directory root:
   - If `.claude/skills` and `.agents/skills` both exist, install to both.
   - If only one exists, install there.
   - If neither exists, create `.agents/skills`.
 - `yk uninstall <skill...>` removes requested skills from existing targets only.
+- `yk uninstall -g <skill...>` and `yk uninstall --global <skill...>` remove requested skills from existing user-level targets only.
 - Uninstall must not create target directories.
 - Uninstall must not remove dependency skills automatically.
 - Each `yk <domain>` command must live in its own `packages/functions-<domain>` package and be registered by `packages/cli`.
