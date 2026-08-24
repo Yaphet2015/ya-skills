@@ -1,4 +1,0 @@
-{
-  "name": "pbench-runner",
-  "description": "Use when a pbench benchmark worktree contains .pbench/run.json and must be completed through an agent skill."
-}

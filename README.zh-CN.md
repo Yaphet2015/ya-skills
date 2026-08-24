@@ -61,9 +61,9 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **a-share-data** | 从公开数据源获取 A 股报价、K 线、财务指标、现金流和公告，并保留来源与缺失字段说明，避免编造数据。 | `yk install a-share-data` |
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
-| **pbench** | 把真实的 Codex 工作流失误捕获为本地、私有的个人基准用例，再通过 harness 管理的 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
+| **pbench** | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
 
-> `pbench-runner` 会在执行 `yk pbench start` 时被自动安装到每个准备好的基准工作树中，无需手动安装。
+> `pbench-runner` 是内部资产，会由 `yk pbench run --manual`（或兼容的 `start` 命令）自动安装，无需从目录手动安装。
 
 随时用 `yk list` 浏览完整目录。
 
@@ -141,7 +141,7 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 
 ### PBench
 
-`yk pbench` 会把真实的 Codex 工作流失误捕获为完全本地、私有的个人基准用例，再通过 harness 管理的 runner 重放已定稿的用例。用它来判断一次模型、Skill、规则包或 harness 的改动是否*真的*改善了*你自己的*工作流。
+`yk pbench` 通过已注册 capture source 捕获真实的 Codex 或 Claude 工作流失误，再通过已注册 runner 重放已定稿用例。用它来判断模型、Skill、规则包或 harness 改动是否*真的*改善了*你自己的*工作流。
 
 PBench 默认按隐私优先设计：case、原始 transcript、评估说明、私有校验器和运行报告都留在你的本地 workspace。它不会把 case 上传到托管 benchmark 服务，不会做云同步，也不会发布到公开排行榜。被测 agent 只能看到脱敏后的 public replay capsule。
 
@@ -154,7 +154,7 @@ flowchart TD
   setup["一次性初始化<br/>workspace-init + project-link"]:::support
   capture["1. 捕获失败会话<br/>yk pbench capture --source codex<br/>或 pbench skill 识别出不匹配"]
   authoring["Harness 编写闸门<br/>validate + finalize<br/>证据或校验器不完整则大声失败"]:::internal
-  trigger["2. 触发基准<br/>在 agent 中使用 pbench skill<br/>或 yk pbench run --case <case> --agent codex"]
+  trigger["2. 触发基准<br/>yk pbench run --case <case> --agent codex<br/>或 yk pbench run --manual"]
   capsule["Runner 只暴露公开输入<br/>.pbench/public + case.public.json"]:::internal
   validate["一次性私有校验<br/>私有校验器始终在 agent 视野之外"]:::internal
   results["私有运行产物<br/><workspace>/runs/<run-id>/"]
@@ -171,17 +171,18 @@ flowchart TD
 
 - `yk pbench workspace-init <path>` —— 初始化一个本地 pbench 工作区。
 - `yk pbench project-link --workspace <path>` —— 把当前项目链接到某个工作区。
-- `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>]` —— 在 `~/.ya-skills/pbench` 下创建一个编写事务，除非传入 `--yes` 否则会请求确认，写入私有编写清单，并打印初始编写校验警告。
+- `yk pbench capture --source <source> [--yes] [--input <jsonl>] [--session-id <id>]` —— 通过已注册 source（`codex` 或 `claude`）捕获 session，写入私有 authoring checklist，并打印一个 next action。`--input` 只向选中的 source 提供 transcript，不启用任意 source。
 - `yk pbench validate --transaction <path> --strict` —— 严格校验某个事务。
 - `yk pbench finalize --transaction <path>` —— 把一个已通过严格校验的事务定稿进工作区。
 - `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` —— 为 agent 导出一个仅含公开内容的重放胶囊。只复制脱敏后的 `public/` 文件和 `case.public.json`；绝不导出私有评估文档、校验器、原始转录或仅用于捕获的源路径。
-- `yk pbench run --case <case-dir-or-case-id> --agent codex [--workspace <path>] [--profile <name>]` —— 在 `<workspace>/.personal-bench/replays/<run-id>/worktree` 中通过 Codex 运行一个已定稿用例，再运行私有校验器并把结果记录到工作区的 `runs/` 目录下。Profile 是用户提供的对比标签（`baseline`、`current-model`、`current-skills`）；省略时记为 `default`。
-- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` —— 为无法由 CLI 启动的 agent，在 `<workspace>/.personal-bench/replays/<run-id>/worktree` 处准备一个由 skill 介入的基准工作树。准备好的工作树包含 `.pbench/public/`、`.pbench/case.public.json`、`.pbench/run.json`，以及已安装的 `pbench-runner` skill。
-- `yk pbench finish --run <run-id>` —— 为 skill 介入的运行执行一次性私有校验，只打印 run id、状态和摘要路径。
-- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` —— 把已有运行产物聚合为状态、用例、profile、时长与 token 摘要。默认 JSON；Markdown 会额外给出简洁的用例与近期运行表格，方便人工查看。
+- `yk pbench run --case <case-dir-or-case-id> --agent <agent> [--workspace <path>] [--profile <name>]` —— 通过已注册 runner 运行 finalized case。当前内置 runner 为 `codex` 和 `claude`。
+- `yk pbench run --case <case-dir-or-case-id> --manual [--workspace <path>] [--profile <name>]` —— 为不能 headless 启动的 agent 准备 manual benchmark worktree，并安装内部 `pbench-runner` asset。
+- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` —— manual preparation path 的兼容命令。
+- `yk pbench finish --run <run-id>` —— 为 manual run 执行一次性私有校验，只打印 run id 和状态。
+- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` —— 默认渲染 Markdown 比较报告；自动化请使用 `yk pbench report --format json`。
 - `yk pbench audit [--case <case-dir-or-case-id>] [--workspace <path>]` —— 不运行私有校验器，检查用例质量。带 `--case` 时审核单个用例；不带时审核工作区中所有已定稿用例。会报告用例形状非法、编写警告，以及公开重放引用了私有评估路径的情况。
 
-用 `yk install pbench` 安装捕获工作流。`yk pbench start` 会自动把 `pbench-runner` 安装到每个准备好的基准工作树中。
+用 `yk install pbench` 安装 operator workflow。`yk pbench run --manual` 会自动把内部 `pbench-runner` asset 安装到准备好的 benchmark worktree。
 
 </details>
 

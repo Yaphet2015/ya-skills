@@ -62,7 +62,7 @@ Most daily usage should feel like two actions.
 flowchart TD
   capture["1. Capture a bad session<br/>yk pbench capture --source codex"]
   author["Authoring gate<br/>review, validate, finalize"]:::internal
-  run["2. Run the finalized case<br/>yk pbench run or yk pbench start"]
+  run["2. Run the finalized case<br/>yk pbench run --agent … or --manual"]
   report["Inspect private results<br/>yk pbench report"]
 
   capture --> author --> run --> report
@@ -154,7 +154,7 @@ public/
   context-files/untracked/
 ```
 
-Not every file is always present. For example, `starting.patch` appears only when capture found tracked dirty changes small enough to expose publicly.
+`starting.patch` and `context-files/untracked/` appear only after the author explicitly curates dirty repository state as replay input. Capture keeps current tracked and bounded untracked state private until that decision is recorded.
 
 ### Private Evaluator Material
 
@@ -188,17 +188,18 @@ They include status, duration, metrics, events, runner environment, redacted log
 
 ## How PBench Works
 
-### 1. Capture reads a Codex session
+### 1. Capture reads a registered agent session
 
-Current capture supports Codex JSONL sessions:
+Current registered capture sources are Codex and Claude:
 
 ```sh
 yk pbench capture --source codex --yes
 yk pbench capture --source codex --input /path/to/session.jsonl --yes
-yk pbench capture --source codex --session-id <id> --yes
+yk pbench capture --source claude --session-id <id> --yes
+yk pbench capture --source claude --input /path/to/transcript.jsonl --yes
 ```
 
-Capture can read both legacy and current Codex JSONL shapes. It extracts:
+The Codex adapter supports legacy and current Codex JSONL. The Claude adapter supports Claude Code project transcripts. Both normalize and extract:
 
 - session metadata, including cwd, model, CLI version, sandbox, approval policy, and Git metadata when present;
 - user messages, excluding injected AGENTS/environment context;
@@ -223,9 +224,9 @@ It generates public replay input from the session and repository:
 - `public/replay.md` as the future agent's context index;
 - `public/agent-instructions.md` from AGENTS.md files between repo root and capture cwd, plus installed skill names;
 - `public/key-observations.md` from failed commands and replayable verification commands;
-- `public/command-observations.md` from bounded command/tool context;
-- `public/starting.patch` when tracked dirty changes are small enough;
-- small non-ignored untracked UTF-8 files under `public/context-files/untracked/`.
+- `public/command-observations.md` from bounded command/tool context.
+
+Current tracked and bounded untracked state is not automatically public because it may contain work produced after the task began. Capture saves it as private authoring evidence and marks replay start as unresolved. The author must choose the baseline commit alone or explicitly curate `public/starting.patch` and public context files before strict validation can pass.
 
 It generates private authoring and evaluator material:
 
@@ -283,7 +284,7 @@ Replay startup fails closed if public agent-visible input contains private evalu
 
 ### 6. The runner validates privately
 
-`yk pbench run` launches Codex automatically. `yk pbench start` prepares a worktree for skill-mediated agents, and `yk pbench finish` performs the one-shot private validation after the agent completes the public task.
+`yk pbench run --agent <agent>` launches a registered runner. `yk pbench run --manual` prepares a worktree for a manually opened agent, and `yk pbench finish` performs one-shot private validation after the public task. `yk pbench start` remains a compatibility command for manual preparation.
 
 Both paths run private validators outside the agent-visible capsule and write local private run artifacts under `<workspace>/runs/<run-id>/`.
 
@@ -303,8 +304,8 @@ PBench is implemented as a normal `ya-skills` function package:
 - `packages/functions-pbench` owns `yk pbench <action>` behavior.
 - `packages/cli` registers the function package so it is available through `yk`.
 - `packages/core` provides the shared function registry used by CLI packages.
-- `skills/pbench` is the agent-facing capture workflow skill.
-- `skills/pbench-runner` is installed into worktrees prepared by `yk pbench start`.
+- `skills/pbench` is the agent-facing capture and replay operator skill.
+- `packages/functions-pbench/assets/pbench-runner/SKILL.md` is the internal canonical runner asset installed into manual replay worktrees.
 - `tests/pbench.test.ts` covers workspace resolution, capture, validation, public/private boundaries, automatic runs, skill-mediated runs, reports, and audits.
 
 Important implementation boundaries:
@@ -359,9 +360,9 @@ Links the current project to an initialized workspace by writing `.personal-benc
 
 ### `yk pbench capture --source <agent> [--yes] [--input <jsonl>] [--session-id <id>] [--workspace <path>] [--title <title>]`
 
-Creates an authoring transaction from a coding-agent session. Built-in sources: `codex` (reads `~/.codex` sessions or `--input`) and `claude` (reads `~/.claude/projects` transcripts by `--session-id`, or `--input`). Other sources require `--input <transcript>`. Without `--yes`, interactive capture asks for confirmation with the session path, repository, baseline commit, and title. In non-interactive mode, pass `--yes`.
+Creates an authoring transaction through a registered capture source. Built-in sources: `codex` (reads `~/.codex` sessions or `--input`) and `claude` (reads `~/.claude/projects` transcripts by `--session-id`, or `--input`). `--input` supplies a transcript to the selected registered source; it does not register an arbitrary source. Without `--yes`, interactive capture asks for confirmation with the session path, repository, baseline commit, and title. In non-interactive mode, pass `--yes`.
 
-Output includes the transaction path, case directory, case id, workspace root, authoring checklist path, warnings, initial validation, and next commands.
+Output includes the transaction path, case directory, case id, workspace root, authoring checklist path, warnings, initial validation, one `state`, one `nextAction`, and the compatibility `next` array.
 
 ### `yk pbench validate --transaction <path> [--strict]`
 
@@ -381,19 +382,23 @@ Exports the public replay capsule for external inspection or manual agent setup.
 
 ### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-Runs a finalized case headlessly through a registered agent runner. Built-in agents: `codex` (sandboxed, `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Evaluator integrity comes from the public/private worktree boundary, not the agent's own sandbox, so any agent with a headless runner is a valid target.
+Runs a finalized case headlessly through a registered runner. Built-in agents: `codex` (write-isolated with `--sandbox workspace-write`) and `claude` (Claude Code `-p` headless). Write isolation does not enforce a private-read whitelist, so all current built-in and manual runners record `instruction-only` integrity and are excluded from the default pass-rate denominator. A future runner may record `enforced` only when it enforces the required read boundary.
+
+### `yk pbench run --case <case-id-or-dir> --manual [--workspace <path>] [--profile <name>]`
+
+Prepares a manual replay worktree and installs the internal `pbench-runner` asset there. Use this when the benchmarked agent cannot be launched headlessly.
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 
-Prepares a skill-mediated replay worktree and installs the `pbench-runner` skill there. Use this when the benchmarked agent cannot be launched by `yk pbench run`.
+Compatibility alias for the manual preparation path. New workflows should use `yk pbench run --manual`.
 
 ### `yk pbench finish --run <run-id>`
 
 Finishes a skill-mediated run with private validation. This is one-shot; a finished run cannot be finished again.
 
-### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--format json|markdown]`
+### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--include-untrusted] [--format json|markdown]`
 
-Aggregates run artifacts by status, case, profile, manual intervention, duration, and token usage. JSON is the default; Markdown is for human review.
+Aggregates all observed run artifacts, but calculates the default pass rate only from terminal, validator-executed, non-contaminated runs with `enforced` integrity. Comparable cohorts are separated by profile, agent, agent version, isolation, manual intervention, and integrity. Running, setup-failed, contaminated, instruction-only, and legacy `unknown` runs remain visible as excluded counts. Malformed run artifacts produce safe warnings and do not block the report. Use `--include-untrusted` to include instruction-only and legacy `unknown` runs in the evaluated denominator; contaminated runs remain excluded. Markdown is the default for humans; use `yk pbench report --format json` for automation.
 
 ### `yk pbench audit [--case <case-id-or-dir>] [--workspace <path>]`
 
@@ -407,7 +412,7 @@ Checks case quality without running private validators. It reports malformed cas
 yk install pbench
 ```
 
-The `pbench` skill tells an agent when a session is benchmark-worthy and how to capture it after the user approves. `yk pbench start` installs `pbench-runner` automatically in prepared replay worktrees.
+The `pbench` skill routes both outcome capture and explicit benchmark operations. `yk pbench run --manual` installs the internal `pbench-runner` asset automatically in the prepared replay worktree.
 
 ### First-time setup
 
@@ -457,10 +462,10 @@ yk pbench run --case <case-id> --agent codex --profile current-model
 
 Inspect the returned `summaryPath` and artifact directory.
 
-### Run a skill-mediated benchmark
+### Run a manual benchmark
 
 ```sh
-yk pbench start --case <case-id> --profile current-skills
+yk pbench run --case <case-id> --manual --profile current-skills
 ```
 
 Open the returned worktree with the benchmarked agent. The worktree contains `.pbench/run.json` and an installed `pbench-runner` skill. The agent should complete the task using only `.pbench/public/`, then run:
@@ -476,10 +481,10 @@ Use stable profile names:
 ```sh
 yk pbench run --case <case-id> --agent codex --profile baseline
 yk pbench run --case <case-id> --agent codex --profile current-model
-yk pbench report --format markdown
+yk pbench report
 ```
 
-Profiles are labels. They do not change runtime behavior by themselves; they make reports comparable.
+Profiles are labels. They do not change runtime behavior by themselves. Compare the cohort rows, because runs with different agents, versions, isolation, manual mode, or integrity are not combined into one default pass rate.
 
 ## Troubleshooting
 

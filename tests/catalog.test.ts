@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { loadCatalog, resolveSkillInstallOrder } from "@ya-skills/core";
@@ -88,30 +88,31 @@ test("fails loudly when dependencies contain a cycle", async () => {
   );
 });
 
-test("root catalog exposes the pbench skill and its yk function refs", async () => {
+test("root catalog exposes pbench as a thin capture and replay router", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const pbench = catalog.byName.get("pbench");
+  const skill = await readFile(resolve("skills", "pbench", "SKILL.md"), "utf8");
 
-  expect(pbench?.description).toContain("benchmark");
-  expect(pbench?.functions).toEqual([
-    { domain: "pbench", action: "capture" },
-    { domain: "pbench", action: "validate" },
-    { domain: "pbench", action: "export-replay" },
-    { domain: "pbench", action: "run" },
-    { domain: "pbench", action: "start" },
-    { domain: "pbench", action: "finish" },
-    { domain: "pbench", action: "finalize" },
-    { domain: "pbench", action: "workspace-init" },
-    { domain: "pbench", action: "project-link" }
-  ]);
+  expect(pbench?.description).toMatch(/capture/i);
+  expect(pbench?.description).toMatch(/run|replay|compare/i);
+  expect(pbench?.functions).toEqual([]);
+  expect(skill).toContain("user approval");
+  expect(skill).toContain("before repair");
+  expect(skill).toContain("registered source");
+  expect(skill).toContain("codex");
+  expect(skill).toContain("claude");
+  expect(skill).not.toContain("<current-agent>");
+  expect(skill).toContain("authoring-checklist.md");
+  expect(skill).toContain("yk pbench run");
+  expect(skill).toContain("yk pbench report");
+  expect(skill).not.toContain("private/failure.md");
+  expect(skill).not.toContain("private/validators/check-completion.mjs");
 });
 
-test("root catalog exposes the pbench runner skill", async () => {
+test("root catalog does not expose the internal pbench runner", async () => {
   const catalog = await loadCatalog(resolve("skills"));
-  const runner = catalog.byName.get("pbench-runner");
 
-  expect(runner?.description).toContain("pbench");
-  expect(runner?.functions).toEqual([]);
+  expect(catalog.byName.has("pbench-runner")).toBe(false);
 });
 
 test("root catalog exposes the video-transcript skill", async () => {

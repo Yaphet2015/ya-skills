@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -39,6 +39,23 @@ async function captureTestCodexSession(
   return captureCodexSession({ ...options, home });
 }
 
+async function captureRepoTransaction(repo: string) {
+  const home = await temp("home");
+  const workspaceRoot = join(await temp("workspace-root"), "workspace");
+  await initWorkspace(workspaceRoot);
+  const commit = git(repo, ["rev-parse", "HEAD"]);
+  const input = await writeCodexSession(repo, commit);
+  const tx = await captureTestCodexSession({
+    cwd: repo,
+    home,
+    workspaceRoot,
+    input,
+    yes: true,
+    title: "Done file missing"
+  });
+  return { home, workspaceRoot, tx };
+}
+
 function git(cwd: string, args: string[]): string {
   return execFileSync("git", args, {
     cwd,
@@ -59,7 +76,16 @@ async function makeRepo(): Promise<string> {
   return repo;
 }
 
-async function makeRepoWithFailingTest(): Promise<string> {
+type RunnableCaseOptions = {
+  requiredEnv?: string[];
+  dirtyStart?: boolean;
+  dirtyStartResolution?: "baseline" | "curated";
+  workspaceRoot?: string;
+  skillTargets?: "claude" | "agents" | "both";
+  existingRunnerSkill?: boolean;
+};
+
+async function makeRepoWithFailingTest(options: RunnableCaseOptions = {}): Promise<string> {
   const repo = await temp("repo");
   git(repo, ["init"]);
   git(repo, ["config", "user.email", "pbench@example.local"]);
@@ -69,17 +95,25 @@ async function makeRepoWithFailingTest(): Promise<string> {
     join(repo, "check-done.mjs"),
     "import { existsSync } from 'node:fs';\nprocess.exit(existsSync('done.txt') ? 0 : 1);\n"
   );
+  if (options.skillTargets === "claude" || options.skillTargets === "both") {
+    await mkdir(join(repo, ".claude", "skills"), { recursive: true });
+    await writeFile(join(repo, ".claude", "skills", ".keep"), "");
+  }
+  if (options.skillTargets === "agents" || options.skillTargets === "both") {
+    await mkdir(join(repo, ".agents", "skills"), { recursive: true });
+    await writeFile(join(repo, ".agents", "skills", ".keep"), "");
+  }
+  if (options.existingRunnerSkill) {
+    await mkdir(join(repo, ".agents", "skills", "pbench-runner"), { recursive: true });
+    await writeFile(join(repo, ".agents", "skills", "pbench-runner", "SKILL.md"), "project-owned\n");
+  }
   git(repo, ["add", "."]);
   git(repo, ["commit", "-m", "baseline"]);
   return repo;
 }
 
-async function finalizedRunnableCase(options: {
-  requiredEnv?: string[];
-  dirtyStart?: boolean;
-  workspaceRoot?: string;
-} = {}): Promise<{ repo: string; home: string; workspaceRoot: string; casePath: string; caseId: string }> {
-  const repo = await makeRepoWithFailingTest();
+async function runnableTransaction(options: RunnableCaseOptions = {}) {
+  const repo = await makeRepoWithFailingTest(options);
   if (options.dirtyStart) {
     await writeFile(
       join(repo, "check-done.mjs"),
@@ -123,10 +157,42 @@ async function finalizedRunnableCase(options: {
     manifest.validators[0].requiredEnv = options.requiredEnv;
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   }
-  const validation = await strictValidateTransaction(tx.transactionPath);
+  if (options.dirtyStart) {
+    const resolution = options.dirtyStartResolution ?? "curated";
+    const manifestPath = join(tx.caseDir, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.replayStart = { status: resolution };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    if (resolution === "curated") {
+      await cp(
+        join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"),
+        join(tx.caseDir, "public", "starting.patch")
+      );
+      for (const name of ["context.manifest.json", "replay.manifest.json"]) {
+        const replayManifestPath = join(tx.caseDir, "public", name);
+        const replayManifest = JSON.parse(await readFile(replayManifestPath, "utf8"));
+        replayManifest.replayFiles.startingPatch = "public/starting.patch";
+        await writeFile(replayManifestPath, `${JSON.stringify(replayManifest, null, 2)}\n`);
+      }
+    }
+  }
+  return { repo, home, workspaceRoot, tx };
+}
+
+async function finalizedRunnableCase(
+  options: RunnableCaseOptions = {}
+): Promise<{ repo: string; home: string; workspaceRoot: string; casePath: string; caseId: string }> {
+  const prepared = await runnableTransaction(options);
+  const validation = await strictValidateTransaction(prepared.tx.transactionPath);
   expect(validation.ok).toBe(true);
-  const finalized = await finalizeTransaction(tx.transactionPath);
-  return { repo, home, workspaceRoot, casePath: finalized.casePath, caseId: finalized.caseId };
+  const finalized = await finalizeTransaction(prepared.tx.transactionPath);
+  return {
+    repo: prepared.repo,
+    home: prepared.home,
+    workspaceRoot: prepared.workspaceRoot,
+    casePath: finalized.casePath,
+    caseId: finalized.caseId
+  };
 }
 
 async function writeRunArtifact(
@@ -137,7 +203,13 @@ async function writeRunArtifact(
     profile?: string;
     status: string;
     agentMode?: string;
+    agentVersion?: string | null;
     manualIntervention?: boolean;
+    isolation?: string;
+    integrity?: "enforced" | "instruction-only" | "unknown" | "contaminated";
+    terminal?: boolean;
+    validatorExecuted?: boolean;
+    contaminated?: boolean;
     durationMs?: number;
     tokenUsage?: Record<string, number>;
     createdAt?: string;
@@ -155,7 +227,11 @@ async function writeRunArtifact(
         workspaceRoot,
         terminal: true,
         agentMode: "codex",
+        agentVersion: "codex-test 0.0.0",
         manualIntervention: false,
+        isolation: "workspace-write",
+        integrity: "enforced",
+        validatorExecuted: true,
         createdAt: "2026-06-12T00:00:00Z",
         updatedAt: "2026-06-12T00:00:00Z",
         ...run
@@ -586,7 +662,7 @@ describe("pbench case validation", () => {
   });
 });
 
-describe("pbench codex capture flow", () => {
+describe("pbench capture and replay flow", () => {
   test("asks for confirmation with session and baseline details before capture", async () => {
     const repo = await makeRepo();
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
@@ -678,6 +754,8 @@ describe("pbench codex capture flow", () => {
       expect(checklist).toContain("- Failure evidence present: yes");
       expect(checklist).toContain("- Replayable verification found: no");
       expect(checklist).toContain("- Generated validator: needs manual authoring");
+      expect(result.state).toBe("needs-authoring");
+      expect(result.nextAction).toBe(`Read ${result.authoringChecklistPath}`);
       expect(result.next).toContain(`Review ${result.caseDir}`);
     } finally {
       process.chdir(originalCwd);
@@ -963,6 +1041,22 @@ describe("pbench codex capture flow", () => {
     await expect(stat(tx.transactionPath)).rejects.toThrow();
   });
 
+  test("finalize rejects a bundle changed after strict validation", async () => {
+    const prepared = await runnableTransaction();
+    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+    expect(validation.ok).toBe(true);
+
+    await writeFile(
+      join(prepared.tx.caseDir, "private", "validators", "check-completion.mjs"),
+      "console.error('PBENCH_AUTHORING_REQUIRED'); process.exit(1);\n"
+    );
+
+    await expect(finalizeTransaction(prepared.tx.transactionPath)).rejects.toThrow(
+      "Cannot finalize: strict validation failed"
+    );
+    await expect(stat(prepared.tx.transactionPath)).resolves.toBeTruthy();
+  });
+
   test("stores capture authoring transactions under the ya-skills home cache", async () => {
     const repo = await makeRepo();
     const home = await temp("home");
@@ -1168,6 +1262,11 @@ describe("pbench codex capture flow", () => {
     const manifest = JSON.parse(await readFile(join(result.caseDir, "case.json"), "utf8"));
     const prompt = await readFile(join(result.caseDir, "public", "prompt.md"), "utf8");
     const observations = await readFile(join(result.caseDir, "public", "command-observations.md"), "utf8");
+    const privateDocuments = await Promise.all(
+      ["failure.md", "success.md", "verification.md"].map((name) =>
+        readFile(join(result.caseDir, "private", name), "utf8")
+      )
+    );
 
     expect(manifest.metadata.source.kind).toBe("claude-session");
     expect(manifest.metadata.source.sessionId).toBe("claude-session-1");
@@ -1175,6 +1274,10 @@ describe("pbench codex capture flow", () => {
     expect(prompt).toContain("Fix the login bug");
     expect(observations).toContain("bun run test");
     expect(observations).toContain("exitCode: 1");
+    expect(privateDocuments.join("\n")).toContain("coding-agent session history");
+    expect(privateDocuments.join("\n")).not.toContain("Codex session history");
+    expect(result.state).toBe("ready-to-finalize");
+    expect(result.nextAction).toBe(`yk pbench finalize --transaction ${result.transactionPath}`);
     await expect(
       readFile(join(result.caseDir, "private", "artifacts", "raw", "claude-session.jsonl"), "utf8")
     ).resolves.toContain("claude-test");
@@ -1423,60 +1526,107 @@ describe("pbench codex capture flow", () => {
     expect(instructions).toContain(".claude/skills: reviewer");
   });
 
-  test("captures tracked dirty changes as public starting patch", async () => {
+  test("keeps unproven tracked changes private until replay-start authoring resolves them", async () => {
     const repo = await makeRepo();
-    await writeFile(join(repo, "ok.mjs"), "console.log('dirty starting point');\nprocess.exit(0);\n");
-    const workspaceRoot = join(await temp("workspace-root"), "workspace");
-    await initWorkspace(workspaceRoot);
-    const commit = git(repo, ["rev-parse", "HEAD"]);
-    const sessionJsonl = await writeCodexSession(repo, commit);
+    await writeFile(join(repo, "ok.mjs"), "console.log('possible repair');\n");
+    const { tx } = await captureRepoTransaction(repo);
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
 
-    const tx = await captureTestCodexSession({
-      cwd: repo,
-      workspaceRoot,
-      input: sessionJsonl,
-      yes: true,
-      title: "Done file missing"
-    });
-    const patch = await readFile(join(tx.caseDir, "public", "starting.patch"), "utf8");
-    const contextManifest = JSON.parse(await readFile(join(tx.caseDir, "public", "context.manifest.json"), "utf8"));
+    await expect(readFile(join(tx.caseDir, "public", "starting.patch"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(tx.caseDir, "private", "artifacts", "extracted", "starting.patch"), "utf8"))
+      .resolves.toContain("possible repair");
+    expect(manifest.replayStart.status).toBe("unresolved");
 
-    expect(patch).toContain("dirty starting point");
-    expect(contextManifest.replayFiles.startingPatch).toBe("public/starting.patch");
+    const validation = await strictValidateTransaction(tx.transactionPath);
+    expect(validation.errors).toContain("START_STATE_UNRESOLVED: choose baseline or curate replay-start files");
+    const checklist = await readFile(join(tx.caseDir, "private", "authoring-checklist.md"), "utf8");
+    expect(checklist).toContain("Replay start needs authoring");
+    expect(checklist).toContain("baseline");
+    expect(checklist).toContain("curated");
   });
 
-  test("copies non-ignored untracked text files and warns about ignored files", async () => {
+  test("keeps unproven untracked files out of the public replay capsule", async () => {
     const repo = await makeRepo();
     await writeFile(join(repo, ".gitignore"), "ignored.txt\n");
     git(repo, ["add", ".gitignore"]);
     git(repo, ["commit", "-m", "add ignore rules"]);
     await mkdir(join(repo, "notes"), { recursive: true });
-    await writeFile(join(repo, "notes", "context.txt"), "Important local context\n");
+    await writeFile(join(repo, "notes", "answer.txt"), "possible repair\n");
     await writeFile(join(repo, "ignored.txt"), "Do not capture\n");
-    const workspaceRoot = join(await temp("workspace-root"), "workspace");
-    await initWorkspace(workspaceRoot);
-    const commit = git(repo, ["rev-parse", "HEAD"]);
-    const sessionJsonl = await writeCodexSession(repo, commit);
-
-    const tx = await captureTestCodexSession({
-      cwd: repo,
-      workspaceRoot,
-      input: sessionJsonl,
-      yes: true,
-      title: "Done file missing"
-    });
-    const copied = await readFile(join(tx.caseDir, "public", "context-files", "untracked", "notes", "context.txt"), "utf8");
+    const { tx } = await captureRepoTransaction(repo);
+    const manifest = JSON.parse(await readFile(join(tx.caseDir, "case.json"), "utf8"));
     const contextManifest = JSON.parse(await readFile(join(tx.caseDir, "public", "context.manifest.json"), "utf8"));
 
-    expect(copied).toBe("Important local context\n");
-    expect(contextManifest.contextFiles).toEqual([
-      {
-        source: "notes/context.txt",
-        publicPath: "public/context-files/untracked/notes/context.txt",
-        kind: "untracked"
-      }
-    ]);
+    await expect(
+      readFile(join(tx.caseDir, "public", "context-files", "untracked", "notes", "answer.txt"), "utf8")
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "untracked", "notes", "answer.txt"), "utf8")
+    ).resolves.toBe("possible repair\n");
+    expect(manifest.replayStart.status).toBe("unresolved");
+    expect(manifest.replayStart.candidateUntrackedManifest).toBe(
+      "private/artifacts/extracted/untracked.manifest.json"
+    );
+    expect(contextManifest.contextFiles).toEqual([]);
     expect(JSON.stringify(contextManifest)).not.toContain("ignored.txt");
+  });
+
+  test("does not capture repository-external files through untracked symlinks", async () => {
+    const repo = await makeRepo();
+    const externalDir = await temp("external-secret");
+    await writeFile(join(externalDir, "secret.txt"), "PRIVATE_SYMLINK_SECRET\n");
+    await symlink(join(externalDir, "secret.txt"), join(repo, "linked-secret.txt"));
+
+    const { tx } = await captureRepoTransaction(repo);
+    const candidateManifest = await readFile(
+      join(tx.caseDir, "private", "artifacts", "extracted", "untracked.manifest.json"),
+      "utf8"
+    );
+
+    await expect(
+      readFile(join(tx.caseDir, "private", "artifacts", "extracted", "untracked", "linked-secret.txt"), "utf8")
+    ).rejects.toThrow();
+    expect(candidateManifest).toContain('"reason": "symbolic link"');
+    expect(candidateManifest).not.toContain("PRIVATE_SYMLINK_SECRET");
+  });
+
+  test("accepts baseline-only replay-start authoring", async () => {
+    const prepared = await runnableTransaction({ dirtyStart: true, dirtyStartResolution: "baseline" });
+
+    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+
+    expect(validation.ok).toBe(true);
+    await expect(readFile(join(prepared.tx.caseDir, "public", "starting.patch"), "utf8")).rejects.toThrow();
+  });
+
+  test("accepts explicitly curated replay-start files", async () => {
+    const prepared = await runnableTransaction({ dirtyStart: true, dirtyStartResolution: "curated" });
+
+    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+
+    expect(validation.ok).toBe(true);
+    await expect(readFile(join(prepared.tx.caseDir, "public", "starting.patch"), "utf8")).resolves.toContain(
+      "dirty starting point"
+    );
+  });
+
+  test("rejects missing or unknown replay-start decisions", async () => {
+    for (const status of [undefined, "typo"] as const) {
+      const prepared = await runnableTransaction();
+      const manifestPath = join(prepared.tx.caseDir, "case.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      if (status === undefined) {
+        delete manifest.replayStart;
+      } else {
+        manifest.replayStart = { status };
+      }
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+      const validation = await strictValidateTransaction(prepared.tx.transactionPath);
+      expect(validation.errors).toContain(
+        "/replayStart.status must be clean, unresolved, baseline, or curated"
+      );
+    }
   });
 
   test("writes bounded public command observations and private failure draft", async () => {
@@ -1654,6 +1804,9 @@ describe("pbench codex capture flow", () => {
       expect(result.status).toBe("passed");
       expect(runJson.agentMode).toBe("claude");
       expect(runJson.isolation).toBe("none");
+      expect(runJson.integrity).toBe("instruction-only");
+      expect(runJson.validatorExecuted).toBe(true);
+      expect(runJson.agentVersion).toBe("claude-test 0.0.0");
       expect(runJson.tokenUsage).toEqual({ input_tokens: 11, output_tokens: 7 });
       expect(runJson.cost).toBe(0.0012);
       expect(metrics.agentMode).toBe("claude");
@@ -1774,6 +1927,161 @@ describe("pbench codex capture flow", () => {
     }
   });
 
+  test("run --manual prepares the skill-mediated worktree", async () => {
+    const prepared = await finalizedRunnableCase();
+
+    const output = JSON.parse(
+      String(
+        await pbenchCommand("run", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot,
+          "--manual"
+        ])
+      )
+    );
+
+    expect(output.status).toBe("running");
+    expect(output.worktree).toContain(output.runId);
+    await expect(stat(join(output.worktree, ".pbench", "run.json"))).resolves.toBeTruthy();
+    await expect(
+      pbenchCommand("run", prepared.home).run([
+        "--case",
+        prepared.caseId,
+        "--workspace",
+        prepared.workspaceRoot,
+        "--manual",
+        "--agent",
+        "claude"
+      ])
+    ).rejects.toThrow("cannot be used together");
+  });
+
+  test("installs the manual runner into the worktree's existing Claude skill target", async () => {
+    const prepared = await finalizedRunnableCase({ skillTargets: "claude" });
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+
+    await expect(
+      stat(join(started.worktree, ".claude", "skills", "pbench-runner", "SKILL.md"))
+    ).resolves.toBeTruthy();
+    await expect(
+      stat(join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md"))
+    ).rejects.toThrow();
+  });
+
+  test("installs and removes the manual runner across both existing skill targets", async () => {
+    const prepared = await finalizedRunnableCase({ skillTargets: "both" });
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+
+    for (const target of [".claude", ".agents"]) {
+      await expect(
+        stat(join(started.worktree, target, "skills", "pbench-runner", "SKILL.md"))
+      ).resolves.toBeTruthy();
+    }
+
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+    await pbenchCommand("finish", prepared.home).run(["--run", started.runId]);
+
+    const diff = await readFile(join(started.artifactDir, "agent.diff"), "utf8");
+    const untracked = await readFile(join(started.artifactDir, "candidate", "untracked.json"), "utf8");
+    expect(diff).not.toContain("pbench-runner");
+    expect(untracked).not.toContain("pbench-runner");
+  });
+
+  test("preserves a skill target created by setup when removing the injected runner", async () => {
+    const prepared = await finalizedRunnableCase();
+    const manifestPath = join(prepared.casePath, "case.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.setupCommands = [
+      {
+        command: "node -e \"require('node:fs').mkdirSync('.agents/skills', { recursive: true })\"",
+        cwd: ".",
+        timeoutSeconds: 10
+      }
+    ];
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await writeFile(
+      join(prepared.casePath, "private", "validators", "check-completion.mjs"),
+      [
+        "import { existsSync } from 'node:fs';",
+        "import { join } from 'node:path';",
+        "const root = process.env.PB_REPLAY_DIR;",
+        "process.exit(existsSync(join(root, 'done.txt')) && existsSync(join(root, '.agents', 'skills')) ? 0 : 1);"
+      ].join("\n") + "\n"
+    );
+
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+
+    const finished = JSON.parse(
+      String(await pbenchCommand("finish", prepared.home).run(["--run", started.runId]))
+    );
+    expect(finished.status).toBe("passed");
+  });
+
+  test("refuses to overwrite an existing runner skill", async () => {
+    const prepared = await finalizedRunnableCase({ existingRunnerSkill: true });
+
+    await expect(
+      pbenchCommand("start", prepared.home).run([
+        "--case",
+        prepared.caseId,
+        "--workspace",
+        prepared.workspaceRoot
+      ])
+    ).rejects.toThrow("Refusing to overwrite existing pbench-runner skill");
+  });
+
+  test("candidate artifacts exclude the injected runner skill", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+
+    await pbenchCommand("finish", prepared.home).run(["--run", started.runId]);
+
+    const diff = await readFile(join(started.artifactDir, "agent.diff"), "utf8");
+    const untracked = await readFile(join(started.artifactDir, "candidate", "untracked.json"), "utf8");
+    expect(diff).not.toContain("pbench-runner");
+    expect(untracked).not.toContain("pbench-runner");
+  });
+
   test("starts a skill-mediated run with public capsule, runner skill, and one-shot finish", async () => {
     const { home, workspaceRoot, caseId, casePath } = await finalizedRunnableCase();
     const startOutput = await createPbenchCommands({ home })
@@ -1820,6 +2128,132 @@ describe("pbench codex capture flow", () => {
     ).rejects.toThrow("already finished");
   });
 
+  test("finish consumes the attempt when validation infrastructure fails", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const privateMarker = "PRIVATE_INFRASTRUCTURE_SECRET";
+    await writeFile(join(prepared.casePath, "case.json"), `${privateMarker} is not JSON\n`);
+
+    const firstOutput = String(
+      await pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    );
+    const first = JSON.parse(firstOutput);
+    expect(first.status).toBe("blocked");
+    expect(firstOutput).not.toContain(privateMarker);
+    await expect(readFile(join(started.artifactDir, "summary.md"), "utf8")).resolves.not.toContain(privateMarker);
+    await expect(
+      pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    ).rejects.toThrow("already finished");
+
+    const statePath = join(
+      prepared.home,
+      ".ya-skills",
+      "pbench",
+      "runs",
+      `${started.runId}.json`
+    );
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(state.terminal).toBe(true);
+  });
+
+  test("rejects a second finish while the first attempt is marked finishing", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const statePath = join(
+      prepared.home,
+      ".ya-skills",
+      "pbench",
+      "runs",
+      `${started.runId}.json`
+    );
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.status = "finishing";
+    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+    await expect(
+      pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    ).rejects.toThrow("already finished");
+  });
+
+  test("treats an atomic finishing marker as a consumed attempt after a crash", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const statePath = join(
+      prepared.home,
+      ".ya-skills",
+      "pbench",
+      "runs",
+      `${started.runId}.json`
+    );
+    await rename(statePath, `${statePath}.finishing`);
+
+    await expect(
+      pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+    ).rejects.toThrow(`already finished: ${started.runId} (finishing)`);
+  });
+
+  test("allows only one concurrent finish to execute private validators", async () => {
+    const prepared = await finalizedRunnableCase();
+    const started = JSON.parse(
+      String(
+        await pbenchCommand("start", prepared.home).run([
+          "--case",
+          prepared.caseId,
+          "--workspace",
+          prepared.workspaceRoot
+        ])
+      )
+    );
+    const counterPath = join(prepared.casePath, "private", "finish-count.txt");
+    await writeFile(
+      join(prepared.casePath, "private", "validators", "check-completion.mjs"),
+      [
+        "import { appendFileSync, existsSync } from 'node:fs';",
+        "import { join } from 'node:path';",
+        "appendFileSync(join(process.env.PB_PRIVATE_DIR, 'finish-count.txt'), 'run\\n');",
+        "process.exit(existsSync(join(process.env.PB_REPLAY_DIR, 'done.txt')) ? 0 : 1);"
+      ].join("\n") + "\n"
+    );
+    await writeFile(join(started.worktree, "done.txt"), "done\n");
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        pbenchCommand("finish", prepared.home).run(["--run", started.runId])
+      )
+    );
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(3);
+    expect((await readFile(counterPath, "utf8")).trim().split("\n")).toHaveLength(1);
+  });
+
   test("preserves profile and writes normalized metrics for a skill-mediated run", async () => {
     const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
     const startOutput = await pbenchCommand("start", home).run([
@@ -1838,7 +2272,12 @@ describe("pbench codex capture flow", () => {
     const runJson = JSON.parse(await readFile(join(started.artifactDir, "run.json"), "utf8"));
     const metrics = JSON.parse(await readFile(join(started.artifactDir, "metrics.json"), "utf8"));
 
-    expect(runJson.profile).toBe("manual-agent");
+    expect(runJson).toMatchObject({
+      profile: "manual-agent",
+      integrity: "instruction-only",
+      validatorExecuted: true,
+      agentVersion: null
+    });
     expect(metrics).toMatchObject({
       runId: started.runId,
       caseId,
@@ -1859,9 +2298,8 @@ describe("pbench codex capture flow", () => {
     const finishOutput = await pbenchCommand("finish", home).run(["--run", started.runId]);
     const finished = JSON.parse(String(finishOutput));
 
-    expect(Object.keys(finished).sort()).toEqual(["failingValidatorId", "runId", "status"]);
+    expect(Object.keys(finished).sort()).toEqual(["runId", "status"]);
     expect(finished.status).toBe("validator_failed");
-    expect(finished.failingValidatorId).toBeTruthy();
     expect(String(finishOutput)).not.toContain("summary.md");
     expect(String(finishOutput)).not.toContain("validator-outcomes");
 
@@ -1902,8 +2340,13 @@ describe("pbench codex capture flow", () => {
       expect(outcomes[0]).toHaveProperty("stdout");
       expect(outcomes[0]).toHaveProperty("stderr");
       const runJson = JSON.parse(await readFile(join(result.artifactDir, "run.json"), "utf8"));
-      expect(runJson.isolation).toBe("workspace-write");
-      expect(runJson.attemptNumber).toBe(1);
+      expect(runJson).toMatchObject({
+        isolation: "workspace-write",
+        integrity: "instruction-only",
+        validatorExecuted: true,
+        agentVersion: "codex-test 0.0.0",
+        attemptNumber: 1
+      });
     } finally {
       process.env.PATH = originalPath;
     }
@@ -1920,7 +2363,10 @@ describe("pbench codex capture flow", () => {
       isolation: "none",
       attemptNumber: 1,
       priorRunIds: [],
-      contaminated: false
+      contaminated: false,
+      integrity: "instruction-only",
+      validatorExecuted: false,
+      agentVersion: null
     });
     // Finish each run so it becomes a terminal prior attempt before the next start.
     await writeFile(join(first.worktree, "done.txt"), "done\n");
@@ -1950,6 +2396,7 @@ describe("pbench codex capture flow", () => {
     );
     const taintedRun = JSON.parse(await readFile(join(tainted.artifactDir, "run.json"), "utf8"));
     expect(taintedRun.contaminated).toBe(true);
+    expect(taintedRun.integrity).toBe("contaminated");
     expect(taintedRun.attemptNumber).toBe(3);
   });
 
@@ -1984,7 +2431,9 @@ describe("pbench codex capture flow", () => {
       "probe",
       "--contaminated"
     ]);
-    const report = JSON.parse(String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot])));
+    const report = JSON.parse(
+      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"]))
+    );
     expect(report.totals.contaminated).toBe(1);
     const recent = report.recentRuns.find((run: { contaminated: boolean }) => run.contaminated === true);
     expect(recent).toBeTruthy();
@@ -2051,23 +2500,21 @@ describe("pbench codex capture flow", () => {
     ]);
   });
 
-  test("installs the runner skill with integrity boundaries and the access-audit rule (P3)", async () => {
+  test("installs the canonical internal runner skill", async () => {
     const { home, workspaceRoot, caseId } = await finalizedRunnableCase();
     const started = JSON.parse(
       String(await pbenchCommand("start", home).run(["--case", caseId, "--workspace", workspaceRoot]))
     );
     const skill = await readFile(join(started.worktree, ".agents", "skills", "pbench-runner", "SKILL.md"), "utf8");
-    expect(skill).toContain("Integrity boundaries");
-    expect(skill).toContain("access-audit.jsonl");
-    expect(skill).toContain("one-shot");
-    expect(skill).toContain("run-artifacts");
-    expect(skill).toContain("harness implementation");
-    // The integrity prose must not itself trip the fail-closed private-reference gate.
+    expect(skill).toContain("name: pbench-runner");
+    expect(skill).toContain("A failed finish is terminal");
+    expect(skill).not.toContain("access-audit.jsonl");
     expectNoAgentVisiblePrivateReferences(skill);
-    // SSOT: the installed runner skill must match the checked-in source verbatim, so the embedded
-    // install copy cannot silently diverge from skills/pbench-runner/SKILL.md.
-    const checkedInSource = await readFile(join(process.cwd(), "skills", "pbench-runner", "SKILL.md"), "utf8");
-    expect(skill).toBe(checkedInSource);
+    const canonicalAsset = await readFile(
+      join(process.cwd(), "packages", "functions-pbench", "assets", "pbench-runner", "SKILL.md"),
+      "utf8"
+    );
+    expect(skill).toBe(canonicalAsset);
   });
 
   test("redacts setup-outcomes stdout/stderr in skill mode (review)", async () => {
@@ -2239,14 +2686,18 @@ describe("pbench codex capture flow", () => {
     }
   });
 
-  test("reports empty totals when the workspace has no runs", async () => {
+  test("defaults reports to Markdown and preserves explicit JSON output", async () => {
     const home = await temp("home");
     const workspaceRoot = join(await temp("workspace-root"), "workspace");
     await initWorkspace(workspaceRoot);
 
-    const output = await pbenchCommand("report", home).run(["--workspace", workspaceRoot]);
-    const report = JSON.parse(String(output));
+    const markdown = String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot]));
+    const json = String(
+      await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "json"])
+    );
+    const report = JSON.parse(json);
 
+    expect(markdown.startsWith("# PBench Report")).toBe(true);
     expect(report).toMatchObject({
       schemaVersion: 1,
       workspaceRoot,
@@ -2261,119 +2712,6 @@ describe("pbench codex capture flow", () => {
       cases: {},
       recentRuns: []
     });
-  });
-
-  test("aggregates run artifacts by status, profile, case, and tokens", async () => {
-    const home = await temp("home");
-    const workspaceRoot = join(await temp("workspace-root"), "workspace");
-    await initWorkspace(workspaceRoot);
-    await writeRunArtifact(workspaceRoot, {
-      runId: "run_a",
-      caseId: "case_one_20260612T000000Z",
-      profile: "baseline",
-      status: "passed",
-      durationMs: 100,
-      tokenUsage: { input_tokens: 10, output_tokens: 5 }
-    });
-    await writeRunArtifact(workspaceRoot, {
-      runId: "run_b",
-      caseId: "case_one_20260612T000000Z",
-      profile: "current",
-      status: "validator_failed",
-      durationMs: 200,
-      tokenUsage: { input_tokens: 20, output_tokens: 10 }
-    });
-    await writeRunArtifact(workspaceRoot, {
-      runId: "run_c",
-      caseId: "case_two_20260612T000000Z",
-      profile: "current",
-      status: "agent_failed",
-      durationMs: 300,
-      tokenUsage: { input_tokens: 30, output_tokens: 15 },
-      manualIntervention: true
-    });
-    await writeRunArtifact(workspaceRoot, {
-      runId: "run_d",
-      caseId: "case_two_20260612T000000Z",
-      status: "setup_failed",
-      durationMs: 400
-    });
-
-    const report = JSON.parse(String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot])));
-    const current = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--profile", "current"]))
-    );
-    const oneCase = JSON.parse(
-      String(await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--case", "case_one_20260612T000000Z"]))
-    );
-
-    expect(report.totals).toMatchObject({
-      runs: 4,
-      cases: 2,
-      manualIntervention: 1,
-      statusCounts: {
-        passed: 1,
-        validator_failed: 1,
-        agent_failed: 1,
-        setup_failed: 1
-      }
-    });
-    expect(report.profiles.baseline).toMatchObject({
-      runs: 1,
-      passed: 1,
-      passRate: 1,
-      averageDurationMs: 100,
-      tokenUsage: { input_tokens: 10, output_tokens: 5 }
-    });
-    expect(report.profiles.current).toMatchObject({
-      runs: 2,
-      passed: 0,
-      passRate: 0,
-      averageDurationMs: 250,
-      tokenUsage: { input_tokens: 50, output_tokens: 25 }
-    });
-    expect(report.profiles.default).toMatchObject({
-      runs: 1,
-      passed: 0,
-      passRate: 0,
-      averageDurationMs: 400
-    });
-    expect(report.cases.case_one_20260612T000000Z.statusCounts).toEqual({ passed: 1, validator_failed: 1 });
-    expect(current.totals.runs).toBe(2);
-    expect(Object.keys(current.profiles)).toEqual(["current"]);
-    expect(oneCase.totals.runs).toBe(2);
-    expect(Object.keys(oneCase.cases)).toEqual(["case_one_20260612T000000Z"]);
-  });
-
-  test("renders markdown report with case and recent run tables without private evaluator paths", async () => {
-    const home = await temp("home");
-    const workspaceRoot = join(await temp("workspace-root"), "workspace");
-    await initWorkspace(workspaceRoot);
-    const artifactDir = await writeRunArtifact(workspaceRoot, {
-      runId: "run_markdown",
-      caseId: "case_markdown_20260612T000000Z",
-      profile: "current",
-      status: "passed",
-      durationMs: 100,
-      tokenUsage: { input_tokens: 10, output_tokens: 5 }
-    });
-
-    const markdown = String(
-      await pbenchCommand("report", home).run(["--workspace", workspaceRoot, "--format", "markdown"])
-    );
-
-    expect(markdown).toContain("| current | 1 | 1 | 100.0% | 100 | 10 | 5 |");
-    expect(markdown).toContain("| passed | 1 |");
-    expect(markdown).toContain("## Cases");
-    expect(markdown).toContain("| Case | Runs | Profiles | Statuses |");
-    expect(markdown).toContain("| case_markdown_20260612T000000Z | 1 | current: 1 | passed: 1 |");
-    expect(markdown).toContain("## Recent Runs");
-    expect(markdown).toContain("| Run | Case | Profile | Status | Duration (ms) | Summary |");
-    expect(markdown).toContain(
-      `| run_markdown | case_markdown_20260612T000000Z | current | passed | 100 | ${join(artifactDir, "summary.md")} |`
-    );
-    expect(markdown).not.toContain("private/validators");
-    expect(markdown).not.toContain("PB_PRIVATE_DIR");
   });
 
   test("audits case quality warnings and public private-path leaks without strict replay", async () => {

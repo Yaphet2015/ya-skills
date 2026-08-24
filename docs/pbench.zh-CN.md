@@ -62,7 +62,7 @@ PBench 捕获的是任务或 session 层面的结果不匹配，不是普通中�
 flowchart TD
   capture["1. 捕获失败 session<br/>yk pbench capture --source codex"]
   author["Authoring gate<br/>review, validate, finalize"]:::internal
-  run["2. 运行 finalized case<br/>yk pbench run 或 yk pbench start"]
+  run["2. 运行 finalized case<br/>yk pbench run --agent … 或 --manual"]
   report["查看私有结果<br/>yk pbench report"]
 
   capture --> author --> run --> report
@@ -154,7 +154,7 @@ public/
   context-files/untracked/
 ```
 
-并不是每个文件都会出现。例如，只有当 capture 发现体积合适的 tracked dirty changes 时，才会生成 `starting.patch`。
+只有作者明确把 dirty repository state 选为 replay input 后，才会出现 `starting.patch` 和 `context-files/untracked/`。在记录这个决定之前，capture 会把当前 tracked 和体积受限的 untracked 状态保留在 private authoring evidence 中。
 
 ### Private Evaluator Material
 
@@ -188,17 +188,18 @@ run artifacts 存在：
 
 ## PBench 如何工作
 
-### 1. Capture 读取 Codex session
+### 1. Capture 读取已注册 agent session
 
-当前 capture 支持 Codex JSONL session：
+当前已注册的 capture source 是 Codex 和 Claude：
 
 ```sh
 yk pbench capture --source codex --yes
 yk pbench capture --source codex --input /path/to/session.jsonl --yes
-yk pbench capture --source codex --session-id <id> --yes
+yk pbench capture --source claude --session-id <id> --yes
+yk pbench capture --source claude --input /path/to/transcript.jsonl --yes
 ```
 
-capture 支持旧版和新版 Codex JSONL 结构，会抽取：
+Codex adapter 支持旧版和新版 Codex JSONL；Claude adapter 支持 Claude Code project transcripts。两者都会规范化并抽取：
 
 - session metadata，包括 cwd、model、CLI version、sandbox、approval policy，以及存在时的 Git metadata；
 - 用户消息，排除注入的 AGENTS/environment context；
@@ -223,9 +224,9 @@ capture 会解析 subject Git 仓库和 baseline commit，把该 commit 同步�
 - `public/replay.md` 是未来 agent 的上下文索引；
 - `public/agent-instructions.md` 来自 repo root 到 capture cwd 之间的 AGENTS.md，以及已安装 skill 名称；
 - `public/key-observations.md` 来自 failed commands 和 replayable verification commands；
-- `public/command-observations.md` 来自有长度限制的命令和工具上下文；
-- `public/starting.patch` 保存体积合适的 tracked dirty changes；
-- 小型、未被 ignore 的 UTF-8 untracked 文件会复制到 `public/context-files/untracked/`。
+- `public/command-observations.md` 来自有长度限制的命令和工具上下文。
+
+当前 tracked 和体积受限的 untracked 状态不会自动进入 public，因为它们可能包含任务开始后产生的工作。capture 会把它们保存为 private authoring evidence，并把 replay start 标记为 unresolved。strict validation 通过前，作者必须选择只使用 baseline commit，或明确整理 `public/starting.patch` 和 public context files。
 
 它也会生成 private authoring 和 evaluator material：
 
@@ -283,7 +284,7 @@ agent replay 时，PBench 会从缓存的 baseline commit 准备 worktree，并�
 
 ### 6. Runner 私下验证
 
-`yk pbench run` 会自动启动 Codex。`yk pbench start` 会为不能被 CLI 直接启动的 agent 准备 skill-mediated worktree，agent 完成 public task 后由 `yk pbench finish` 做一次性 private validation。
+`yk pbench run --agent <agent>` 会启动已注册 runner。`yk pbench run --manual` 会为手动打开的 agent 准备 worktree，agent 完成 public task 后由 `yk pbench finish` 做一次性 private validation。`yk pbench start` 保留为 manual preparation 的兼容命令。
 
 两条路径都会在 agent-visible capsule 之外运行 private validators，并把本地私有 run artifacts 写到 `<workspace>/runs/<run-id>/`。
 
@@ -303,8 +304,8 @@ PBench 是 `ya-skills` 里的普通 function package：
 - `packages/functions-pbench` 负责 `yk pbench <action>` 行为；
 - `packages/cli` 注册 function package，让命令通过 `yk` 暴露；
 - `packages/core` 提供 CLI package 复用的 function registry；
-- `skills/pbench` 是 agent-facing capture workflow skill；
-- `skills/pbench-runner` 会被安装到 `yk pbench start` 准备的 worktree；
+- `skills/pbench` 是 agent-facing capture 与 replay operator skill；
+- `packages/functions-pbench/assets/pbench-runner/SKILL.md` 是安装到 manual replay worktree 的内部 canonical runner asset；
 - `tests/pbench.test.ts` 覆盖 workspace 解析、capture、validation、public/private 边界、automatic run、skill-mediated run、report 和 audit。
 
 重要实现边界：
@@ -357,11 +358,11 @@ public/
 
 把当前项目关联到一个已初始化 workspace，写入 `.personal-bench/workspace.json`。
 
-### `yk pbench capture --source codex [--yes] [--input <jsonl>] [--session-id <id>] [--workspace <path>] [--title <title>]`
+### `yk pbench capture --source <source> [--yes] [--input <jsonl>] [--session-id <id>] [--workspace <path>] [--title <title>]`
 
-从 Codex session 创建 authoring transaction。不带 `--yes` 时，交互式 capture 会显示 session path、repository、baseline commit 和 title 并请求确认。非交互环境需要传 `--yes`。
+通过已注册的 capture source 创建 authoring transaction。内置 source 为 `codex` 和 `claude`。`--input` 只把 transcript 交给选中的已注册 source；它不会注册任意 source。不带 `--yes` 时，交互式 capture 会显示 session path、repository、baseline commit 和 title 并请求确认。非交互环境需要传 `--yes`。
 
-输出包含 transaction path、case directory、case id、workspace root、authoring checklist path、warnings、initial validation 和 next commands。
+输出包含 transaction path、case directory、case id、workspace root、authoring checklist path、warnings、initial validation、一个 `state`、一个 `nextAction`，以及兼容用的 `next` 数组。
 
 ### `yk pbench validate --transaction <path> [--strict]`
 
@@ -381,19 +382,23 @@ public/
 
 ### `yk pbench run --case <case-id-or-dir> --agent <agent> [--workspace <path>] [--profile <name>]`
 
-通过已注册的 agent runner 以 headless 方式运行 finalized case。内置 agent：`codex`（沙箱 `--sandbox workspace-write`）与 `claude`（Claude Code `-p` headless）。评估完整性来自 public/private worktree 边界，而非 agent 自带沙箱，因此任何具备 headless runner 的 agent 都可作为目标。
+通过已注册的 runner 以 headless 方式运行 finalized case。内置 agent：`codex`（使用 `--sandbox workspace-write` 限制写入）与 `claude`（Claude Code `-p` headless）。写入隔离不能强制 private-read 白名单，因此当前所有内置 runner 和 manual runner 都记录为 `instruction-only` integrity，默认不进入 pass-rate 分母。只有真正强制读取边界的未来 runner 才能记录为 `enforced`。
+
+### `yk pbench run --case <case-id-or-dir> --manual [--workspace <path>] [--profile <name>]`
+
+准备 manual replay worktree，并安装内部 `pbench-runner` asset。当 benchmarked agent 不能 headless 启动时使用。
 
 ### `yk pbench start --case <case-id-or-dir> [--workspace <path>] [--profile <name>]`
 
-准备 skill-mediated replay worktree，并安装 `pbench-runner` skill。当 benchmarked agent 不能由 `yk pbench run` 直接启动时使用。
+这是 manual preparation path 的兼容命令。新流程应使用 `yk pbench run --manual`。
 
 ### `yk pbench finish --run <run-id>`
 
 对 skill-mediated run 执行 private validation。它是一次性的；已经 finish 的 run 不能再次 finish。
 
-### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--format json|markdown]`
+### `yk pbench report [--workspace <path>] [--case <case-id-or-dir>] [--profile <name>] [--include-untrusted] [--format json|markdown]`
 
-按 status、case、profile、manual intervention、duration 和 token usage 聚合 run artifacts。默认输出 JSON；Markdown 适合人工阅读。
+报告会聚合所有观测到的 run artifacts，但默认 pass rate 只使用 terminal、已执行 validator、未污染且 integrity 为 `enforced` 的 run。可比较 cohort 会按 profile、agent、agent version、isolation、manual intervention 和 integrity 分组。running、setup-failed、contaminated、instruction-only 和旧版 `unknown` run 仍然可见，但计入 excluded counts。损坏的 run artifact 只产生安全 warning，不会阻断整份报告。使用 `--include-untrusted` 可把 instruction-only 和旧版 `unknown` run 纳入 evaluated 分母；contaminated run 仍然排除。默认输出 Markdown；自动化请使用 `yk pbench report --format json`。
 
 ### `yk pbench audit [--case <case-id-or-dir>] [--workspace <path>]`
 
@@ -407,7 +412,7 @@ public/
 yk install pbench
 ```
 
-`pbench` skill 会告诉 agent 什么情况值得捕获，以及用户批准后如何捕获。`yk pbench start` 会在准备好的 replay worktree 里自动安装 `pbench-runner`。
+`pbench` skill 同时路由 outcome capture 和显式 benchmark 操作。`yk pbench run --manual` 会在准备好的 replay worktree 里自动安装内部 `pbench-runner` asset。
 
 ### 第一次设置
 
@@ -457,10 +462,10 @@ yk pbench run --case <case-id> --agent codex --profile current-model
 
 然后查看返回的 `summaryPath` 和 artifact directory。
 
-### 运行 skill-mediated benchmark
+### 运行 manual benchmark
 
 ```sh
-yk pbench start --case <case-id> --profile current-skills
+yk pbench run --case <case-id> --manual --profile current-skills
 ```
 
 用被测 agent 打开返回的 worktree。worktree 里包含 `.pbench/run.json` 和已安装的 `pbench-runner` skill。agent 应该只使用 `.pbench/public/` 完成任务，然后执行：
@@ -476,10 +481,10 @@ yk pbench finish --run <run-id>
 ```sh
 yk pbench run --case <case-id> --agent codex --profile baseline
 yk pbench run --case <case-id> --agent codex --profile current-model
-yk pbench report --format markdown
+yk pbench report
 ```
 
-profile 只是标签，本身不会改变 runtime 行为；它让 report 可以比较不同配置。
+profile 只是标签，本身不会改变 runtime 行为。比较时应查看 cohort 行；不同 agent、version、isolation、manual mode 或 integrity 的 run，不会合并成一个默认 pass rate。
 
 ## 故障排查
 
