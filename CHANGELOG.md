@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/Yaphet2015/ya-skills/compare/v0.10.0...v0.11.0) (2026-08-24)
+
+
+### Features
+
+* add eli5 skill ([458fdcc](https://github.com/Yaphet2015/ya-skills/commit/458fdccd28eb22971d81ebe2ef08ad03ef504703))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
