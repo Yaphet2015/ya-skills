@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/Yaphet2015/ya-skills/compare/v0.8.0...v0.9.0) (2026-08-24)
+
+
+### Features
+
+* **pbench:** add default-first operator commands ([90141be](https://github.com/Yaphet2015/ya-skills/commit/90141be43b5530565b2edea34bb6066ad7985419))
+
+
+### Bug Fixes
+
+* **pbench:** close integrity review gaps ([34e0295](https://github.com/Yaphet2015/ya-skills/commit/34e029592e9c8daf7ce2e439f9632e6ff133c9a1))
+* **pbench:** isolate injected runner skills ([9bb8ddb](https://github.com/Yaphet2015/ya-skills/commit/9bb8ddb647cd31246d0d7e33e00e0ddb491c41db))
+* **pbench:** make finish attempts atomic ([27540b3](https://github.com/Yaphet2015/ya-skills/commit/27540b3c15f0ff84b30d07275bb58819f706192a))
+* **pbench:** reject invalid run statuses ([3e111d4](https://github.com/Yaphet2015/ya-skills/commit/3e111d43f1c1580bddb869e79a3796986c083923))
+* **pbench:** report trusted benchmark cohorts ([9601509](https://github.com/Yaphet2015/ya-skills/commit/9601509484981a66a23d12a34a1081009aecfeb0))
+* **pbench:** require replay-start provenance ([8557837](https://github.com/Yaphet2015/ya-skills/commit/8557837c323b87a67c1d67c11ca89e583c85f71c))
+* **pbench:** revalidate cases during finalize ([9dbbef3](https://github.com/Yaphet2015/ya-skills/commit/9dbbef3538b8a80458f6567bbad482755b282d33))
+* **pbench:** route capture through registered sources ([44030fc](https://github.com/Yaphet2015/ya-skills/commit/44030fc2df3559dbc2ef727d9d321a257c6445ab))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
