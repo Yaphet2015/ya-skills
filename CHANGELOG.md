@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/Yaphet2015/ya-skills/compare/v0.9.0...v0.10.0) (2026-08-24)
+
+
+### Features
+
+* add global uninstall and overwrite reinstall ([3fa8e1f](https://github.com/Yaphet2015/ya-skills/commit/3fa8e1fd27925fe8ea52922ae817249368a2a1fa))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
