@@ -36,7 +36,7 @@
 - Release tarballs must contain the compiled `yk` binary and the `skills/` catalog.
 - Packaged installs rely on `YA_SKILLS_CATALOG_DIR` pointing to the installed catalog; keep this env override working before changing catalog lookup.
 - Keep `bun.lock` public-registry compatible for GitHub-hosted release runners.
-- After a release, update the Homebrew formula version, asset URL, and sha256 in the tap.
+- After a release, update the Homebrew formula asset URL and sha256 in the tap. Do not set formula `version`; Homebrew scans it from the GitHub release URL.
 
 ## Editing Guidance
 - Use Bun workspace package imports instead of deep relative imports across packages.

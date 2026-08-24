@@ -236,7 +236,7 @@ bun run smoke            # 快速端到端冒烟测试
    - `ya-skills-v<version>-macos-arm64.tar.gz`
    - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
 
-资源上传放在 Release Please 工作流里执行，因为由默认 `GITHUB_TOKEN` 创建的 tag 不会触发其他工作流。`.github/workflows/release.yml` 仍可用于手动推送 `v*` tag。发布后，请用新的 formula `version`、发布资源 URL 和 sha256 更新 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。
+资源上传放在 Release Please 工作流里执行，因为由默认 `GITHUB_TOKEN` 创建的 tag 不会触发其他工作流。`.github/workflows/release.yml` 仍可用于手动推送 `v*` tag。发布后，请用新的发布资源 URL 和 sha256 更新 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。不要写 formula `version`；Homebrew 会从 GitHub release URL 读出版本。
 
 ## 贡献
 

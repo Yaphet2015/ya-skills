@@ -22,7 +22,7 @@ Local packaging path, not Release Please:
 4. Run `bun run typecheck`, `bun run test`, and `bun run build:binary:macos-arm64`.
 5. Package `yk` plus `skills/` into `ya-skills-v<version>-macos-arm64.tar.gz` and `.sha256`.
 6. Create tag `v<version>` and a GitHub Release with those two assets.
-7. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb` version, URL, sha256, and `--version` assertion.
+7. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb` URL, sha256, and `--version` assertion. Do not add a formula `version` line.
 8. Close or refresh the open Release Please PR. Do not merge it.
 9. After success, delete local packaging leftovers. Do not leave `ya-skills-v*-macos-arm64.tar.gz`, `.sha256`, `dist/yk`, or a packaging staging dir in the repo.
 

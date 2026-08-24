@@ -236,7 +236,7 @@ Releases are automated with [Release Please](https://github.com/googleapis/relea
    - `ya-skills-v<version>-macos-arm64.tar.gz`
    - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
 
-The asset upload runs in the Release Please workflow because tags created by the default `GITHUB_TOKEN` do not trigger other workflows. `.github/workflows/release.yml` remains available for manual `v*` tag pushes. After publishing, update [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap) with the new formula `version`, release asset URL, and sha256.
+The asset upload runs in the Release Please workflow because tags created by the default `GITHUB_TOKEN` do not trigger other workflows. `.github/workflows/release.yml` remains available for manual `v*` tag pushes. After publishing, update [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap) with the new release asset URL and sha256. Do not set formula `version`; Homebrew scans it from the GitHub release URL.
 
 ## Contributing
 

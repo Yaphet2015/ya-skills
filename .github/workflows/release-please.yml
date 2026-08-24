@@ -104,6 +104,12 @@ jobs:
             exit 1
           fi
 
+      - name: Check out ya-skills
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          path: ya-skills
+
       - name: Check out Homebrew tap
         uses: actions/checkout@v4
         with:
@@ -114,26 +120,7 @@ jobs:
       - name: Update ya-skills formula
         working-directory: homebrew-tap
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          import re
-
-          formula = Path("Formula/ya-skills.rb")
-          version = os.environ["VERSION"]
-          tag = os.environ["TAG_NAME"]
-          asset_name = os.environ["ASSET_NAME"]
-          sha256 = os.environ["ASSET_SHA256"]
-          url = f"https://github.com/Yaphet2015/ya-skills/releases/download/{tag}/{asset_name}"
-          text = formula.read_text()
-          text = re.sub(r'url "[^"]+"', f'url "{url}"', text, count=1)
-          text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
-          text = re.sub(r'sha256 "[^"]+"', f'sha256 "{sha256}"', text, count=1)
-          text = re.sub(r'assert_match "[^"]+", shell_output\("\#\{bin\}/yk --version"\)',
-                        f'assert_match "{version}", shell_output("#{{bin}}/yk --version")',
-                        text, count=1)
-          formula.write_text(text)
-          PY
+          python3 ../ya-skills/scripts/update-ya-skills-formula.py Formula/ya-skills.rb
           git diff -- Formula/ya-skills.rb
 
       - name: Commit and push tap update

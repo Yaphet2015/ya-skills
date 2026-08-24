@@ -17,7 +17,7 @@ Local-package the current `main`. Do not merge Release Please. Do not overwrite 
 4. Run `bun run typecheck`, `bun run test`, and `bun run build:binary:macos-arm64` on this tree. A previous green run does not count.
 5. Package `dist/yk` and `skills/` as `ya-skills-v<version>-macos-arm64.tar.gz` plus `.sha256`. The tarball must contain both.
 6. Create tag `v<version>` and `gh release create` with those two assets. No `--clobber`. Stop if the tag or release already exists. If `.github/workflows/release.yml` starts, cancel that run so CI cannot replace the local assets.
-7. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb`: `url`, `version`, `sha256`, and the `assert_match` version. Commit and push. Do not force-push.
+7. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb` with `scripts/update-ya-skills-formula.py` and env `VERSION`, `TAG_NAME`, `ASSET_NAME`, `ASSET_SHA256`. That writes `url`, `sha256`, and the `--version` assertion. Do not add `version` — `brew audit` infers it from the GitHub release URL. Commit and push. Do not force-push.
 8. Close or refresh the open Release Please PR. Do not merge it.
 9. After the GitHub Release and tap update succeed, delete local packaging leftovers: `ya-skills-v*-macos-arm64.tar.gz`, matching `.sha256` files, `dist/yk`, and any staging dir used to build the tarball. Do not commit these files. Keep them only if the release or tap update failed.
 
@@ -29,12 +29,13 @@ Local-package the current `main`. Do not merge Release Please. Do not overwrite 
 | "User said skip tests" | Formula and users install this binary. Verify this tree. |
 | "Merge the Release Please PR, CI will do it" | This skill is the local path. Merging that PR races the same version. |
 | "Just change the tap sha256" | Tap-only leaves `yk --version` and the GitHub tag pointing at old contents. |
+| "Keep version so the formula is explicit" | `brew audit` fails: `version` is redundant with the GitHub release URL. |
 | "package.json already matches the old tag" | Rebuild would reprint the old version. Bump first. |
 | "Leave tarballs so we can inspect" | The GitHub Release already has the assets. Local copies clutter the tree. |
 
 ## Done when
 
 - GitHub Release `v<next>` exists and was not an overwrite
-- Formula `version`, URL, sha256, and `--version` assertion match that release
+- Formula URL, sha256, and `--version` assertion match that release, and the formula has no `version` line
 - Release Please PR is closed or stale, not merged
 - Local leftovers are gone: no `ya-skills-v*-macos-arm64.tar.gz` / `.sha256` in the repo, no leftover `dist/yk` or packaging staging dir
