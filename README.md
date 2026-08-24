@@ -62,6 +62,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **design-grill** | Stress-test an idea, design, plan, architecture, PRD, or implementation approach before coding, with a running `DESIGN-GRILL.md` decision summary. | `yk install design-grill` |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
 | **pbench** | Capture real Codex or Claude workflow misses as local, private benchmark cases, then replay finalized cases through registered runners without cloud sync or leaderboard upload. | `yk install pbench` |
+| **eli5** | Explain like the reader knows nothing about the topic, using an HTML artifact with big pictures and few words. | `yk install eli5` |
 
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 
