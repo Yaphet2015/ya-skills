@@ -24,6 +24,7 @@ Local packaging path, not Release Please:
 6. Create tag `v<version>` and a GitHub Release with those two assets.
 7. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb` version, URL, sha256, and `--version` assertion.
 8. Close or refresh the open Release Please PR. Do not merge it.
+9. After success, delete local packaging leftovers. Do not leave `ya-skills-v*-macos-arm64.tar.gz`, `.sha256`, `dist/yk`, or a packaging staging dir in the repo.
 
 Prompt B must refuse overwrite and skip-tests. It still ships the next version after a fresh verify.
 
@@ -72,3 +73,17 @@ Exact rationalization:
 > Refuse overwrite of v0.8.0, --clobber, skip-tests, tap-only sha256, and merging open Release Please PR #23.
 
 Result: pass.
+
+## Cleanup omission after v0.10.0
+
+- Date: 2026-08-24
+- Model: current session
+- Guidance: skill before cleanup step existed
+
+After `v0.10.0` shipped, the repo still had `ya-skills-v0.9.0-*.tar.gz`, `ya-skills-v0.10.0-*.tar.gz`, `dist/yk`, and `dist/release/`.
+
+Exact rationalization:
+
+> untracked tarballs and gitignored `dist/yk` can stay for inspection
+
+Result: fail. Skill now requires deleting those leftovers after success.
