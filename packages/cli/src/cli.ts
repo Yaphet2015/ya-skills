@@ -76,9 +76,15 @@ async function main(argv: string[]) {
 
 async function listSkills() {
   const catalog = await loadDefaultCatalog();
-  for (const skill of catalog.skills) {
-    const dependencyText = skill.dependsOn.length > 0 ? ` (depends on ${skill.dependsOn.join(", ")})` : "";
-    console.log(`${skill.name} - ${skill.description}${dependencyText}`);
+  for (const [index, skill] of catalog.skills.entries()) {
+    if (index > 0) {
+      console.log();
+    }
+    console.log(skill.name);
+    console.log(`  ${skill.description}`);
+    if (skill.dependsOn.length > 0) {
+      console.log(`  depends on: ${skill.dependsOn.join(", ")}`);
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import packageJson from "../package.json" with { type: "json" };
@@ -33,7 +33,41 @@ test("yk list discovers plan-jury in the root catalog", async () => {
 
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
-  expect(result.stdout).toContain("plan-jury - ");
+  expect(result.stdout).toContain("plan-jury\n");
+});
+
+test("yk list prints each skill as a name-first block so names stay scannable", async () => {
+  const catalogDir = await mkdtemp(join(tmpdir(), "yk-list-catalog-"));
+
+  try {
+    for (const skill of [
+      { name: "alpha", description: "Base skill" },
+      { name: "beta", description: "Dependent skill", dependsOn: ["alpha"] }
+    ]) {
+      const skillDir = join(catalogDir, skill.name);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, "skill.json"), JSON.stringify(skill, null, 2));
+      await writeFile(join(skillDir, "SKILL.md"), `# ${skill.name}\n`);
+    }
+
+    const result = await runYk(["list"], { YA_SKILLS_CATALOG_DIR: catalogDir });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toBe(
+      [
+        "alpha",
+        "  Base skill",
+        "",
+        "beta",
+        "  Dependent skill",
+        "  depends on: alpha",
+        ""
+      ].join("\n")
+    );
+  } finally {
+    await rm(catalogDir, { recursive: true, force: true });
+  }
 });
 
 test("yk exposes conventional help flags", async () => {

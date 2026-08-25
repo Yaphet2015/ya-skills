@@ -170,6 +170,6 @@ test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => 
 
   expect(stderr).toBe("");
   expect(exitCode).toBe(0);
-  expect(stdout).toContain("homebrew-only - Packaged catalog skill");
+  expect(stdout).toContain("homebrew-only\n  Packaged catalog skill");
   expect(stdout).not.toContain("pbench");
 });
