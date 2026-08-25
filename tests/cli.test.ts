@@ -28,6 +28,14 @@ async function runYk(
   return { stdout, stderr, exitCode };
 }
 
+test("yk list discovers plan-jury in the root catalog", async () => {
+  const result = await runYk(["list"]);
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr).toBe("");
+  expect(result.stdout).toContain("plan-jury - ");
+});
+
 test("yk exposes conventional help flags", async () => {
   for (const flag of ["-h", "--help"]) {
     const result = await runYk([flag]);
