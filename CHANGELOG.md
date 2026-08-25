@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/Yaphet2015/ya-skills/compare/v0.12.0...v0.13.0) (2026-08-25)
+
+
+### Features
+
+* print yk list as scannable name-first blocks ([eac403b](https://github.com/Yaphet2015/ya-skills/commit/eac403b4a80e759b1cc87f1185034b1e48327ded))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
