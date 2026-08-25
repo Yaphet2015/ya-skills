@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/Yaphet2015/ya-skills/compare/v0.11.0...v0.12.0) (2026-08-25)
+
+
+### Features
+
+* add plan-jury skill ([0c2f1e5](https://github.com/Yaphet2015/ya-skills/commit/0c2f1e5324a78410dc84a0a65bf8a4a579e93ee5))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
