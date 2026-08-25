@@ -1,4 +1,4 @@
 {
   "name": "plan-jury",
-  "description": "Use only when the user explicitly invokes plan-jury to have Sol, Grok, and GLM review a development plan or design."
+  "description": "Use only when the user explicitly invokes plan-jury to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff."
 }

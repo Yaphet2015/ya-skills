@@ -1,6 +1,6 @@
 ---
 name: plan-jury
-description: Use only when the user explicitly invokes plan-jury to have Sol, Grok, and GLM review a development plan or design.
+description: Use only when the user explicitly invokes plan-jury to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff.
 disable-model-invocation: true
 ---
 
@@ -33,16 +33,16 @@ disable-model-invocation: true
 ## 背景
 为什么要做。现在什么状态。有什么约束。
 
-## 预期
-做成什么样算成功。明确不做的事。
+## 预期 / 目的
+做还是不做。做成什么样算成功。明确不做的事。
 
-## 本次方案
-准备怎么做。步骤、边界、关键取舍。
+## 选项 / 方案
+一条路就写这一条。多条就并列，标 A/B/C。
 
 ## 已做决定
 只记用户明确拍板的讨论和 decision。不要猜。每条一行：决定 — 出处（原话或时间点）。
 
-## 方案优缺点
+## 已知优缺点
 - 优点:
 - 缺点:
 ```
@@ -81,15 +81,28 @@ wait
 
 ## 汇总
 
-读 `sol.md` / `grok.md` / `glm.md`，写成 `$ws/summary.md`，并在对话里给出同一份：
+先审三家过程，再写结论。读 `sol.md` / `grok.md` / `glm.md` 和对应 `.log`。评审点名的文件，抽查是否存在。不要重做整仓调研。
+
+过程不过关的点（没读文件、编例子、稻草人、把猜测当事实）只进「可忽略 / 分歧」，并写为什么不信。不要进「必须改」。结论已经回答做不做 / 选哪条时，「必须改」可以为无。
+
+写成 `$ws/summary.md`，并在对话里给出同一份：
 
 ```markdown
 # Plan Jury 汇总
 
 工作区:
 
+## review 过程本身
+- sol: 严谨 / 有问题 — 一句证据（读了什么，或哪条是编的）
+- grok: ...
+- glm: ...
+
+## 结论
+一句话：按方案怎么改 / 选哪条路 / 做或不做（及条件）。
+
 ## 必须改
 - 建议 — 谁提的 — 依据（文件或 brief 段落）
+  （只收过程过关的阻断项。取舍题 = 选某条前必须成立的事实或条件。）
 
 ## 可以改
 - 建议 — 谁提的 — 依据
@@ -108,7 +121,7 @@ wait
 
 ## 三家短评
 ### sol
-2 到 4 句。
+2 到 4 句。含过程质量，不只复述结论。
 
 ### grok
 2 到 4 句。
@@ -116,3 +129,13 @@ wait
 ### glm
 2 到 4 句。
 ```
+
+## 主会话自检
+
+不要写入 summary.md。
+
+| 借口 | 实际 |
+|---|---|
+| 两家都说必须改 | 先看过程。编的例子两家重复也不算。 |
+| 用户在等，直接平均 | 结论可以短。过程审查不能省。 |
+| 已经写在可忽略里了 | 同一条不能再出现在必须改。 |
