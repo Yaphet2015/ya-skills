@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/Yaphet2015/ya-skills/compare/v0.13.0...v0.14.0) (2026-08-25)
+
+
+### Features
+
+* let plan-jury audit reviews and judge go/no-go tradeoffs ([8f5a18f](https://github.com/Yaphet2015/ya-skills/commit/8f5a18f3422bfd1ca4f78b122782da1fcb9b6dda))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
