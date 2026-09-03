@@ -64,6 +64,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **pbench** | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
 | **eli5** | 当读者完全不懂这个主题来解释：用 HTML artifact，大图、少字。 | `yk install eli5` |
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
+| **validator** | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
 
 > `pbench-runner` 是内部资产，会由 `yk pbench run --manual`（或兼容的 `start` 命令）自动安装，无需从目录手动安装。
 

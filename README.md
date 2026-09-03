@@ -64,6 +64,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **pbench** | Capture real Codex or Claude workflow misses as local, private benchmark cases, then replay finalized cases through registered runners without cloud sync or leaderboard upload. | `yk install pbench` |
 | **eli5** | Explain like the reader knows nothing about the topic, using an HTML artifact with big pictures and few words. | `yk install eli5` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
+| **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
 
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 

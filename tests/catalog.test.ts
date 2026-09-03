@@ -131,6 +131,14 @@ test("root catalog exposes the design-grill skill", async () => {
   expect(designGrill?.functions).toEqual([]);
 });
 
+test("root catalog exposes the validator skill", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const validator = catalog.byName.get("validator");
+
+  expect(validator).toBeDefined();
+  expect(validator?.functions).toEqual([]);
+});
+
 test("root catalog exposes the a-share-data skill", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const aShareData = catalog.byName.get("a-share-data");
