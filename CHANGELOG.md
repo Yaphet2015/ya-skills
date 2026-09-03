@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/Yaphet2015/ya-skills/compare/v0.14.0...v0.15.0) (2026-09-03)
+
+
+### Features
+
+* add validator skill that establishes a completion standard after plans ([7c87fba](https://github.com/Yaphet2015/ya-skills/commit/7c87fbad1d041207e57cd54df5060b42691d6027))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
