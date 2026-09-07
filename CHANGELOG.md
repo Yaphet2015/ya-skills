@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/Yaphet2015/ya-skills/compare/v0.15.0...v0.16.0) (2026-09-07)
+
+
+### Features
+
+* switch plan-jury GPT model to gpt-6-astra xhigh ([39409c7](https://github.com/Yaphet2015/ya-skills/commit/39409c73f3313792702c90321abdd9233d7ee7d4))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
