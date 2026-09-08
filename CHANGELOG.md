@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/Yaphet2015/ya-skills/compare/v0.16.0...v0.17.0) (2026-09-08)
+
+
+### Features
+
+* **catalog:** add show-branch-diff skill (manual-only branch diff report) ([b2d3156](https://github.com/Yaphet2015/ya-skills/commit/b2d31568d6bdd18a33473ae968e8a448af751c0e))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
