@@ -147,6 +147,55 @@ test("root catalog exposes the a-share-data skill", async () => {
   expect(aShareData?.functions).toEqual([]);
 });
 
+test("root catalog exposes the show-branch-diff skill as manual-only", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const showBranchDiff = catalog.byName.get("show-branch-diff");
+
+  expect(showBranchDiff?.description).toMatch(/^Use only when the user explicitly invokes/);
+  expect(showBranchDiff?.description).toMatch(/never triggers implicitly/);
+  expect(showBranchDiff?.functions).toEqual([]);
+
+  const skill = await readFile(resolve("skills", "show-branch-diff", "SKILL.md"), "utf8");
+  expect(skill).toContain("disable-model-invocation: true");
+  expect(skill).toContain("Invocation Gate");
+  expect(skill).not.toContain(".logoscode");
+  expect(skill).not.toContain("pr-lens");
+});
+
+test("show-branch-diff tools validate and build offline", async () => {
+  const skillDir = resolve("skills", "show-branch-diff");
+  const example = join(skillDir, "references", "example.graph.json");
+
+  const validate = Bun.spawn(["node", join(skillDir, "tools", "validate.cjs"), example], {
+    stdout: "pipe",
+    stderr: "pipe"
+  });
+  const [validateOut, , validateCode] = await Promise.all([
+    new Response(validate.stdout).text(),
+    new Response(validate.stderr).text(),
+    validate.exited
+  ]);
+  expect(validateCode).toBe(0);
+  expect(validateOut).toContain("VALID");
+
+  const outDir = await mkdtemp(join(tmpdir(), "yk-show-branch-diff-"));
+  const outFile = join(outDir, "report.html");
+  const build = Bun.spawn(["node", join(skillDir, "tools", "build-report.cjs"), example, outFile], {
+    stdout: "pipe",
+    stderr: "pipe"
+  });
+  const [, buildErr, buildCode] = await Promise.all([
+    new Response(build.stdout).text(),
+    new Response(build.stderr).text(),
+    build.exited
+  ]);
+  expect(buildErr).toBe("");
+  expect(buildCode).toBe(0);
+  const html = await readFile(outFile, "utf8");
+  expect(html).toContain("<!doctype html>");
+  await rm(outDir, { recursive: true, force: true });
+});
+
 test("root catalog does not expose demo-only skills", async () => {
   const catalog = await loadCatalog(resolve("skills"));
 

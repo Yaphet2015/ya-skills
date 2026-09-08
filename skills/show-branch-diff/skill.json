@@ -1,0 +1,4 @@
+{
+  "name": "show-branch-diff",
+  "description": "Use only when the user explicitly invokes show-branch-diff to turn a branch diff or code change into an animated architecture / data-flow report — a self-contained offline Chinese HTML page. It never triggers implicitly."
+}
