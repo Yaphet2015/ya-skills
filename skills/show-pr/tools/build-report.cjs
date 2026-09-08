@@ -96,14 +96,17 @@ const html = `<!doctype html>
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
-  /* ---------- report pages ---------- */
-  .page { display: none; padding: 6px 0 40px; max-width: 1080px; }
-  .page.on { display: block; }
-  .pagebtn { border-style: dashed; }
+  /* ---------- report sections (stacked below the diagrams) ---------- */
+  #sections { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 18px; }
+  .report-sec { margin-bottom: 34px; max-width: 1080px; }
+  .report-sec > h2 { font-size: 15px; margin: 0 0 4px; }
+  .report-sec > .phint { margin: 0 0 14px; }
   .rcard { border: 1px solid var(--border); background: var(--surface2); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; max-width: 880px; }
   .rtitle { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
   .rsummary { font-size: 12.5px; color: var(--sub); line-height: 1.65; margin: 0 0 10px; white-space: pre-wrap; }
   .rnote { font-size: 12px; color: var(--sub); margin: 8px 0 0; line-height: 1.65; }
+  .rresult { font-size: 12.5px; color: #86efac; margin: 8px 0 0; line-height: 1.6; }
+  .rresult b { font-weight: 600; }
   .phint { font-size: 12px; color: var(--faint); margin: 0 0 14px; }
   .cmd { font-family: ui-monospace, monospace; font-size: 12px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: #a5d6ff; overflow-x: auto; margin: 8px 0; }
   .log { font-family: ui-monospace, monospace; font-size: 11.5px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: #9fb0c8; white-space: pre-wrap; max-height: 420px; overflow: auto; margin: 8px 0; }
@@ -114,8 +117,7 @@ const html = `<!doctype html>
   .step-card { position: relative; padding-left: 56px; }
   .rno { position: absolute; left: 18px; top: 16px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }
   .shot { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
-  .page video { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
-  .opts { list-style: none; padding: 0; margin: 4px 0 10px; }
+  .page video { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }  .opts { list-style: none; padding: 0; margin: 4px 0 10px; }
   .opts li { font-size: 12.5px; color: var(--sub); padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
   .opts li.chosen { border-color: var(--hero); color: #c7d2fe; background: #141b29; }
   .chiptag { font-size: 10px; color: var(--hero); margin-left: 8px; }
@@ -147,7 +149,7 @@ const html = `<!doctype html>
       <div id="archHolder"></div>
     </div>
     <div id="flowHolder"></div>
-    <div id="pages"></div>
+    <div id="sections"></div>
   </section>
 </main>
 <div class="legend">
@@ -399,7 +401,6 @@ function setArchView(id) {
   state.mode = 'arch'; state.archViewId = id;
   document.getElementById('arch').classList.add('on');
   Object.keys(flowSvgs).forEach(function (fid) { flowSvgs[fid].classList.remove('on'); });
-  pagesEl.querySelectorAll('.page').forEach(function (p) { p.classList.remove('on'); });
   const v = viewById[id];
   document.getElementById('archTitle').textContent = v.title;
   document.getElementById('archSummary').textContent = v.summary || '';
@@ -427,7 +428,6 @@ function setFlow(fid, navId) {
   state.mode = 'flow'; state.flowId = fid;
   document.getElementById('arch').classList.remove('on');
   Object.keys(flowSvgs).forEach(function (k) { flowSvgs[k].classList.toggle('on', k === fid); });
-  pagesEl.querySelectorAll('.page').forEach(function (p) { p.classList.remove('on'); });
   setActiveNav(navId || ('flow-' + fid));
   const fv = navItems.find(function (it) { return it.kind === 'flow' && it.flowId === fid; });
   if (fv) setActiveNav(fv.id);
@@ -499,35 +499,24 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'ArrowLeft') goStep(state.step - 1);
 });
 
-/* ---------- report pages: mermaid / repro / logs / evidence / design / test steps ---------- */
-const pagesEl = document.getElementById('pages');
+/* ---------- report sections: mermaid / repro / logs / evidence / design / test steps (stacked below the diagrams) ---------- */
+const sectionsEl = document.getElementById('sections');
 function mkEl(tag, cls, parent) {
   const el = document.createElement(tag);
   if (cls) el.className = cls;
   if (parent) parent.appendChild(el);
   return el;
 }
-function addPage(id, label) {
-  const page = mkEl('div', 'page', pagesEl);
-  page.id = 'page-' + id;
-  const b = document.createElement('button');
-  b.className = 'vbtn pagebtn';
-  b.textContent = label;
-  b.id = 'nav-page-' + id;
-  b.onclick = function () { state.step = -1; clearStepActive(); setPage(id); };
-  navEl.appendChild(b);
-  return page;
-}
-function setPage(id) {
-  state.mode = 'page'; state.pageId = id;
-  document.getElementById('arch').classList.remove('on');
-  Object.keys(flowSvgs).forEach(function (k) { flowSvgs[k].classList.remove('on'); });
-  pagesEl.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('on', p.id === 'page-' + id); });
-  setActiveNav('nav-page-' + id);
+function addSection(id, label, hint) {
+  const sec = mkEl('section', 'report-sec', sectionsEl);
+  sec.id = 'sec-' + id;
+  mkEl('h2', '', sec).textContent = label;
+  if (hint) mkEl('p', 'phint', sec).textContent = hint;
+  return sec;
 }
 
 if (DOC.mermaid && DOC.mermaid.length) {
-  const p = addPage('mermaid', 'Mermaid 图');
+  const p = addSection('mermaid', 'Mermaid 图');
   DOC.mermaid.forEach(function (m) {
     const card = mkEl('div', 'rcard', p);
     mkEl('h3', 'rtitle', card).textContent = m.title;
@@ -536,17 +525,24 @@ if (DOC.mermaid && DOC.mermaid.length) {
   });
 }
 if (DOC.repro && DOC.repro.length) {
-  const p = addPage('repro', '复现步骤');
+  const p = addSection('repro', '复现步骤');
+  mkEl('p', 'phint', p).textContent = '枚举分支改动涉及的用例：每条给出复现命令与测试结果；未被自动化覆盖的用例单独注明，需手工验证。';
   DOC.repro.forEach(function (r, i) {
     const card = mkEl('div', 'rcard step-card', p);
     mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
     mkEl('h3', 'rtitle', card).textContent = r.title;
     if (r.command) mkEl('pre', 'cmd', card).textContent = r.command;
     if (r.note) mkEl('p', 'rnote', card).textContent = r.note;
+    if (r.result) {
+      const res = mkEl('p', 'rresult', card);
+      const b = mkEl('b', '', res);
+      b.textContent = '结果：';
+      res.appendChild(document.createTextNode(r.result));
+    }
   });
 }
 if (DOC.testLogs && DOC.testLogs.length) {
-  const p = addPage('logs', '测试日志');
+  const p = addSection('logs', '测试日志');
   mkEl('p', 'phint', p).textContent = '以下为真实运行的原始输出，未做编辑；退出码非 0 的记录同样保留。';
   DOC.testLogs.forEach(function (t) {
     const card = mkEl('div', 'rcard', p);
@@ -559,7 +555,7 @@ if (DOC.testLogs && DOC.testLogs.length) {
   });
 }
 if (EVIDENCE.length) {
-  const p = addPage('evidence', '验证证据');
+  const p = addSection('evidence', '验证证据');
   EVIDENCE.forEach(function (ev) {
     const card = mkEl('figure', 'rcard', p);
     mkEl('h3', 'rtitle', card).textContent = ev.title;
@@ -576,7 +572,7 @@ if (EVIDENCE.length) {
   });
 }
 if (DOC.design && DOC.design.length) {
-  const p = addPage('design', '设计决策');
+  const p = addSection('design', '设计决策');
   DOC.design.forEach(function (d) {
     const card = mkEl('div', 'rcard', p);
     mkEl('h3', 'rtitle', card).textContent = d.title;
@@ -596,7 +592,7 @@ if (DOC.design && DOC.design.length) {
   });
 }
 if (DOC.testSteps && DOC.testSteps.length) {
-  const p = addPage('steps', 'Reviewer 验证');
+  const p = addSection('steps', 'Reviewer 验证');
   mkEl('p', 'phint', p).textContent = '按顺序执行，每步核对预期结果。';
   DOC.testSteps.forEach(function (s, i) {
     const card = mkEl('div', 'rcard step-card', p);

@@ -145,13 +145,13 @@ Up to 8, for what lanes and flows cannot express: state machines, ER models, cla
 
 ## Reproduction steps
 
-Up to 12, ordered: how a reviewer reproduces the situation the change addresses (often on the base commit).
+Up to 12. Enumerate the test cases the branch's changes involve, one card per case group: the command that reproduces it, the real test result, and whether automation covers it. Cases not covered by automated tests get their own entries with manual steps and 未自动化覆盖 marked in the title or note — do not bury them among the automated ones.
 
 ```json
-{ "title": "回到 base 提交并安装依赖", "command": "git checkout 3f5c1ab && bun install", "note": "…" }
+{ "title": "提交与 ACK 语义", "command": "jest src/renderer/quick/__tests__/useQuickSubmit.test.ts", "note": "…", "result": "自动化覆盖：12 项通过" }
 ```
 
-`title` required (≤120), `command` optional (≤500), `note` optional (≤500). Repro reproduces the situation; reviewer test steps verify the result — do not write the same list twice.
+`title` required (≤120), `command` optional (≤500), `note` optional (≤500), `result` optional (≤500). Repro enumerates what the change's cases are and how they ran; reviewer test steps verify the change — keep the two lists distinct.
 
 ## Test logs
 

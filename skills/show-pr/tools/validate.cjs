@@ -213,6 +213,7 @@ for (const [i, r] of (doc.repro || []).entries()) {
   if (!r.title || r.title.length > 120) err(`repro step ${i + 1} title missing or over 120 chars`);
   if (r.command && r.command.length > 500) err(`repro step ${i + 1} command over 500 chars`);
   if (r.note && r.note.length > 500) err(`repro step ${i + 1} note over 500 chars`);
+  if (r.result && r.result.length > 500) err(`repro step ${i + 1} result over 500 chars`);
 }
 
 if ((doc.testLogs || []).length > 12) err('over 12 test logs');

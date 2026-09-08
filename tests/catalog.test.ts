@@ -290,6 +290,13 @@ test("show-pr validator rejects missing evidence files and unlisted design choic
   expect(result.code).toBe(1);
   expect(result.errText).toContain("exitCode");
 
+  example.testLogs[0].exitCode = 1;
+  example.repro[0].result = "x".repeat(501);
+  await Bun.write(docFile, JSON.stringify(example));
+  result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("result");
+
   await rm(outDir, { recursive: true, force: true });
 });
 

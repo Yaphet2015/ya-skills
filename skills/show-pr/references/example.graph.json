@@ -493,22 +493,24 @@
   ],
   "repro": [
     {
-      "title": "回到 base 提交并安装依赖",
-      "command": "git checkout 3f5c1ab && bun install"
+      "title": "批量切分与单批上限（buildBulkPayload）",
+      "command": "bun test packages/broadcast-lib/src/buildBulkPayload.test.ts",
+      "result": "自动化覆盖：3 项通过（见下方 TDD red/green 日志）"
     },
     {
-      "title": "造一条 2,000 人的测试广播，触发旧路径",
-      "command": "bun run seed:broadcast --recipients 2000",
-      "note": "旧路径会逐封调用 Postmark，观察日志里的请求次数。"
+      "title": "抑制名单每路广播只拉一次（getSuppressedEmails）",
+      "command": "bun test packages/broadcast-lib/src/getSuppressedEmails.test.ts",
+      "result": "自动化覆盖：1 项通过"
     },
     {
-      "title": "切回本分支",
-      "command": "git checkout batch-broadcast-send && bun install && bun run build"
+      "title": "队列路由写入 batchSize 与收件人数",
+      "command": "bun test app/api/broadcasts/queue",
+      "result": "自动化覆盖：5 项通过"
     },
     {
-      "title": "重新触发同一条广播",
-      "command": "bun run seed:broadcast --recipients 2000",
-      "note": "新路径应只发出 1 次抑制名单请求和 4 次批量请求。"
+      "title": "2,000 人广播只发 4 次批量请求（未自动化覆盖）",
+      "note": "需本地 Firebase 模拟器 + Postmark 沙箱手工触发：观察日志中 POST /email/batch 恰为 4 次，无单封请求。",
+      "result": "未自动化覆盖：需手工验证（对照 Reviewer 验证第 3 步）"
     }
   ],
   "testLogs": [

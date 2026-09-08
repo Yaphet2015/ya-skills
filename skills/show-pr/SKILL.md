@@ -58,6 +58,7 @@ A follow-up such as "rename that node" or "add the queue" is: edit `.show-pr/gra
 - **One hero edge**, two at the outside: the connection the change is really about.
 - **Add a flow only when there is a sequence worth animating.** One good flow beats three thin ones.
 - **Add mermaid only for what lanes and flows cannot express** — a state machine, an ER model, a journey. A second drawing of the same architecture is noise.
+- **复现步骤是清单，不是教程**：逐条枚举改动涉及的用例，附真实结果；未被自动化覆盖的用例单独列卡注明，不得混在自动化条目里。
 - **Attach file refs** — they become the hover tooltips (summary + file list) on node cards.
 - **Write a walkthrough anyway** for anything non-trivial: more than one diagram, several changed parts, or any flow. Two to twelve steps; the headline change is step one; an overview of everything touched is the last step. Each step is one change (added / removed / replaced / now / moved), never a description of the diagram.
 
@@ -70,6 +71,7 @@ The six evidence sections exist so a reviewer can check the work instead of taki
 | "测试肯定能过，不用真跑" | 没跑过就没有日志。跑一次，原样粘贴，包括 exit code。 |
 | "输出太长，我概括一下" | 概括不是日志。截取首尾可以，改写或翻译不行。 |
 | "只贴通过的就好" | 只贴 green 不贴 red 的 TDD 日志等于没有 red。两次都贴。 |
+| "复现步骤枚举不全" | 枚举分支涉及的全部用例；自动化覆盖的附真实结果，未覆盖的单独注明需手工验证。 |
 | "截图以后补" | 说"已验证"之前必须有截图或录屏。没有就别写这条证据。 |
 | "这个决策没有别的选项" | 没有备选的决策不是决策点，直接跳过，不要凑数。 |
 
@@ -82,7 +84,7 @@ The six evidence sections exist so a reviewer can check the work instead of taki
 - Drill-down: one nav button per view (child views indented); clicking switches the visible node/edge selection.
 - One sequence diagram per flow, with self-messages, repeats and notes.
 - 导览 sidebar: every walkthrough step; click or ←/→ switches the diagram and dims everything except the step's focus.
-- Six evidence tabs, each rendered only when the document carries it: Mermaid 图, 复现步骤, 测试日志 (command + exit badge + raw output), 验证证据 (embedded screenshots / video), 设计决策 (context, options, chosen, rationale), Reviewer 验证 (steps with expected results).
+- Six evidence sections, each rendered only when the document carries it, stacked below the diagrams in normal page flow (scroll down, no tabs): Mermaid 图, 复现步骤 (per-case command + result + automation coverage), 测试日志 (command + exit badge + raw output), 验证证据 (embedded screenshots / video), 设计决策 (context, options, chosen, rationale), Reviewer 验证 (steps with expected results).
 
 ## What ships with this skill
 
