@@ -147,23 +147,23 @@ test("root catalog exposes the a-share-data skill", async () => {
   expect(aShareData?.functions).toEqual([]);
 });
 
-test("root catalog exposes the show-branch-diff skill as manual-only", async () => {
+test("root catalog exposes the show-pr skill as manual-only", async () => {
   const catalog = await loadCatalog(resolve("skills"));
-  const showBranchDiff = catalog.byName.get("show-branch-diff");
+  const showPr = catalog.byName.get("show-pr");
 
-  expect(showBranchDiff?.description).toMatch(/^Use only when the user explicitly invokes/);
-  expect(showBranchDiff?.description).toMatch(/never triggers implicitly/);
-  expect(showBranchDiff?.functions).toEqual([]);
+  expect(showPr?.description).toMatch(/^Use only when the user explicitly invokes/);
+  expect(showPr?.description).toMatch(/never triggers implicitly/);
+  expect(showPr?.functions).toEqual([]);
 
-  const skill = await readFile(resolve("skills", "show-branch-diff", "SKILL.md"), "utf8");
+  const skill = await readFile(resolve("skills", "show-pr", "SKILL.md"), "utf8");
   expect(skill).toContain("disable-model-invocation: true");
   expect(skill).toContain("Invocation Gate");
   expect(skill).not.toContain(".logoscode");
   expect(skill).not.toContain("pr-lens");
 });
 
-test("show-branch-diff tools validate and build offline", async () => {
-  const skillDir = resolve("skills", "show-branch-diff");
+test("show-pr tools validate and build offline", async () => {
+  const skillDir = resolve("skills", "show-pr");
   const example = join(skillDir, "references", "example.graph.json");
 
   const validate = Bun.spawn(["node", join(skillDir, "tools", "validate.cjs"), example], {
@@ -178,7 +178,7 @@ test("show-branch-diff tools validate and build offline", async () => {
   expect(validateCode).toBe(0);
   expect(validateOut).toContain("VALID");
 
-  const outDir = await mkdtemp(join(tmpdir(), "yk-show-branch-diff-"));
+  const outDir = await mkdtemp(join(tmpdir(), "yk-show-pr-"));
   const outFile = join(outDir, "report.html");
   const build = Bun.spawn(["node", join(skillDir, "tools", "build-report.cjs"), example, outFile], {
     stdout: "pipe",
@@ -193,6 +193,103 @@ test("show-branch-diff tools validate and build offline", async () => {
   expect(buildCode).toBe(0);
   const html = await readFile(outFile, "utf8");
   expect(html).toContain("<!doctype html>");
+  await rm(outDir, { recursive: true, force: true });
+});
+
+async function buildExampleClone(mutate?: (doc: Record<string, unknown>) => void) {
+  const skillDir = resolve("skills", "show-pr");
+  const example = join(skillDir, "references", "example.graph.json");
+  const doc = JSON.parse(await readFile(example, "utf8"));
+  if (mutate) mutate(doc);
+  const outDir = await mkdtemp(join(tmpdir(), "yk-show-pr-clone-"));
+  const docFile = join(outDir, "doc.json");
+  // evidence paths resolve relative to the document, so copy the real file next to it
+  const evidenceDir = join(outDir, "evidence");
+  await mkdir(evidenceDir, { recursive: true });
+  await Bun.write(
+    join(evidenceDir, "batch-result.png"),
+    Bun.file(join(skillDir, "references", "evidence", "batch-result.png"))
+  );
+  await Bun.write(docFile, JSON.stringify(doc));
+  const outFile = join(outDir, "report.html");
+  const build = Bun.spawn(["node", join(skillDir, "tools", "build-report.cjs"), docFile, outFile], {
+    stdout: "pipe",
+    stderr: "pipe"
+  });
+  const [, buildErr, buildCode] = await Promise.all([
+    new Response(build.stdout).text(),
+    new Response(build.stderr).text(),
+    build.exited
+  ]);
+  const html = await readFile(outFile, "utf8");
+  return { outDir, outFile, docFile, html, buildErr, buildCode };
+}
+
+test("show-pr report embeds evidence and renders mermaid from the example document", async () => {
+  const { html, buildErr, buildCode, outDir } = await buildExampleClone();
+
+  expect(buildErr).toBe("");
+  expect(buildCode).toBe(0);
+  expect(html).toContain("data:image/png;base64,");
+  expect(html).toContain("stateDiagram-v2");
+  expect(html).toContain("mermaid.initialize");
+  expect(html).toContain("复现步骤");
+  expect(html).toContain("测试日志");
+  expect(html).toContain("设计决策");
+  expect(html).toContain("Reviewer");
+  await rm(outDir, { recursive: true, force: true });
+});
+
+test("show-pr report omits the mermaid bundle when the document has no mermaid", async () => {
+  const { html, buildCode, outDir } = await buildExampleClone((doc) => {
+    doc.mermaid = [];
+  });
+
+  expect(buildCode).toBe(0);
+  expect(html).toContain("<!doctype html>");
+  expect(html).not.toContain("mermaid.initialize");
+  await rm(outDir, { recursive: true, force: true });
+});
+
+test("show-pr validator rejects missing evidence files and unlisted design choices", async () => {
+  const skillDir = resolve("skills", "show-pr");
+  const example = JSON.parse(await readFile(join(skillDir, "references", "example.graph.json"), "utf8"));
+  const outDir = await mkdtemp(join(tmpdir(), "yk-show-pr-bad-"));
+  const docFile = join(outDir, "doc.json");
+
+  const runValidate = async () => {
+    const proc = Bun.spawn(["node", join(skillDir, "tools", "validate.cjs"), docFile], {
+      stdout: "pipe",
+      stderr: "pipe"
+    });
+    const [out, errText, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited
+    ]);
+    return { out, errText, code };
+  };
+
+  example.evidence[0].path = "evidence/does-not-exist.png";
+  await Bun.write(docFile, JSON.stringify(example));
+  let result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("evidence");
+
+  example.evidence[0].path = "evidence/batch-result.png";
+  example.design[0].chosen = "不存在的选项";
+  await Bun.write(docFile, JSON.stringify(example));
+  result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("chosen");
+
+  example.design[0].chosen = example.design[0].options[0].label;
+  example.testLogs[0].exitCode = "zero";
+  await Bun.write(docFile, JSON.stringify(example));
+  result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("exitCode");
+
   await rm(outDir, { recursive: true, force: true });
 });
 

@@ -65,7 +65,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **eli5** | Explain like the reader knows nothing about the topic, using an HTML artifact with big pictures and few words. | `yk install eli5` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
-| **show-branch-diff** | Manually invoke `show-branch-diff` to turn a branch diff or code change into an animated architecture / data-flow report — a self-contained offline Chinese HTML page. It never triggers implicitly. | `yk install show-branch-diff` |
+| **show-pr** | Manually invoke `show-pr` to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, reproduction steps, real test logs, verification screenshots or video, a decision-point design doc, and reviewer test steps in one HTML page. It never triggers implicitly. | `yk install show-pr` |
 
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 

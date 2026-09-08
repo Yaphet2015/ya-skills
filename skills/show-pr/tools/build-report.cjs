@@ -1,8 +1,27 @@
 const fs = require('fs');
+const path = require('path');
 
-const [, , graphFile = '.show-branch-diff/graph.zh.json', outFile = '.show-branch-diff/report.html'] = process.argv;
+const [, , graphFile = '.show-pr/graph.zh.json', outFile = '.show-pr/report.html'] = process.argv;
 const doc = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
 const docJson = JSON.stringify(doc).replace(/</g, '\\u003c');
+
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime' };
+const evidenceJson = JSON.stringify(
+  (doc.evidence || []).map(function (ev) {
+    const abs = path.resolve(path.dirname(path.resolve(graphFile)), ev.path);
+    const ext = ev.path.split('.').pop().toLowerCase();
+    const dataUri = 'data:' + (MIME[ext] || 'application/octet-stream') + ';base64,' + fs.readFileSync(abs).toString('base64');
+    return Object.assign({}, ev, { dataUri: dataUri });
+  })
+).replace(/</g, '\\u003c');
+
+const hasMermaid = Array.isArray(doc.mermaid) && doc.mermaid.length > 0;
+const mermaidBundle = hasMermaid
+  ? fs.readFileSync(path.join(__dirname, 'vendor', 'mermaid.min.js'), 'utf8').replace(/<\/script>/gi, '<\\/script>')
+  : '';
+const mermaidBootstrap = hasMermaid
+  ? "<script>try{mermaid.initialize({startOnLoad:false,theme:'dark',securityLevel:'loose',fontFamily:'-apple-system,PingFang SC,Microsoft YaHei,sans-serif'});mermaid.init();}catch(e){document.querySelectorAll('.mermaid').forEach(function(d){if(!d.querySelector('svg'))d.textContent='Mermaid \u6e32\u67d3\u5931\u8d25\uff1a'+e.message;});}</script>"
+  : '';
 
 const html = `<!doctype html>
 <html lang="zh-CN">
@@ -76,6 +95,32 @@ const html = `<!doctype html>
   .legend { display: flex; flex-wrap: wrap; gap: 18px; padding: 12px 36px; font-size: 11px; color: #7d8aa0; border-top: 1px solid var(--border); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* ---------- report pages ---------- */
+  .page { display: none; padding: 6px 0 40px; max-width: 1080px; }
+  .page.on { display: block; }
+  .pagebtn { border-style: dashed; }
+  .rcard { border: 1px solid var(--border); background: var(--surface2); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; max-width: 880px; }
+  .rtitle { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
+  .rsummary { font-size: 12.5px; color: var(--sub); line-height: 1.65; margin: 0 0 10px; white-space: pre-wrap; }
+  .rnote { font-size: 12px; color: var(--sub); margin: 8px 0 0; line-height: 1.65; }
+  .phint { font-size: 12px; color: var(--faint); margin: 0 0 14px; }
+  .cmd { font-family: ui-monospace, monospace; font-size: 12px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: #a5d6ff; overflow-x: auto; margin: 8px 0; }
+  .log { font-family: ui-monospace, monospace; font-size: 11.5px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: #9fb0c8; white-space: pre-wrap; max-height: 420px; overflow: auto; margin: 8px 0; }
+  .lhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .exit { font-family: ui-monospace, monospace; font-size: 11px; border-radius: 7px; padding: 2px 10px; border: 1px solid; flex-shrink: 0; }
+  .exit.ok { color: #86efac; border-color: var(--added); }
+  .exit.fail { color: #fca5a5; border-color: var(--removed); }
+  .step-card { position: relative; padding-left: 56px; }
+  .rno { position: absolute; left: 18px; top: 16px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }
+  .shot { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .page video { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .opts { list-style: none; padding: 0; margin: 4px 0 10px; }
+  .opts li { font-size: 12.5px; color: var(--sub); padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
+  .opts li.chosen { border-color: var(--hero); color: #c7d2fe; background: #141b29; }
+  .chiptag { font-size: 10px; color: var(--hero); margin-left: 8px; }
+  .expected { font-size: 12.5px; color: #86efac; margin: 8px 0 0; line-height: 1.6; }
+  .mermaid { background: #0d1119; border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow-x: auto; text-align: center; color: var(--text); }
 </style>
 </head>
 <body>
@@ -102,6 +147,7 @@ const html = `<!doctype html>
       <div id="archHolder"></div>
     </div>
     <div id="flowHolder"></div>
+    <div id="pages"></div>
   </section>
 </main>
 <div class="legend">
@@ -113,7 +159,9 @@ const html = `<!doctype html>
   <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--removed)" stroke-width="1.4" stroke-dasharray="5 4"/></svg>已移除的边</span>
   <span>点击导览步骤可聚焦对应变更 &middot; 方向键切换</span>
 </div>
+${mermaidBundle ? '<script>' + mermaidBundle + '</script>' : ''}
 <script>
+const EVIDENCE = ${evidenceJson};
 const DOC = ${docJson};
 
 const DELTA = { added: '#22c55e', modified: '#eab308', removed: '#ef4444', unchanged: '#64748b' };
@@ -351,6 +399,7 @@ function setArchView(id) {
   state.mode = 'arch'; state.archViewId = id;
   document.getElementById('arch').classList.add('on');
   Object.keys(flowSvgs).forEach(function (fid) { flowSvgs[fid].classList.remove('on'); });
+  pagesEl.querySelectorAll('.page').forEach(function (p) { p.classList.remove('on'); });
   const v = viewById[id];
   document.getElementById('archTitle').textContent = v.title;
   document.getElementById('archSummary').textContent = v.summary || '';
@@ -378,6 +427,7 @@ function setFlow(fid, navId) {
   state.mode = 'flow'; state.flowId = fid;
   document.getElementById('arch').classList.remove('on');
   Object.keys(flowSvgs).forEach(function (k) { flowSvgs[k].classList.toggle('on', k === fid); });
+  pagesEl.querySelectorAll('.page').forEach(function (p) { p.classList.remove('on'); });
   setActiveNav(navId || ('flow-' + fid));
   const fv = navItems.find(function (it) { return it.kind === 'flow' && it.flowId === fid; });
   if (fv) setActiveNav(fv.id);
@@ -449,10 +499,122 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'ArrowLeft') goStep(state.step - 1);
 });
 
+/* ---------- report pages: mermaid / repro / logs / evidence / design / test steps ---------- */
+const pagesEl = document.getElementById('pages');
+function mkEl(tag, cls, parent) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (parent) parent.appendChild(el);
+  return el;
+}
+function addPage(id, label) {
+  const page = mkEl('div', 'page', pagesEl);
+  page.id = 'page-' + id;
+  const b = document.createElement('button');
+  b.className = 'vbtn pagebtn';
+  b.textContent = label;
+  b.id = 'nav-page-' + id;
+  b.onclick = function () { state.step = -1; clearStepActive(); setPage(id); };
+  navEl.appendChild(b);
+  return page;
+}
+function setPage(id) {
+  state.mode = 'page'; state.pageId = id;
+  document.getElementById('arch').classList.remove('on');
+  Object.keys(flowSvgs).forEach(function (k) { flowSvgs[k].classList.remove('on'); });
+  pagesEl.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('on', p.id === 'page-' + id); });
+  setActiveNav('nav-page-' + id);
+}
+
+if (DOC.mermaid && DOC.mermaid.length) {
+  const p = addPage('mermaid', 'Mermaid 图');
+  DOC.mermaid.forEach(function (m) {
+    const card = mkEl('div', 'rcard', p);
+    mkEl('h3', 'rtitle', card).textContent = m.title;
+    if (m.summary) mkEl('p', 'rsummary', card).textContent = m.summary;
+    mkEl('div', 'mermaid', card).textContent = m.code;
+  });
+}
+if (DOC.repro && DOC.repro.length) {
+  const p = addPage('repro', '复现步骤');
+  DOC.repro.forEach(function (r, i) {
+    const card = mkEl('div', 'rcard step-card', p);
+    mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
+    mkEl('h3', 'rtitle', card).textContent = r.title;
+    if (r.command) mkEl('pre', 'cmd', card).textContent = r.command;
+    if (r.note) mkEl('p', 'rnote', card).textContent = r.note;
+  });
+}
+if (DOC.testLogs && DOC.testLogs.length) {
+  const p = addPage('logs', '测试日志');
+  mkEl('p', 'phint', p).textContent = '以下为真实运行的原始输出，未做编辑；退出码非 0 的记录同样保留。';
+  DOC.testLogs.forEach(function (t) {
+    const card = mkEl('div', 'rcard', p);
+    const head = mkEl('div', 'lhead', card);
+    mkEl('h3', 'rtitle', head).textContent = t.title;
+    const badge = mkEl('span', 'exit ' + (t.exitCode === 0 ? 'ok' : 'fail'), head);
+    badge.textContent = 'exit ' + t.exitCode;
+    mkEl('pre', 'cmd', card).textContent = t.command;
+    mkEl('pre', 'log', card).textContent = t.output;
+  });
+}
+if (EVIDENCE.length) {
+  const p = addPage('evidence', '验证证据');
+  EVIDENCE.forEach(function (ev) {
+    const card = mkEl('figure', 'rcard', p);
+    mkEl('h3', 'rtitle', card).textContent = ev.title;
+    if (ev.kind === 'video') {
+      const v = mkEl('video', '', card);
+      v.controls = true;
+      v.src = ev.dataUri;
+    } else {
+      const img = mkEl('img', 'shot', card);
+      img.src = ev.dataUri;
+      img.alt = ev.title;
+    }
+    if (ev.note) mkEl('figcaption', 'rnote', card).textContent = ev.note;
+  });
+}
+if (DOC.design && DOC.design.length) {
+  const p = addPage('design', '设计决策');
+  DOC.design.forEach(function (d) {
+    const card = mkEl('div', 'rcard', p);
+    mkEl('h3', 'rtitle', card).textContent = d.title;
+    mkEl('p', 'rsummary', card).textContent = d.context;
+    const list = mkEl('ul', 'opts', card);
+    d.options.forEach(function (o) {
+      const li = mkEl('li', o.label === d.chosen ? 'chosen' : '', list);
+      const b = mkEl('b', '', li);
+      b.textContent = o.label;
+      if (o.label === d.chosen) mkEl('span', 'chiptag', li).textContent = '✓ 已选';
+      if (o.summary) li.appendChild(document.createTextNode(' — ' + o.summary));
+    });
+    const why = mkEl('p', 'rnote', card);
+    const b2 = mkEl('b', '', why);
+    b2.textContent = '理由：';
+    why.appendChild(document.createTextNode(d.rationale));
+  });
+}
+if (DOC.testSteps && DOC.testSteps.length) {
+  const p = addPage('steps', 'Reviewer 验证');
+  mkEl('p', 'phint', p).textContent = '按顺序执行，每步核对预期结果。';
+  DOC.testSteps.forEach(function (s, i) {
+    const card = mkEl('div', 'rcard step-card', p);
+    mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
+    mkEl('h3', 'rtitle', card).textContent = s.title;
+    if (s.command) mkEl('pre', 'cmd', card).textContent = s.command;
+    const exp = mkEl('p', 'expected', card);
+    const b3 = mkEl('b', '', exp);
+    b3.textContent = '预期：';
+    exp.appendChild(document.createTextNode(s.expected));
+  });
+}
+
 /* ---------- init ---------- */
 setArchView('overview');
 if (steps.length) goStep(0);
 </script>
+${mermaidBootstrap}
 </body>
 </html>
 `;

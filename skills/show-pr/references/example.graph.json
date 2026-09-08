@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "0.1.1",
+  "schemaVersion": "0.2.0",
   "kind": "graph",
   "generatedAt": "2026-08-19T18:24:00.000Z",
-  "title": "Batch broadcast sending through Postmark",
-  "summary": "Broadcast delivery moves from one Postmark request per recipient to batched requests of 500, with suppression filtering pulled in front of the send and the payload builder extracted into a shared library.",
+  "title": "批量发送广播：从逐封调用 Postmark 到每批 500 封",
+  "summary": "广播发送从每个收件人一次 Postmark 请求，改为每 500 封一批的批量请求；抑制名单拉取前移到发送之前，载荷构造抽成共享库。",
   "lenses": [
     "architecture",
     "data-flow"
@@ -24,30 +24,30 @@
     },
     "pullRequest": {
       "number": 128,
-      "title": "Send broadcasts in batches of 500",
+      "title": "按每批 500 封发送广播",
       "url": "https://github.com/ohansemmanuel/bestregards/pull/128"
     },
     "generator": {
-      "name": "show-branch-diff-examples",
-      "version": "0.1.0"
+      "name": "show-pr-examples",
+      "version": "0.2.0"
     }
   },
   "lanes": [
     {
       "id": "web",
-      "label": "Next.js",
+      "label": "Next.js 前端",
       "subtitle": "Vercel",
       "order": 0
     },
     {
       "id": "functions",
-      "label": "Cloud Functions",
+      "label": "云函数",
       "subtitle": "Firebase",
       "order": 1
     },
     {
       "id": "external",
-      "label": "External",
+      "label": "外部服务",
       "subtitle": "Postmark",
       "order": 2
     }
@@ -55,12 +55,12 @@
   "nodes": [
     {
       "id": "broadcast-composer",
-      "label": "Broadcast composer",
+      "label": "广播编辑页",
       "kind": "ui",
       "delta": "unchanged",
       "lane": "web",
       "subtitle": "app/broadcasts/new",
-      "summary": "Where an author writes a broadcast and hits send. Untouched by this change.",
+      "summary": "作者在这里编写广播并点击发送。本次改动未触及。",
       "files": [
         {
           "path": "app/broadcasts/new/page.tsx"
@@ -74,7 +74,7 @@
       "kind": "route",
       "delta": "modified",
       "lane": "web",
-      "summary": "Writes the queue document. Now stamps the recipient count and batch size the sender will use instead of leaving batching to the worker.",
+      "summary": "写入队列文档。现在会写入收件人数与批次大小，不再把分批留给 worker 自行决定。",
       "files": [
         {
           "path": "app/api/broadcasts/queue/route.ts",
@@ -92,8 +92,8 @@
       "kind": "datastore",
       "delta": "modified",
       "lane": "functions",
-      "subtitle": "Firestore collection",
-      "summary": "Queue documents gained batchSize and suppressedCount fields, and results are now written back per batch rather than per recipient.",
+      "subtitle": "Firestore 集合",
+      "summary": "队列文档新增 batchSize 与 suppressedCount 字段；结果改为按批写回，而不是按收件人写回。",
       "files": [
         {
           "path": "functions/src/broadcast/schema.ts",
@@ -109,8 +109,8 @@
       "kind": "function",
       "delta": "added",
       "lane": "functions",
-      "subtitle": "onWrite trigger",
-      "summary": "New trigger handler. Fetches suppressions once, builds batched payloads, and posts them to Postmark in chunks of 500.",
+      "subtitle": "onWrite 触发器",
+      "summary": "新触发器：一次性拉取抑制名单，构造批量载荷，按每批 500 封发给 Postmark。",
       "files": [
         {
           "path": "functions/src/broadcast/sendBroadcastBulk.ts",
@@ -119,7 +119,7 @@
         }
       ],
       "badges": [
-        "new"
+        "新增"
       ]
     },
     {
@@ -128,7 +128,7 @@
       "kind": "function",
       "delta": "added",
       "lane": "functions",
-      "summary": "Turns a broadcast and its recipient slice into a Postmark batch request body.",
+      "summary": "把一路广播和它的收件人切片，转成一次 Postmark 批量请求体。",
       "files": [
         {
           "path": "packages/broadcast-lib/src/buildBulkPayload.ts",
@@ -144,7 +144,7 @@
       "kind": "function",
       "delta": "added",
       "lane": "functions",
-      "summary": "Pulls the Postmark suppression dump once per broadcast so suppressed addresses are filtered before any batch is sent.",
+      "summary": "每路广播只拉一次 Postmark 抑制名单，让被抑制地址在任何批次发出前就被过滤掉。",
       "files": [
         {
           "path": "packages/broadcast-lib/src/getSuppressedEmails.ts",
@@ -161,14 +161,14 @@
       "delta": "added",
       "lane": "functions",
       "subtitle": "packages/broadcast-lib",
-      "summary": "New shared package so the queue route and the sender agree on payload shape and batch size.",
+      "summary": "新的共享包：让队列路由与发送方对载荷结构和批次大小达成一致。",
       "files": [
         {
           "path": "packages/broadcast-lib/src/index.ts"
         }
       ],
       "badges": [
-        "new package"
+        "新包"
       ]
     },
     {
@@ -177,8 +177,8 @@
       "kind": "function",
       "delta": "removed",
       "lane": "functions",
-      "subtitle": "onWrite trigger",
-      "summary": "The per-recipient loop this change replaces.",
+      "subtitle": "onWrite 触发器",
+      "summary": "被本次改动替换掉的逐收件人循环。",
       "files": [
         {
           "path": "functions/src/broadcast/processBroadcast.ts",
@@ -195,7 +195,7 @@
       "kind": "function",
       "delta": "removed",
       "lane": "functions",
-      "summary": "One Postmark request per recipient. Gone with the loop that called it.",
+      "summary": "每个收件人一次 Postmark 请求。随调用它的循环一起移除。",
       "files": [
         {
           "path": "functions/src/broadcast/sendSingleEmail.ts",
@@ -212,8 +212,8 @@
       "kind": "external",
       "delta": "modified",
       "lane": "external",
-      "subtitle": "Email API",
-      "summary": "Same provider, different endpoints: the batch endpoint and the suppression dump replace repeated single sends.",
+      "subtitle": "邮件 API",
+      "summary": "供应商不变，端点变了：批量端点与抑制名单接口取代了重复的单封发送。",
       "files": [],
       "badges": []
     }
@@ -225,7 +225,7 @@
       "to": "queue-route",
       "kind": "http",
       "delta": "unchanged",
-      "label": "send broadcast",
+      "label": "提交广播",
       "emphasis": "normal",
       "animated": false,
       "files": []
@@ -236,7 +236,7 @@
       "to": "broadcast-queue",
       "kind": "data",
       "delta": "modified",
-      "label": "enqueue job",
+      "label": "写入任务",
       "emphasis": "normal",
       "animated": false,
       "files": []
@@ -247,7 +247,7 @@
       "to": "broadcast-lib",
       "kind": "dependency",
       "delta": "added",
-      "label": "batch size",
+      "label": "读取批量大小",
       "emphasis": "normal",
       "animated": false,
       "files": []
@@ -280,7 +280,7 @@
       "to": "send-single-email",
       "kind": "call",
       "delta": "removed",
-      "label": "per recipient",
+      "label": "逐个收件人",
       "emphasis": "normal",
       "animated": false,
       "files": []
@@ -291,7 +291,7 @@
       "to": "postmark",
       "kind": "http",
       "delta": "removed",
-      "label": "POST /email · 1 msg/call",
+      "label": "POST /email · 每次 1 封",
       "emphasis": "normal",
       "animated": false,
       "files": []
@@ -332,7 +332,7 @@
       "to": "postmark",
       "kind": "http",
       "delta": "added",
-      "label": "GET suppression dump",
+      "label": "拉取抑制名单",
       "emphasis": "normal",
       "animated": true,
       "files": []
@@ -343,10 +343,10 @@
       "to": "postmark",
       "kind": "http",
       "delta": "added",
-      "label": "500 msgs/call",
+      "label": "每次 500 封",
       "emphasis": "hero",
       "animated": true,
-      "summary": "The change in one edge: a broadcast to 10,000 recipients drops from 10,000 requests to 20.",
+      "summary": "整个改动浓缩成一条边：10,000 人的广播从 10,000 次请求降到 20 次。",
       "files": []
     },
     {
@@ -355,7 +355,7 @@
       "to": "broadcast-queue",
       "kind": "data",
       "delta": "added",
-      "label": "write results",
+      "label": "写回结果",
       "emphasis": "normal",
       "animated": false,
       "files": []
@@ -364,13 +364,13 @@
   "flows": [
     {
       "id": "send-pipeline",
-      "title": "Sending a broadcast",
-      "summary": "The path a queued broadcast takes now, from enqueue to per-message results.",
+      "title": "发送一路广播",
+      "summary": "排队后的广播现在走的完整路径：从入队到逐封结果。",
       "delta": "modified",
       "participants": [
         {
           "node": "queue-route",
-          "label": "queue route"
+          "label": "队列路由"
         },
         {
           "node": "broadcast-queue",
@@ -390,7 +390,7 @@
           "id": "enqueue",
           "from": "queue-route",
           "to": "broadcast-queue",
-          "label": "enqueue broadcast job",
+          "label": "入队广播任务",
           "kind": "async",
           "delta": "modified",
           "animated": true,
@@ -400,7 +400,7 @@
           "id": "trigger",
           "from": "broadcast-queue",
           "to": "send-broadcast-bulk",
-          "label": "onWrite trigger",
+          "label": "onWrite 触发",
           "kind": "async",
           "delta": "added",
           "animated": true,
@@ -410,7 +410,7 @@
           "id": "suppressions-request",
           "from": "send-broadcast-bulk",
           "to": "postmark",
-          "label": "GET suppression dump",
+          "label": "拉取抑制名单",
           "kind": "sync",
           "delta": "added",
           "animated": true,
@@ -420,30 +420,30 @@
           "id": "suppressions-response",
           "from": "postmark",
           "to": "send-broadcast-bulk",
-          "label": "suppressed addresses",
+          "label": "返回抑制地址",
           "kind": "return",
           "delta": "added",
           "animated": true,
-          "note": "Fetched once per broadcast, not once per recipient.",
+          "note": "每路广播拉取一次，而不是每个收件人一次。",
           "files": []
         },
         {
           "id": "batch-post",
           "from": "send-broadcast-bulk",
           "to": "postmark",
-          "label": "POST /email/batch · 500 msgs",
+          "label": "POST /email/batch · 500 封",
           "kind": "sync",
           "delta": "added",
           "animated": true,
           "repeat": 4,
-          "note": "One request per 500 recipients; four for this 2,000-recipient broadcast.",
+          "note": "每 500 个收件人一次请求；本次 2,000 人的广播共 4 次。",
           "files": []
         },
         {
           "id": "batch-results",
           "from": "postmark",
           "to": "send-broadcast-bulk",
-          "label": "per-message results",
+          "label": "逐封结果",
           "kind": "return",
           "delta": "added",
           "animated": true,
@@ -453,7 +453,7 @@
           "id": "write-results",
           "from": "send-broadcast-bulk",
           "to": "broadcast-queue",
-          "label": "write results",
+          "label": "写回结果",
           "kind": "async",
           "delta": "added",
           "animated": true,
@@ -468,28 +468,142 @@
     "deletions": 212,
     "chips": [
       {
-        "label": "Postmark calls",
-        "value": "500× fewer",
+        "label": "Postmark 调用",
+        "value": "减少 500 倍",
         "tone": "hero"
       },
       {
-        "label": "New",
-        "value": "4 units",
+        "label": "新增",
+        "value": "4 个部件",
         "tone": "added"
       },
       {
-        "label": "Retired",
-        "value": "2 units",
+        "label": "退役",
+        "value": "2 个部件",
         "tone": "removed"
       }
     ]
   },
+  "mermaid": [
+    {
+      "title": "广播状态机",
+      "summary": "批量发送引入的新状态流转：认领、过滤、分批、重试。旧实现只有入队和完成两态，失败的收件人无法单独重试。",
+      "code": "stateDiagram-v2\n    [*] --> queued: 入队\n    queued --> sending: sendBroadcastBulk 认领\n    sending --> filtering: 拉取抑制名单\n    filtering --> batching: buildBulkPayload\n    batching --> sending: 每 500 封一批\n    sending --> done: 全部批次成功\n    sending --> partial: 部分批次失败\n    partial --> sending: 重试剩余批次\n    done --> [*]"
+    }
+  ],
+  "repro": [
+    {
+      "title": "回到 base 提交并安装依赖",
+      "command": "git checkout 3f5c1ab && bun install"
+    },
+    {
+      "title": "造一条 2,000 人的测试广播，触发旧路径",
+      "command": "bun run seed:broadcast --recipients 2000",
+      "note": "旧路径会逐封调用 Postmark，观察日志里的请求次数。"
+    },
+    {
+      "title": "切回本分支",
+      "command": "git checkout batch-broadcast-send && bun install && bun run build"
+    },
+    {
+      "title": "重新触发同一条广播",
+      "command": "bun run seed:broadcast --recipients 2000",
+      "note": "新路径应只发出 1 次抑制名单请求和 4 次批量请求。"
+    }
+  ],
+  "testLogs": [
+    {
+      "title": "TDD red：先写批量切分测试（预期失败）",
+      "command": "bun test packages/broadcast-lib",
+      "exitCode": 1,
+      "output": "bun test v1.1.0\n\npackages/broadcast-lib/src/buildBulkPayload.test.ts:\n✗ buildBulkPayload 把 2,000 个收件人切成 4 批 [1.50ms]\n✗ buildBulkPayload 每批不超过 500 封 [0.42ms]\n\n 2 fail\nRan 2 tests across 1 file. [0.09s]"
+    },
+    {
+      "title": "TDD green：实现后同一组测试通过",
+      "command": "bun test packages/broadcast-lib",
+      "exitCode": 0,
+      "output": "bun test v1.1.0\n\npackages/broadcast-lib/src/buildBulkPayload.test.ts:\n✓ buildBulkPayload 把 2,000 个收件人切成 4 批 [1.12ms]\n✓ buildBulkPayload 每批不超过 500 封 [0.38ms]\n✓ getSuppressedEmails 只在每路广播拉取一次 [3.21ms]\n\n 3 pass\nRan 3 tests across 1 file. [0.10s]"
+    },
+    {
+      "title": "回归：全仓测试",
+      "command": "bun test",
+      "exitCode": 0,
+      "output": "bun test v1.1.0\n\n 218 pass\n 0 fail\nRan 218 tests across 34 files. [4.86s]"
+    }
+  ],
+  "evidence": [
+    {
+      "title": "批量结果验证截图（占位示例）",
+      "kind": "image",
+      "path": "evidence/batch-result.png",
+      "note": "占位示例图：真实报告中替换为你自己的验证截图。本图对应 Firestore 队列文档里按批写回的结果字段。"
+    }
+  ],
+  "design": [
+    {
+      "title": "批量大小：每批 500 封还是逐封发送？",
+      "context": "旧路径每个收件人一次 API 调用，2,000 人的广播要打 2,000 次 Postmark，频繁触发限流，全量发送要 40 分钟。",
+      "options": [
+        {
+          "label": "维持逐封发送",
+          "summary": "不改代码，但限流与耗时问题原样保留。"
+        },
+        {
+          "label": "每批 500 封（批量端点）",
+          "summary": "Postmark /email/batch 的单次上限正好是 500。"
+        },
+        {
+          "label": "每批 1,000 封（自建并发）",
+          "summary": "需要自己拆分并发、限速与重试，复杂度最高。"
+        }
+      ],
+      "chosen": "每批 500 封（批量端点）",
+      "rationale": "供应商批量端点单次上限就是 500：选它不需要自建并发控制，失败按整批重试，复杂度最低，请求次数从 2,000 降到 4。"
+    },
+    {
+      "title": "抑制名单：何时拉取？",
+      "context": "旧路径在发送时逐个检查抑制名单，同一个名单被反复查询。",
+      "options": [
+        {
+          "label": "每个收件人查一次",
+          "summary": "实时性最好，但查询次数与收件人数相同。"
+        },
+        {
+          "label": "每路广播拉取一次全量",
+          "summary": "一次 GET 拉全量，之后本地过滤。"
+        }
+      ],
+      "chosen": "每路广播拉取一次全量",
+      "rationale": "抑制名单变动频率低；一次全量拉取把 O(n) 次查询降为 1 次，任何批次发出前就已过滤完毕。"
+    }
+  ],
+  "testSteps": [
+    {
+      "title": "安装并启动本地环境",
+      "command": "bun install && bun run dev",
+      "expected": "服务启动，控制台无报错。"
+    },
+    {
+      "title": "发送一条 2,000 人的测试广播",
+      "command": "bun run seed:broadcast --recipients 2000",
+      "expected": "队列文档写入成功，batchSize 字段为 500。"
+    },
+    {
+      "title": "观察发送日志",
+      "expected": "对 Postmark 只有 1 次 GET 抑制名单 + 4 次 POST /email/batch，没有任何单封请求。"
+    },
+    {
+      "title": "跑全量测试",
+      "command": "bun test",
+      "expected": "全部通过，exit 0。"
+    }
+  ],
   "views": [
     {
       "id": "overview",
-      "title": "Architecture — blast radius",
+      "title": "架构 — 影响范围",
       "lens": "architecture",
-      "summary": "Everything this change touches, across all three lanes.",
+      "summary": "这次改动触达的全部内容，横跨三条泳道。",
       "scope": {
         "kind": "all"
       },
@@ -497,9 +611,9 @@
       "children": [
         {
           "id": "new-batch-path",
-          "title": "The new batch path",
+          "title": "新的批量路径",
           "lens": "architecture",
-          "summary": "What replaced the per-recipient loop.",
+          "summary": "取代逐收件人循环的方案。",
           "scope": {
             "kind": "selection",
             "lanes": [],
@@ -525,9 +639,9 @@
         },
         {
           "id": "retired-path",
-          "title": "What was retired",
+          "title": "被移除的路径",
           "lens": "architecture",
-          "summary": "The single-send path, kept visible so a reviewer can confirm nothing else called it.",
+          "summary": "保留单发路径的可见性，便于 reviewer 确认没有其他调用方。",
           "scope": {
             "kind": "selection",
             "lanes": [],
@@ -549,7 +663,7 @@
     },
     {
       "id": "send-pipeline-view",
-      "title": "Data flow — sending a broadcast",
+      "title": "数据流 — 发送一路广播",
       "lens": "data-flow",
       "scope": {
         "kind": "selection",
@@ -568,8 +682,8 @@
     "steps": [
       {
         "id": "batches-of-500",
-        "heading": "sendBroadcastBulk and buildBulkPayload added",
-        "body": "Nothing loops over recipients any more. The sender works on a whole batch at a time.",
+        "heading": "新增 sendBroadcastBulk 与 buildBulkPayload",
+        "body": "不再有遍历收件人的循环，发送方一次处理整整一批。",
         "stage": {
           "kind": "view",
           "view": "overview"
@@ -588,8 +702,8 @@
       },
       {
         "id": "suppression-first",
-        "heading": "getSuppressedEmails added before the send",
-        "body": "It pulls the blocked addresses once, before any batch is built.",
+        "heading": "新增 getSuppressedEmails，前移到发送之前",
+        "body": "先把被抑制地址一次拉全，再构造任何批次。",
         "stage": {
           "kind": "view",
           "view": "new-batch-path"
@@ -607,8 +721,8 @@
       },
       {
         "id": "old-path-goes-dark",
-        "heading": "processBroadcast and sendSingleEmail removed",
-        "body": "sendBroadcastBulk does their job for whole batches.",
+        "heading": "移除 processBroadcast 与 sendSingleEmail",
+        "body": "sendBroadcastBulk 按整批完成了它们的工作。",
         "stage": {
           "kind": "view",
           "view": "overview"
@@ -626,8 +740,8 @@
       },
       {
         "id": "sequence-start-to-finish",
-        "heading": "The send sequence gained 6 new steps",
-        "body": "The queue write is the only step that was there before, and it now stamps the batch size.",
+        "heading": "发送时序新增 6 个步骤",
+        "body": "队列写入是唯一保留的旧步骤，且它现在写入批次大小。",
         "stage": {
           "kind": "flow",
           "flow": "send-pipeline"
@@ -638,8 +752,8 @@
       },
       {
         "id": "four-batch-calls",
-        "heading": "Postmark now gets 500 emails per call",
-        "body": "One call per batch, and Postmark answers with a result for each message.",
+        "heading": "Postmark 每次收到 500 封",
+        "body": "每批一次调用，Postmark 逐封返回结果。",
         "stage": {
           "kind": "flow",
           "flow": "send-pipeline"
@@ -657,8 +771,8 @@
       },
       {
         "id": "blast-radius",
-        "heading": "4 parts added, 2 removed, across 3 lanes",
-        "body": "A 2,000-person broadcast used to make 2,000 calls to Postmark. It now makes 4.",
+        "heading": "3 条泳道：新增 4 个部件，移除 2 个",
+        "body": "2,000 人的广播过去要调 2,000 次 Postmark，现在只要 4 次。",
         "stage": {
           "kind": "view",
           "view": "overview"

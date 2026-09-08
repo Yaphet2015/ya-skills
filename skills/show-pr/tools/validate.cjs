@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const file = process.argv[2] || '.show-branch-diff/graph.zh.json';
+const file = process.argv[2] || '.show-pr/graph.zh.json';
 const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
 const errors = [];
 const err = (msg) => errors.push(msg);
@@ -35,7 +35,7 @@ const checkId = (id, what) => {
   if (id && id.length > 128) err(`${what}: id over 128 chars`);
 };
 
-if (doc.schemaVersion !== '0.1.1') err(`schemaVersion must be 0.1.1, got ${doc.schemaVersion}`);
+if (doc.schemaVersion !== '0.2.0') err(`schemaVersion must be 0.2.0, got ${doc.schemaVersion}`);
 if (doc.kind !== 'graph') err(`kind must be "graph"`);
 if (!Array.isArray(doc.lenses) || doc.lenses.some((l) => !LENSES.includes(l))) err('lenses invalid');
 if (doc.flows.length > 0 && !doc.lenses.includes('data-flow')) err('document with flows must declare data-flow lens');
@@ -198,9 +198,89 @@ for (const s of steps) {
   }
 }
 
+/* ---------- report evidence sections (all optional) ---------- */
+const MERMAID_MAX_CODE = 4000;
+if (doc.mermaid && doc.mermaid.length > 8) err('over 8 mermaid diagrams');
+for (const m of doc.mermaid || []) {
+  if (!m.title || m.title.length > 120) err(`mermaid "${m.title || ''}" title missing or over 120 chars`);
+  if (m.summary && m.summary.length > 2000) err(`mermaid "${m.title}" summary over 2000 chars`);
+  if (!m.code || !m.code.trim()) err(`mermaid "${m.title}" has no code`);
+  if (m.code && m.code.length > MERMAID_MAX_CODE) err(`mermaid "${m.title}" code over ${MERMAID_MAX_CODE} chars`);
+}
+
+if ((doc.repro || []).length > 12) err('over 12 repro steps');
+for (const [i, r] of (doc.repro || []).entries()) {
+  if (!r.title || r.title.length > 120) err(`repro step ${i + 1} title missing or over 120 chars`);
+  if (r.command && r.command.length > 500) err(`repro step ${i + 1} command over 500 chars`);
+  if (r.note && r.note.length > 500) err(`repro step ${i + 1} note over 500 chars`);
+}
+
+if ((doc.testLogs || []).length > 12) err('over 12 test logs');
+for (const [i, t] of (doc.testLogs || []).entries()) {
+  if (!t.title || t.title.length > 120) err(`test log ${i + 1} title missing or over 120 chars`);
+  if (!t.command || t.command.length > 500) err(`test log ${i + 1} command missing or over 500 chars`);
+  if (!Number.isInteger(t.exitCode)) err(`test log ${i + 1} exitCode must be an integer, got ${JSON.stringify(t.exitCode)}`);
+  if (!t.output || !t.output.trim()) err(`test log ${i + 1} has no output — paste the real run, do not fabricate`);
+  if (t.output && t.output.length > 20000) err(`test log ${i + 1} output over 20000 chars`);
+}
+
+const EVIDENCE_EXT = {
+  image: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+  video: ['mp4', 'webm', 'mov'],
+};
+const MAX_EVIDENCE_BYTES = 8 * 1024 * 1024;
+const MAX_EVIDENCE_TOTAL = 16 * 1024 * 1024;
+const evidence = doc.evidence || [];
+if (evidence.length > 12) err('over 12 evidence items');
+let evidenceTotal = 0;
+for (const [i, ev] of evidence.entries()) {
+  if (!ev.title || ev.title.length > 120) err(`evidence ${i + 1} title missing or over 120 chars`);
+  if (!EVIDENCE_EXT[ev.kind]) err(`evidence ${i + 1} bad kind "${ev.kind}" (image or video)`);
+  if (!ev.path || ev.path.length > 300) err(`evidence ${i + 1} path missing or over 300 chars`);
+  if (ev.path && (ev.path.startsWith('/') || ev.path.includes('\\') || /^[A-Za-z]:/.test(ev.path) || ev.path.split('/').includes('..'))) {
+    err(`evidence ${i + 1} bad path ${ev.path} — repository-relative POSIX path`);
+  }
+  if (ev.note && ev.note.length > 500) err(`evidence ${i + 1} note over 500 chars`);
+  if (ev.path && EVIDENCE_EXT[ev.kind]) {
+    const ext = ev.path.split('.').pop().toLowerCase();
+    if (!EVIDENCE_EXT[ev.kind].includes(ext)) err(`evidence ${i + 1} kind "${ev.kind}" does not match extension ".${ext}"`);
+    const abs = path.resolve(path.dirname(file), ev.path);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      err(`evidence ${i + 1} file not found: ${ev.path} (relative to the document)`);
+    } else {
+      const size = fs.statSync(abs).size;
+      if (size > MAX_EVIDENCE_BYTES) err(`evidence ${i + 1} ${ev.path} is ${(size / 1048576).toFixed(1)} MB — over 8 MB`);
+      evidenceTotal += size;
+    }
+  }
+}
+if (evidenceTotal > MAX_EVIDENCE_TOTAL) err(`evidence totals ${(evidenceTotal / 1048576).toFixed(1)} MB — over 16 MB`);
+
+if ((doc.design || []).length > 16) err('over 16 design decisions');
+for (const [i, d] of (doc.design || []).entries()) {
+  if (!d.title || d.title.length > 120) err(`design ${i + 1} title missing or over 120 chars`);
+  if (!d.context || d.context.length > 2000) err(`design "${d.title}" context missing or over 2000 chars`);
+  if (!Array.isArray(d.options) || d.options.length < 1 || d.options.length > 6) err(`design "${d.title}" needs 1-6 options`);
+  const labels = new Set();
+  for (const o of d.options || []) {
+    if (!o.label || o.label.length > 60) err(`design "${d.title}" option label missing or over 60 chars`);
+    if (o.summary && o.summary.length > 500) err(`design "${d.title}" option "${o.label}" summary over 500 chars`);
+    labels.add(o.label);
+  }
+  if (!labels.has(d.chosen)) err(`design "${d.title}" chosen "${d.chosen}" is not one of the declared options`);
+  if (!d.rationale || d.rationale.length > 2000) err(`design "${d.title}" rationale missing or over 2000 chars`);
+}
+
+if ((doc.testSteps || []).length > 12) err('over 12 reviewer test steps');
+for (const [i, s] of (doc.testSteps || []).entries()) {
+  if (!s.title || s.title.length > 120) err(`test step ${i + 1} title missing or over 120 chars`);
+  if (s.command && s.command.length > 500) err(`test step ${i + 1} command over 500 chars`);
+  if (!s.expected || s.expected.length > 500) err(`test step ${i + 1} expected result missing or over 500 chars`);
+}
+
 if (errors.length) {
   console.error(`INVALID (${file}) — ${errors.length} problem(s):`);
   for (const e of errors) console.error('  - ' + e);
   process.exit(1);
 }
-console.log(`VALID — ${doc.lanes.length} lanes, ${doc.nodes.length} nodes, ${doc.edges.length} edges, ${doc.flows.length} flows, ${roots.length} root views, ${steps.length} walkthrough steps`);
+console.log(`VALID — ${doc.lanes.length} lanes, ${doc.nodes.length} nodes, ${doc.edges.length} edges, ${doc.flows.length} flows, ${roots.length} root views, ${steps.length} walkthrough steps, ${(doc.mermaid || []).length} mermaid, ${(doc.repro || []).length} repro, ${(doc.testLogs || []).length} test logs, ${evidence.length} evidence, ${(doc.design || []).length} design, ${(doc.testSteps || []).length} test steps`);

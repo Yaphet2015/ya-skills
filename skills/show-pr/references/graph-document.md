@@ -10,7 +10,7 @@ Every schema here is **strict**: an unknown key is a rejection, not a warning. A
 
 ```json
 {
-  "schemaVersion": "0.1.1",
+  "schemaVersion": "0.2.0",
   "kind": "graph",
   "title": "Batch broadcast sending through Postmark",
   "summary": "One paragraph answering: what does this change do?",
@@ -21,11 +21,19 @@ Every schema here is **strict**: an unknown key is a rejection, not a warning. A
   "edges": [],
   "flows": [],
   "stats": {},
+  "mermaid": [],
+  "repro": [],
+  "testLogs": [],
+  "evidence": [],
+  "design": [],
+  "testSteps": [],
   "views": []
 }
 ```
 
 `lenses` declares what the document carries enough detail to draw: `architecture`, `data-flow`, or both. A document carrying flows must declare `data-flow`.
+
+The six evidence sections — `mermaid`, `repro`, `testLogs`, `evidence`, `design`, `testSteps` — are all optional; a section absent from the document simply does not render its tab. The tables below give each one's rules.
 
 `provenance` is where the document came from: the repository, the base and head commit shas (lowercase hex, 7-40 characters), optionally the pull request and the generator. When you produce a document through the CLI these are filled in from the repository, so do not invent them.
 
@@ -122,6 +130,80 @@ Up to 16, for the data-flow lens.
 ```
 
 Up to 8 chips, `tone` one of `neutral added modified removed hero`. Per-delta element counts are deliberately absent from the schema: they are derivable from the document, and a stored copy can only go stale.
+
+## Mermaid diagrams
+
+Up to 8, for what lanes and flows cannot express: state machines, ER models, class diagrams, journey maps. The report renders them in its own Mermaid 图 tab, offline, from the bundle vendored with the skill — nothing loads from the network.
+
+```json
+{ "title": "广播状态机", "summary": "…", "code": "stateDiagram-v2\n    [*] --> queued: 入队" }
+```
+
+- `title` required (≤120), `summary` optional (≤2000), `code` required (≤4000). Mermaid labels may be Chinese.
+- Do not redraw what a lane view or a flow already shows; a second diagram of the same thing is noise.
+- Broken syntax renders an inline error box in that tab — open the report to check.
+
+## Reproduction steps
+
+Up to 12, ordered: how a reviewer reproduces the situation the change addresses (often on the base commit).
+
+```json
+{ "title": "回到 base 提交并安装依赖", "command": "git checkout 3f5c1ab && bun install", "note": "…" }
+```
+
+`title` required (≤120), `command` optional (≤500), `note` optional (≤500). Repro reproduces the situation; reviewer test steps verify the result — do not write the same list twice.
+
+## Test logs
+
+Up to 12. Proof that tests actually ran: the command, the exit code, the raw output.
+
+```json
+{ "title": "TDD red：先写批量切分测试（预期失败）", "command": "bun test packages/broadcast-lib", "exitCode": 1, "output": "…" }
+```
+
+- `exitCode` must be an integer; `output` 1–20,000 characters, pasted as it ran — command output stays verbatim, never translated or rewritten.
+- Paste the real runs, including the failing red run before the green run. A log that cannot fail proves nothing.
+- Never fabricate a log. If you did not run it, leave the section out.
+
+## Evidence
+
+Up to 12 screenshots or screen recordings, embedded into the report at build time as data URIs, so the file stays self-contained offline.
+
+```json
+{ "title": "批量结果验证截图", "kind": "image", "path": "evidence/batch-result.png", "note": "…" }
+```
+
+- `kind` is `image` (png jpg jpeg gif webp) or `video` (mp4 webm mov); the extension must match the kind.
+- `path` is relative to the document, POSIX, no `..`; the validator checks the file exists, ≤8 MB each and ≤16 MB total.
+- Capture before claiming done: the evidence tab exists so “已验证” has a picture behind it.
+
+## Design decisions
+
+Up to 16 decision points: every place the change faced a real choice.
+
+```json
+{
+  "title": "批量大小：每批 500 封还是逐封发送？",
+  "context": "旧路径…",
+  "options": [ { "label": "维持逐封发送", "summary": "…" }, { "label": "每批 500 封（批量端点）", "summary": "…" } ],
+  "chosen": "每批 500 封（批量端点）",
+  "rationale": "…"
+}
+```
+
+- `context` and `rationale` required (≤2000); 1–6 options with `label` ≤60; `chosen` must equal one declared label — the validator enforces it.
+- Include the rejected options, not just the winner; a decision without alternatives is not a decision.
+- Skip non-decisions: where there was never a choice, there is no decision point.
+
+## Reviewer test steps
+
+Up to 12, ordered: how a reviewer verifies the change themselves, on this branch.
+
+```json
+{ "title": "发送一条 2,000 人的测试广播", "command": "bun run seed:broadcast --recipients 2000", "expected": "队列文档写入成功，batchSize 字段为 500。" }
+```
+
+`title` and `expected` (≤500) required; `command` optional. Write `expected` so pass or fail is a check the reviewer can make, not a feeling.
 
 ## Views
 
@@ -272,9 +354,9 @@ Labels 120 characters, summaries 2000, chip values 32. They are display fields: 
 ## Then validate
 
 ```bash
-node <skill-dir>/tools/validate.cjs .show-branch-diff/graph.zh.json
+node <skill-dir>/tools/validate.cjs .show-pr/graph.zh.json
 ```
 
-`<skill-dir>` is where this skill is installed (`.agents/skills/show-branch-diff` or `.claude/skills/show-branch-diff`).
+`<skill-dir>` is where this skill is installed (`.agents/skills/show-pr` or `.claude/skills/show-pr`).
 
 Every problem is reported at once, with a path into the document. Fix them all and run it again until it is clean.
