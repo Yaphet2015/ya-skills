@@ -151,7 +151,6 @@ const html = `<!doctype html>
     <div id="flowHolder"></div>
   </section>
 </main>
-<div id="sections"></div>
 <div class="legend">
   <span><i class="dot" style="background:var(--added)"></i>新增</span>
   <span><i class="dot" style="background:var(--modified)"></i>修改</span>
@@ -161,6 +160,7 @@ const html = `<!doctype html>
   <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--removed)" stroke-width="1.4" stroke-dasharray="5 4"/></svg>已移除的边</span>
   <span>点击导览步骤可聚焦对应变更 &middot; 方向键切换</span>
 </div>
+<div id="sections"></div>
 ${mermaidBundle ? '<script>' + mermaidBundle + '</script>' : ''}
 <script>
 const EVIDENCE = ${evidenceJson};
