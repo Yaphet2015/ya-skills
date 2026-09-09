@@ -23,7 +23,6 @@ Every schema here is **strict**: an unknown key is a rejection, not a warning. A
   "stats": {},
   "mermaid": [],
   "repro": [],
-  "testLogs": [],
   "evidence": [],
   "design": [],
   "testSteps": [],
@@ -33,7 +32,7 @@ Every schema here is **strict**: an unknown key is a rejection, not a warning. A
 
 `lenses` declares what the document carries enough detail to draw: `architecture`, `data-flow`, or both. A document carrying flows must declare `data-flow`.
 
-The six evidence sections — `mermaid`, `repro`, `testLogs`, `evidence`, `design`, `testSteps` — are all optional; a section absent from the document simply does not render its tab. The tables below give each one's rules.
+The five evidence sections — `mermaid`, `repro` (测试覆盖), `evidence`, `testSteps` (建议手动测试), `design` (设计决策， rendered last) — are all optional; a section absent from the document simply does not render. The tables below give each one's rules.
 
 `provenance` is where the document came from: the repository, the base and head commit shas (lowercase hex, 7-40 characters), optionally the pull request and the generator. When you produce a document through the CLI these are filled in from the repository, so do not invent them.
 
@@ -143,27 +142,21 @@ Up to 8, for what lanes and flows cannot express: state machines, ER models, cla
 - Do not redraw what a lane view or a flow already shows; a second diagram of the same thing is noise.
 - Broken syntax renders an inline error box in that tab — open the report to check.
 
-## Reproduction steps
+## Test coverage (repro)
 
-Up to 12. Enumerate the test cases the branch's changes involve, one card per case group: the command that reproduces it, the real test result, and whether automation covers it. Cases not covered by automated tests get their own entries with manual steps and 未自动化覆盖 marked in the title or note — do not bury them among the automated ones.
-
-```json
-{ "title": "提交与 ACK 语义", "command": "jest src/renderer/quick/__tests__/useQuickSubmit.test.ts", "note": "…", "result": "自动化覆盖：12 项通过" }
-```
-
-`title` required (≤120), `command` optional (≤500), `note` optional (≤500), `result` optional (≤500), `manual` optional boolean. Set `manual: true` on every case not covered by automated tests — the report marks those cards with a yellow warning badge. Repro enumerates what the change's cases are and how they ran; reviewer test steps verify the change — keep the two lists distinct.
-
-## Test logs
-
-Up to 12. Proof that tests actually ran: the command, the exit code, the raw output.
+Up to 12. Enumerate the test cases the branch's changes involve, one card per case group: the command that reproduces it, the real test result, and whether automation covers it.
 
 ```json
-{ "title": "TDD red：先写批量切分测试（预期失败）", "command": "bun test packages/broadcast-lib", "exitCode": 1, "output": "…" }
+{ "title": "提交与 ACK 语义", "command": "jest src/renderer/quick/__tests__/useQuickSubmit.test.ts", "result": "自动化覆盖：12 项通过" }
 ```
 
-- `exitCode` must be an integer; `output` 1–20,000 characters, pasted as it ran — command output stays verbatim, never translated or rewritten.
-- Paste the real runs, including the failing red run before the green run. A log that cannot fail proves nothing.
-- Never fabricate a log. If you did not run it, leave the section out.
+`title` required (≤120), `command` optional (≤500), `note` optional (≤500), `result` optional (≤500). Cases not covered by automated tests set `manual: true` and carry `steps` (1–16 non-empty strings, ≤500 each) plus `expected` (≤500, required on manual entries) — the validator enforces both. The report marks manual cards with a yellow warning badge, renders the steps as an ordered list, and puts the expected behaviour on its own line:
+
+```json
+{ "title": "2,000 人广播只发 4 次批量请求", "manual": true, "steps": ["pnpm dev 启动", "发送 2,000 人测试广播", "观察请求日志"], "expected": "POST /email/batch 恰为 4 次，无单封请求。" }
+```
+
+Run before you write a result line; a result you did not observe is fabrication.
 
 ## Evidence
 
@@ -175,7 +168,17 @@ Up to 12 screenshots or screen recordings, embedded into the report at build tim
 
 - `kind` is `image` (png jpg jpeg gif webp) or `video` (mp4 webm mov); the extension must match the kind.
 - `path` is relative to the document, POSIX, no `..`; the validator checks the file exists, ≤8 MB each and ≤16 MB total.
-- Capture before claiming done: the evidence tab exists so “已验证” has a picture behind it.
+- Capture before claiming done: the evidence section exists so “已验证” has a picture behind it.
+
+## Suggested manual tests (testSteps)
+
+Up to 12, ordered: how a reviewer verifies the change themselves, on this branch. Same shape as a manual repro entry: an ordered list of steps plus the expected behaviour on its own line.
+
+```json
+{ "title": "发送一条 2,000 人的测试广播", "steps": ["bun run seed:broadcast --recipients 2000"], "expected": "队列文档写入成功，batchSize 字段为 500。" }
+```
+
+`title` ≤120, `steps` 1–16 non-empty strings ≤500 each, `expected` ≤500 — all required. Write `expected` so pass or fail is a check the reviewer can make, not a feeling.
 
 ## Design decisions
 
@@ -194,16 +197,6 @@ Up to 16 decision points: every place the change faced a real choice.
 - `context` and `rationale` required (≤2000); 1–6 options with `label` ≤60; `chosen` must equal one declared label — the validator enforces it.
 - Include the rejected options, not just the winner; a decision without alternatives is not a decision.
 - Skip non-decisions: where there was never a choice, there is no decision point.
-
-## Reviewer test steps
-
-Up to 12, ordered: how a reviewer verifies the change themselves, on this branch.
-
-```json
-{ "title": "发送一条 2,000 人的测试广播", "command": "bun run seed:broadcast --recipients 2000", "expected": "队列文档写入成功，batchSize 字段为 500。" }
-```
-
-`title` and `expected` (≤500) required; `command` optional. Write `expected` so pass or fail is a check the reviewer can make, not a feeling.
 
 ## Views
 

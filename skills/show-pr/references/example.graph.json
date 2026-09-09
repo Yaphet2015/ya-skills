@@ -495,7 +495,7 @@
     {
       "title": "批量切分与单批上限（buildBulkPayload）",
       "command": "bun test packages/broadcast-lib/src/buildBulkPayload.test.ts",
-      "result": "自动化覆盖：3 项通过（见下方 TDD red/green 日志）"
+      "result": "自动化覆盖：3 项通过"
     },
     {
       "title": "抑制名单每路广播只拉一次（getSuppressedEmails）",
@@ -510,28 +510,13 @@
     {
       "title": "2,000 人广播只发 4 次批量请求",
       "manual": true,
-      "note": "需本地 Firebase 模拟器 + Postmark 沙箱手工触发：观察日志中 POST /email/batch 恰为 4 次，无单封请求。",
-      "result": "未自动化覆盖：需手工验证（对照 Reviewer 验证第 3 步）"
-    }
-  ],
-  "testLogs": [
-    {
-      "title": "TDD red：先写批量切分测试（预期失败）",
-      "command": "bun test packages/broadcast-lib",
-      "exitCode": 1,
-      "output": "bun test v1.1.0\n\npackages/broadcast-lib/src/buildBulkPayload.test.ts:\n✗ buildBulkPayload 把 2,000 个收件人切成 4 批 [1.50ms]\n✗ buildBulkPayload 每批不超过 500 封 [0.42ms]\n\n 2 fail\nRan 2 tests across 1 file. [0.09s]"
-    },
-    {
-      "title": "TDD green：实现后同一组测试通过",
-      "command": "bun test packages/broadcast-lib",
-      "exitCode": 0,
-      "output": "bun test v1.1.0\n\npackages/broadcast-lib/src/buildBulkPayload.test.ts:\n✓ buildBulkPayload 把 2,000 个收件人切成 4 批 [1.12ms]\n✓ buildBulkPayload 每批不超过 500 封 [0.38ms]\n✓ getSuppressedEmails 只在每路广播拉取一次 [3.21ms]\n\n 3 pass\nRan 3 tests across 1 file. [0.10s]"
-    },
-    {
-      "title": "回归：全仓测试",
-      "command": "bun test",
-      "exitCode": 0,
-      "output": "bun test v1.1.0\n\n 218 pass\n 0 fail\nRan 218 tests across 34 files. [4.86s]"
+      "result": "未自动化覆盖：需手工验证（对照 Reviewer 验证第 3 步）",
+      "steps": [
+        "本地起 Firebase 模拟器与 Postmark 沙箱",
+        "造一条 2,000 人的测试广播并发送",
+        "观察服务端请求日志"
+      ],
+      "expected": "POST /email/batch 恰为 4 次，且无任何单封请求。"
     }
   ],
   "evidence": [
@@ -583,21 +568,31 @@
   "testSteps": [
     {
       "title": "安装并启动本地环境",
-      "command": "bun install && bun run dev",
+      "steps": [
+        "pnpm install",
+        "pnpm run dev"
+      ],
       "expected": "服务启动，控制台无报错。"
     },
     {
       "title": "发送一条 2,000 人的测试广播",
-      "command": "bun run seed:broadcast --recipients 2000",
+      "steps": [
+        "bun run seed:broadcast --recipients 2000"
+      ],
       "expected": "队列文档写入成功，batchSize 字段为 500。"
     },
     {
       "title": "观察发送日志",
-      "expected": "对 Postmark 只有 1 次 GET 抑制名单 + 4 次 POST /email/batch，没有任何单封请求。"
+      "steps": [
+        "保持应用运行，查看网络面板中 Postmark 请求"
+      ],
+      "expected": "只有 1 次 GET 抑制名单 + 4 次 POST /email/batch，没有任何单封请求。"
     },
     {
       "title": "跑全量测试",
-      "command": "bun test",
+      "steps": [
+        "bun test"
+      ],
       "expected": "全部通过，exit 0。"
     }
   ],

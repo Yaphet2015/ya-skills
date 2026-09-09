@@ -208,22 +208,27 @@ for (const m of doc.mermaid || []) {
   if (m.code && m.code.length > MERMAID_MAX_CODE) err(`mermaid "${m.title}" code over ${MERMAID_MAX_CODE} chars`);
 }
 
-if ((doc.repro || []).length > 12) err('over 12 repro steps');
+if ((doc.repro || []).length > 12) err('over 12 repro entries');
 for (const [i, r] of (doc.repro || []).entries()) {
-  if (!r.title || r.title.length > 120) err(`repro step ${i + 1} title missing or over 120 chars`);
-  if (r.command && r.command.length > 500) err(`repro step ${i + 1} command over 500 chars`);
-  if (r.note && r.note.length > 500) err(`repro step ${i + 1} note over 500 chars`);
-  if (r.result && r.result.length > 500) err(`repro step ${i + 1} result over 500 chars`);
-  if (r.manual !== undefined && typeof r.manual !== 'boolean') err(`repro step ${i + 1} manual must be a boolean`);
+  if (!r.title || r.title.length > 120) err(`repro ${i + 1} title missing or over 120 chars`);
+  if (r.command && r.command.length > 500) err(`repro ${i + 1} command over 500 chars`);
+  if (r.note && r.note.length > 500) err(`repro ${i + 1} note over 500 chars`);
+  if (r.result && r.result.length > 500) err(`repro ${i + 1} result over 500 chars`);
+  if (r.manual !== undefined && typeof r.manual !== 'boolean') err(`repro ${i + 1} manual must be a boolean`);
+  if (r.steps !== undefined && !isValidStepList(r.steps)) err(`repro ${i + 1} steps must be 1-16 non-empty strings under 500 chars`);
+  if (r.expected && r.expected.length > 500) err(`repro ${i + 1} expected over 500 chars`);
+  if (r.manual && !(Array.isArray(r.steps) && r.steps.length >= 1)) err(`repro ${i + 1} manual entry needs steps`);
+  if (r.manual && !r.expected) err(`repro ${i + 1} manual entry needs expected`);
+}
+function isValidStepList(steps) {
+  return Array.isArray(steps) && steps.length >= 1 && steps.length <= 16 && steps.every((s) => typeof s === 'string' && s.trim() !== '' && s.length <= 500);
 }
 
-if ((doc.testLogs || []).length > 12) err('over 12 test logs');
-for (const [i, t] of (doc.testLogs || []).entries()) {
-  if (!t.title || t.title.length > 120) err(`test log ${i + 1} title missing or over 120 chars`);
-  if (!t.command || t.command.length > 500) err(`test log ${i + 1} command missing or over 500 chars`);
-  if (!Number.isInteger(t.exitCode)) err(`test log ${i + 1} exitCode must be an integer, got ${JSON.stringify(t.exitCode)}`);
-  if (!t.output || !t.output.trim()) err(`test log ${i + 1} has no output — paste the real run, do not fabricate`);
-  if (t.output && t.output.length > 20000) err(`test log ${i + 1} output over 20000 chars`);
+if ((doc.testSteps || []).length > 12) err('over 12 manual test entries');
+for (const [i, s] of (doc.testSteps || []).entries()) {
+  if (!s.title || s.title.length > 120) err(`manual test ${i + 1} title missing or over 120 chars`);
+  if (!isValidStepList(s.steps)) err(`manual test ${i + 1} steps must be 1-16 non-empty strings under 500 chars`);
+  if (!s.expected || s.expected.length > 500) err(`manual test ${i + 1} expected missing or over 500 chars`);
 }
 
 const EVIDENCE_EXT = {
@@ -285,4 +290,4 @@ if (errors.length) {
   for (const e of errors) console.error('  - ' + e);
   process.exit(1);
 }
-console.log(`VALID — ${doc.lanes.length} lanes, ${doc.nodes.length} nodes, ${doc.edges.length} edges, ${doc.flows.length} flows, ${roots.length} root views, ${steps.length} walkthrough steps, ${(doc.mermaid || []).length} mermaid, ${(doc.repro || []).length} repro, ${(doc.testLogs || []).length} test logs, ${evidence.length} evidence, ${(doc.design || []).length} design, ${(doc.testSteps || []).length} test steps`);
+console.log(`VALID — ${doc.lanes.length} lanes, ${doc.nodes.length} nodes, ${doc.edges.length} edges, ${doc.flows.length} flows, ${roots.length} root views, ${steps.length} walkthrough steps, ${(doc.mermaid || []).length} mermaid, ${(doc.repro || []).length} repro, ${evidence.length} evidence, ${(doc.design || []).length} design, ${(doc.testSteps || []).length} manual tests`);

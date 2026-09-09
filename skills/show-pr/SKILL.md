@@ -1,6 +1,6 @@
 ---
 name: show-pr
-description: Use only when the user explicitly invokes show-pr to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, reproduction steps, real test logs, verification screenshots or video, a decision-point design doc, and reviewer test steps in one HTML page. It never triggers implicitly.
+description: Use only when the user explicitly invokes show-pr to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, per-case test coverage with real results, verification screenshots or video, a decision-point design doc, and suggested manual tests in one HTML page. It never triggers implicitly.
 disable-model-invocation: true
 ---
 
@@ -20,12 +20,12 @@ Run only when the user explicitly invokes `show-pr` or explicitly asks for this 
 
 2. **Collect the evidence before writing a word of it.**
 
-   - Run the tests and keep the real output — the red run before the fix, and the green run after. Do not summarise; copy the terminal output as it ran.
+   - Run the tests and record the real per-case results — the numbers you actually observed, including failures on the base commit. A result you did not watch is fabrication.
    - Capture the screenshot or screen recording that proves you verified the behaviour yourself, into `.show-pr/evidence/`.
    - List the decision points you actually faced: what the options were, what you chose, why. Rejected options count.
-   - If something was not run or not captured, that section is simply absent from the document — never written from memory.
+   - If something was not run or not captured, that entry is simply absent from the document — never written from memory.
 
-3. **Write the document** to `.show-pr/graph.zh.json`, following `references/graph-document.md`. `references/example.graph.json` is a valid reference with three lanes, all four delta states, a hero edge, a seven-step flow, a walkthrough, and all six evidence sections — read it before writing your first one; it is quicker than reading the reference.
+3. **Write the document** to `.show-pr/graph.zh.json`, following `references/graph-document.md`. `references/example.graph.json` is a valid reference with three lanes, all four delta states, a hero edge, a seven-step flow, a walkthrough, and all five evidence sections — read it before writing your first one; it is quicker than reading the reference.
 
 4. **Validate, and fix.**
 
@@ -47,8 +47,8 @@ A follow-up such as "rename that node" or "add the queue" is: edit `.show-pr/gra
 
 ## Language rules (Chinese report)
 
-- **Chinese**: `title`, `summary`, lane `label`/`subtitle`, node `label`/`subtitle`/`summary`/`group`/`badges`, edge `label`/`summary`, flow `title`/`summary`, participant `label`, message `label`/`note`, view `title`/`summary`, walkthrough `heading`/`body`, stats chip `label`/`value`, mermaid `title`/`summary` and the labels inside mermaid `code`, repro `title`/`note`, testLog `title`, evidence `title`/`note`, design `title`/`context`/`options`/`rationale`, testStep `title`/`expected`.
-- **English (unchanged)**: every id (`lanes[].id`, `nodes[].id`, `edges[].id`, `flows/messages/views/steps ids — the id regex `^[A-Za-z0-9][A-Za-z0-9._:/-]*$` rejects CJK), every `kind`, every `delta` (`added`/`modified`/`removed`/`unchanged`), every `emphasis`/`tone`, every file path, code identifiers inside prose (module/function names like `sessionActions`, IPC channels like `quick:command`, protocols like `STOMP`), and test-log `command`/`output` — command output is pasted verbatim, never translated or rewritten. The report chrome (导览 / 上一步 / 下一步 / 新增·修改·移除·未变 badges / legend / the six tab names) is hardcoded in the build tool — never put it in the document.
+- **Chinese**: `title`, `summary`, lane `label`/`subtitle`, node `label`/`subtitle`/`summary`/`group`/`badges`, edge `label`/`summary`, flow `title`/`summary`, participant `label`, message `label`/`note`, view `title`/`summary`, walkthrough `heading`/`body`, stats chip `label`/`value`, mermaid `title`/`summary` and the labels inside mermaid `code`, repro `title`/`note`/`result`/`steps`/`expected`, evidence `title`/`note`, design `title`/`context`/`options`/`rationale`, testStep `title`/`steps`/`expected`.
+- **English (unchanged)**: every id (`lanes[].id`, `nodes[].id`, `edges[].id`, `flows/messages/views/steps ids — the id regex `^[A-Za-z0-9][A-Za-z0-9._:/-]*$` rejects CJK), every `kind`, every `delta` (`added`/`modified`/`removed`/`unchanged`), every `emphasis`/`tone`, every file path, code identifiers inside prose (module/function names like `sessionActions`, IPC channels like `quick:command`, protocols like `STOMP`), and the commands inside repro `command`/`steps` — commands are typed as they run, never translated. The report chrome (导览 / 上一步 / 下一步 / 新增·修改·移除·未变 badges / legend / the five section titles) is hardcoded in the build tool — never put it in the document.
 - Write prose for a smart twelve-year-old: short common words, one idea per line, active voice, numbers as digits. This holds in Chinese: 用短句和常用词，一行为一件事。
 
 ## What makes a document worth reading
@@ -58,24 +58,23 @@ A follow-up such as "rename that node" or "add the queue" is: edit `.show-pr/gra
 - **One hero edge**, two at the outside: the connection the change is really about.
 - **Add a flow only when there is a sequence worth animating.** One good flow beats three thin ones.
 - **Add mermaid only for what lanes and flows cannot express** — a state machine, an ER model, a journey. A second drawing of the same architecture is noise.
-- **复现步骤是清单，不是教程**：逐条枚举改动涉及的用例，附真实结果；未被自动化覆盖的用例设 `manual: true` 单独列卡（报告中显示黄色 warning 徽章），不得混在自动化条目里。
+- **测试覆盖是清单，不是教程**：逐条枚举改动涉及的用例，附真实结果；未被自动化覆盖的用例设 `manual: true` 单独列卡（黄色 warning 徽章 + 有序复现步骤 + 换行预期表现），不得混在自动化条目里。
 - **Attach file refs** — they become the hover tooltips (summary + file list) on node cards.
 - **Write a walkthrough anyway** for anything non-trivial: more than one diagram, several changed parts, or any flow. Two to twelve steps; the headline change is step one; an overview of everything touched is the last step. Each step is one change (added / removed / replaced / now / moved), never a description of the diagram.
 
 ## What makes the evidence worth trusting
 
-The six evidence sections exist so a reviewer can check the work instead of taking your word. They are honest or they are worse than absent.
+The five evidence sections exist so a reviewer can check the work instead of taking your word. They are honest or they are worse than absent.
 
 | 借口 | 现实 |
 | ---- | ---- |
-| "测试肯定能过，不用真跑" | 没跑过就没有日志。跑一次，原样粘贴，包括 exit code。 |
-| "输出太长，我概括一下" | 概括不是日志。截取首尾可以，改写或翻译不行。 |
-| "只贴通过的就好" | 只贴 green 不贴 red 的 TDD 日志等于没有 red。两次都贴。 |
-| "复现步骤枚举不全" | 枚举分支涉及的全部用例；自动化覆盖的附真实结果，未覆盖的单独注明需手工验证。 |
+| "测试肯定能过，不用真跑" | 没跑过就没有结果行。跑一次，写下真实数字。 |
+| "结果我记得大概" | 凭记忆写的结果是编造。回头重跑，或者不写。 |
+| "复现步骤枚举不全" | 枚举分支涉及的全部用例；自动化覆盖的附真实结果，未覆盖的设 manual 并附步骤与预期。 |
 | "截图以后补" | 说"已验证"之前必须有截图或录屏。没有就别写这条证据。 |
 | "这个决策没有别的选项" | 没有备选的决策不是决策点，直接跳过，不要凑数。 |
 
-**Red flags — 任一出现即停止并修正**：编造或凭记忆写日志；把复现步骤和 reviewer 测试步骤复制成两份一样的；证据图片与改动无关。
+**Red flags — 任一出现即停止并修正**：编造或凭记忆写结果；把测试覆盖的手工条目和建议手动测试写成两份一样的；证据图片与改动无关。
 
 ## What the report contains
 
@@ -84,7 +83,7 @@ The six evidence sections exist so a reviewer can check the work instead of taki
 - Drill-down: one nav button per view (child views indented); clicking switches the visible node/edge selection.
 - One sequence diagram per flow, with self-messages, repeats and notes.
 - 导览 sidebar: every walkthrough step; click or ←/→ switches the diagram and dims everything except the step's focus.
-- Six evidence sections, each rendered only when the document carries it, as one independent block at the very bottom of the page — fully below and outside the 导览 sidebar and the diagram stage (the 导览 filters diagrams only): Mermaid 图, 复现步骤 (per-case command + result + automation coverage), 测试日志 (command + exit badge + raw output), 验证证据 (embedded screenshots / video), 设计决策 (context, options, chosen, rationale), Reviewer 验证 (steps with expected results).
+- Five evidence sections, each rendered only when the document carries it, as one independent block at the very bottom of the page — fully below and outside the 导览 sidebar and the diagram stage (the 导览 filters diagrams only): Mermaid 图, 测试覆盖 (per-case command + result; manual cases flagged yellow with ordered steps + expected behaviour), 验证证据 (embedded screenshots / video), 建议手动测试 (ordered steps + expected behaviour), 设计决策 (context, options, chosen, rationale) — rendered last.
 
 ## What ships with this skill
 

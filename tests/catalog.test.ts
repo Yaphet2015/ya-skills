@@ -233,10 +233,10 @@ test("show-pr report embeds evidence and renders mermaid from the example docume
   expect(html).toContain("data:image/png;base64,");
   expect(html).toContain("stateDiagram-v2");
   expect(html).toContain("mermaid.initialize");
-  expect(html).toContain("复现步骤");
-  expect(html).toContain("测试日志");
+  expect(html).toContain("测试覆盖");
+  expect(html).toContain("建议手动测试");
   expect(html).toContain("设计决策");
-  expect(html).toContain("Reviewer");
+  expect(html).not.toContain("测试日志");
   await rm(outDir, { recursive: true, force: true });
 });
 
@@ -284,13 +284,6 @@ test("show-pr validator rejects missing evidence files and unlisted design choic
   expect(result.errText).toContain("chosen");
 
   example.design[0].chosen = example.design[0].options[0].label;
-  example.testLogs[0].exitCode = "zero";
-  await Bun.write(docFile, JSON.stringify(example));
-  result = await runValidate();
-  expect(result.code).toBe(1);
-  expect(result.errText).toContain("exitCode");
-
-  example.testLogs[0].exitCode = 1;
   example.repro[0].result = "x".repeat(501);
   await Bun.write(docFile, JSON.stringify(example));
   result = await runValidate();
@@ -298,11 +291,32 @@ test("show-pr validator rejects missing evidence files and unlisted design choic
   expect(result.errText).toContain("result");
 
   example.repro[0].result = "自动化覆盖：3 项通过";
+  example.repro[3].steps = "not-an-array";
+  await Bun.write(docFile, JSON.stringify(example));
+  result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("steps");
+
+  example.repro[3].steps = ["pnpm dev 启动应用"];
+  example.repro[3].expected = "";
+  await Bun.write(docFile, JSON.stringify(example));
+  result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("expected");
+
+  example.repro[3].expected = "POST /email/batch 恰为 4 次，且无任何单封请求。";
   example.repro[0].manual = "yes";
   await Bun.write(docFile, JSON.stringify(example));
   result = await runValidate();
   expect(result.code).toBe(1);
   expect(result.errText).toContain("manual");
+
+  example.repro[0].manual = undefined;
+  example.testSteps[0].steps = [];
+  await Bun.write(docFile, JSON.stringify(example));
+  result = await runValidate();
+  expect(result.code).toBe(1);
+  expect(result.errText).toContain("steps");
 
   await rm(outDir, { recursive: true, force: true });
 });

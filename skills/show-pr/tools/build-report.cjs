@@ -102,6 +102,8 @@ const html = `<!doctype html>
   .report-sec > h2 { font-size: 15px; margin: 0 0 4px; }
   .report-sec > .phint { margin: 0 0 14px; }
   .rcard { border: 1px solid var(--border); background: var(--surface2); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; max-width: 880px; }
+  .steps-list { margin: 10px 0 0; padding-left: 22px; }
+  .steps-list li { font-size: 12.5px; color: var(--sub); line-height: 1.7; margin-bottom: 4px; }
   .rtitle { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
   .rsummary { font-size: 12.5px; color: var(--sub); line-height: 1.65; margin: 0 0 10px; white-space: pre-wrap; }
   .rnote { font-size: 12px; color: var(--sub); margin: 8px 0 0; line-height: 1.65; }
@@ -112,11 +114,6 @@ const html = `<!doctype html>
   .warnbadge { display: inline-block; margin-left: 10px; font-size: 10.5px; font-weight: 600; color: #fde047; border: 1px solid rgba(234, 179, 8, 0.6); border-radius: 7px; padding: 2px 8px; vertical-align: 1px; }
   .phint { font-size: 12px; color: var(--faint); margin: 0 0 14px; }
   .cmd { font-family: ui-monospace, monospace; font-size: 12px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: #a5d6ff; overflow-x: auto; margin: 8px 0; }
-  .log { font-family: ui-monospace, monospace; font-size: 11.5px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: #9fb0c8; white-space: pre-wrap; max-height: 420px; overflow: auto; margin: 8px 0; }
-  .lhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .exit { font-family: ui-monospace, monospace; font-size: 11px; border-radius: 7px; padding: 2px 10px; border: 1px solid; flex-shrink: 0; }
-  .exit.ok { color: #86efac; border-color: var(--added); }
-  .exit.fail { color: #fca5a5; border-color: var(--removed); }
   .step-card { position: relative; padding-left: 56px; }
   .rno { position: absolute; left: 18px; top: 16px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }
   .shot { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
@@ -528,8 +525,8 @@ if (DOC.mermaid && DOC.mermaid.length) {
   });
 }
 if (DOC.repro && DOC.repro.length) {
-  const p = addSection('repro', '复现步骤');
-  mkEl('p', 'phint', p).textContent = '枚举分支改动涉及的用例：每条给出复现命令与测试结果；未被自动化覆盖的用例单独注明，需手工验证。';
+  const p = addSection('repro', '测试覆盖');
+  mkEl('p', 'phint', p).textContent = '枚举分支改动涉及的用例：自动化条目附命令与结果；未自动化覆盖的用例黄色标记，附有序复现步骤与预期表现。';
   DOC.repro.forEach(function (r, i) {
     const card = mkEl('div', 'rcard step-card' + (r.manual ? ' manual' : ''), p);
     mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
@@ -537,6 +534,10 @@ if (DOC.repro && DOC.repro.length) {
     h3.textContent = r.title;
     if (r.manual) mkEl('span', 'warnbadge', h3).textContent = '⚠ 未自动化覆盖';
     if (r.command) mkEl('pre', 'cmd', card).textContent = r.command;
+    if (r.steps && r.steps.length) {
+      const ol = mkEl('ol', 'steps-list', card);
+      r.steps.forEach(function (s) { mkEl('li', '', ol).textContent = s; });
+    }
     if (r.note) mkEl('p', 'rnote', card).textContent = r.note;
     if (r.result) {
       const res = mkEl('p', 'rresult' + (r.manual ? ' warn' : ''), card);
@@ -544,19 +545,12 @@ if (DOC.repro && DOC.repro.length) {
       b.textContent = '结果：';
       res.appendChild(document.createTextNode(r.result));
     }
-  });
-}
-if (DOC.testLogs && DOC.testLogs.length) {
-  const p = addSection('logs', '测试日志');
-  mkEl('p', 'phint', p).textContent = '以下为真实运行的原始输出，未做编辑；退出码非 0 的记录同样保留。';
-  DOC.testLogs.forEach(function (t) {
-    const card = mkEl('div', 'rcard', p);
-    const head = mkEl('div', 'lhead', card);
-    mkEl('h3', 'rtitle', head).textContent = t.title;
-    const badge = mkEl('span', 'exit ' + (t.exitCode === 0 ? 'ok' : 'fail'), head);
-    badge.textContent = 'exit ' + t.exitCode;
-    mkEl('pre', 'cmd', card).textContent = t.command;
-    mkEl('pre', 'log', card).textContent = t.output;
+    if (r.expected) {
+      const exp = mkEl('p', 'rresult' + (r.manual ? ' warn' : ''), card);
+      const b2 = mkEl('b', '', exp);
+      b2.textContent = '预期：';
+      exp.appendChild(document.createTextNode(r.expected));
+    }
   });
 }
 if (EVIDENCE.length) {
@@ -574,6 +568,23 @@ if (EVIDENCE.length) {
       img.alt = ev.title;
     }
     if (ev.note) mkEl('figcaption', 'rnote', card).textContent = ev.note;
+  });
+}
+if (DOC.testSteps && DOC.testSteps.length) {
+  const p = addSection('steps', '建议手动测试');
+  mkEl('p', 'phint', p).textContent = '按顺序执行每条路径的复现步骤，核对预期表现。';
+  DOC.testSteps.forEach(function (s, i) {
+    const card = mkEl('div', 'rcard step-card', p);
+    mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
+    mkEl('h3', 'rtitle', card).textContent = s.title;
+    if (s.steps && s.steps.length) {
+      const ol = mkEl('ol', 'steps-list', card);
+      s.steps.forEach(function (st) { mkEl('li', '', ol).textContent = st; });
+    }
+    const exp = mkEl('p', 'expected', card);
+    const b3 = mkEl('b', '', exp);
+    b3.textContent = '预期：';
+    exp.appendChild(document.createTextNode(s.expected));
   });
 }
 if (DOC.design && DOC.design.length) {
@@ -594,20 +605,6 @@ if (DOC.design && DOC.design.length) {
     const b2 = mkEl('b', '', why);
     b2.textContent = '理由：';
     why.appendChild(document.createTextNode(d.rationale));
-  });
-}
-if (DOC.testSteps && DOC.testSteps.length) {
-  const p = addSection('steps', 'Reviewer 验证');
-  mkEl('p', 'phint', p).textContent = '按顺序执行，每步核对预期结果。';
-  DOC.testSteps.forEach(function (s, i) {
-    const card = mkEl('div', 'rcard step-card', p);
-    mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
-    mkEl('h3', 'rtitle', card).textContent = s.title;
-    if (s.command) mkEl('pre', 'cmd', card).textContent = s.command;
-    const exp = mkEl('p', 'expected', card);
-    const b3 = mkEl('b', '', exp);
-    b3.textContent = '预期：';
-    exp.appendChild(document.createTextNode(s.expected));
   });
 }
 
