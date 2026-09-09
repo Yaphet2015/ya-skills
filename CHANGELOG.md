@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.18.0](https://github.com/Yaphet2015/ya-skills/compare/v0.17.0...v0.18.0) (2026-09-09)
+
+
+### Features
+
+* **skill:** rename show-branch-diff to show-pr, add evidence sections to report ([80f87b0](https://github.com/Yaphet2015/ya-skills/commit/80f87b09302e5b680876f899ed7f06ec0d76d54e))
+* **skill:** restructure bottom sections — drop test logs, rename and reformat coverage/manual tests, design last ([10adf86](https://github.com/Yaphet2015/ya-skills/commit/10adf861b50c001cfd26b2183530b967ed325f07))
+* **skill:** show-pr v2 — stacked report sections, per-case repro semantics, fix hidden-tab mermaid failure ([99634c5](https://github.com/Yaphet2015/ya-skills/commit/99634c55950747ff77c503f763f8fd8b76ed3e53))
+* **skill:** yellow warning marking for repro cases not covered by automation ([9c0867b](https://github.com/Yaphet2015/ya-skills/commit/9c0867bea60dfaf57837ea0037e14ab614b39906))
+
+
+### Bug Fixes
+
+* **skill:** legend strip sits between the diagram area and the bottom sections ([a088a5b](https://github.com/Yaphet2015/ya-skills/commit/a088a5baeb47bba7c981a618168f8dcd769e8ca4))
+* **skill:** move report sections fully below main — outside the stage and the walkthrough sidebar ([b87863e](https://github.com/Yaphet2015/ya-skills/commit/b87863e230c151853b24d253f284e20f98103328))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
