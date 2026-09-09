@@ -96,8 +96,8 @@ const html = `<!doctype html>
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
-  /* ---------- report sections (stacked below the diagrams) ---------- */
-  #sections { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 18px; }
+  /* ---------- report sections (independent block at the bottom of the page, below main) ---------- */
+  #sections { border-top: 1px solid var(--border); margin-top: 26px; padding: 26px 36px 60px; }
   .report-sec { margin-bottom: 34px; max-width: 1080px; }
   .report-sec > h2 { font-size: 15px; margin: 0 0 4px; }
   .report-sec > .phint { margin: 0 0 14px; }
@@ -149,9 +149,9 @@ const html = `<!doctype html>
       <div id="archHolder"></div>
     </div>
     <div id="flowHolder"></div>
-    <div id="sections"></div>
   </section>
 </main>
+<div id="sections"></div>
 <div class="legend">
   <span><i class="dot" style="background:var(--added)"></i>新增</span>
   <span><i class="dot" style="background:var(--modified)"></i>修改</span>

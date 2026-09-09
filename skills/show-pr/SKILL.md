@@ -84,7 +84,7 @@ The six evidence sections exist so a reviewer can check the work instead of taki
 - Drill-down: one nav button per view (child views indented); clicking switches the visible node/edge selection.
 - One sequence diagram per flow, with self-messages, repeats and notes.
 - 导览 sidebar: every walkthrough step; click or ←/→ switches the diagram and dims everything except the step's focus.
-- Six evidence sections, each rendered only when the document carries it, stacked below the diagrams in normal page flow (scroll down, no tabs): Mermaid 图, 复现步骤 (per-case command + result + automation coverage), 测试日志 (command + exit badge + raw output), 验证证据 (embedded screenshots / video), 设计决策 (context, options, chosen, rationale), Reviewer 验证 (steps with expected results).
+- Six evidence sections, each rendered only when the document carries it, as one independent block at the very bottom of the page — fully below and outside the 导览 sidebar and the diagram stage (the 导览 filters diagrams only): Mermaid 图, 复现步骤 (per-case command + result + automation coverage), 测试日志 (command + exit badge + raw output), 验证证据 (embedded screenshots / video), 设计决策 (context, options, chosen, rationale), Reviewer 验证 (steps with expected results).
 
 ## What ships with this skill
 
