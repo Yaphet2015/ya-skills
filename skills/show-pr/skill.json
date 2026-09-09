@@ -1,4 +1,4 @@
 {
   "name": "show-pr",
-  "description": "Use only when the user explicitly invokes show-pr to turn a branch diff or code change into a self-contained offline Chinese PR report (animated architecture / data-flow diagrams plus mermaid diagrams, reproduction steps, real test logs, verification screenshots or video, decision-point design doc, and reviewer test steps). It never triggers implicitly."
+  "description": "Use only when the user explicitly invokes show-pr to turn a branch diff or code change into a self-contained offline Chinese PR report (animated architecture / data-flow diagrams plus mermaid diagrams, per-case test coverage with real results, verification screenshots or video, decision-point design doc, and suggested manual tests). It never triggers implicitly."
 }
