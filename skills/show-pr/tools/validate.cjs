@@ -214,6 +214,7 @@ for (const [i, r] of (doc.repro || []).entries()) {
   if (r.command && r.command.length > 500) err(`repro step ${i + 1} command over 500 chars`);
   if (r.note && r.note.length > 500) err(`repro step ${i + 1} note over 500 chars`);
   if (r.result && r.result.length > 500) err(`repro step ${i + 1} result over 500 chars`);
+  if (r.manual !== undefined && typeof r.manual !== 'boolean') err(`repro step ${i + 1} manual must be a boolean`);
 }
 
 if ((doc.testLogs || []).length > 12) err('over 12 test logs');

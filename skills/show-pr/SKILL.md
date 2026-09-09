@@ -58,7 +58,7 @@ A follow-up such as "rename that node" or "add the queue" is: edit `.show-pr/gra
 - **One hero edge**, two at the outside: the connection the change is really about.
 - **Add a flow only when there is a sequence worth animating.** One good flow beats three thin ones.
 - **Add mermaid only for what lanes and flows cannot express** — a state machine, an ER model, a journey. A second drawing of the same architecture is noise.
-- **复现步骤是清单，不是教程**：逐条枚举改动涉及的用例，附真实结果；未被自动化覆盖的用例单独列卡注明，不得混在自动化条目里。
+- **复现步骤是清单，不是教程**：逐条枚举改动涉及的用例，附真实结果；未被自动化覆盖的用例设 `manual: true` 单独列卡（报告中显示黄色 warning 徽章），不得混在自动化条目里。
 - **Attach file refs** — they become the hover tooltips (summary + file list) on node cards.
 - **Write a walkthrough anyway** for anything non-trivial: more than one diagram, several changed parts, or any flow. Two to twelve steps; the headline change is step one; an overview of everything touched is the last step. Each step is one change (added / removed / replaced / now / moved), never a description of the diagram.
 

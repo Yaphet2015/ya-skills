@@ -151,7 +151,7 @@ Up to 12. Enumerate the test cases the branch's changes involve, one card per ca
 { "title": "提交与 ACK 语义", "command": "jest src/renderer/quick/__tests__/useQuickSubmit.test.ts", "note": "…", "result": "自动化覆盖：12 项通过" }
 ```
 
-`title` required (≤120), `command` optional (≤500), `note` optional (≤500), `result` optional (≤500). Repro enumerates what the change's cases are and how they ran; reviewer test steps verify the change — keep the two lists distinct.
+`title` required (≤120), `command` optional (≤500), `note` optional (≤500), `result` optional (≤500), `manual` optional boolean. Set `manual: true` on every case not covered by automated tests — the report marks those cards with a yellow warning badge. Repro enumerates what the change's cases are and how they ran; reviewer test steps verify the change — keep the two lists distinct.
 
 ## Test logs
 

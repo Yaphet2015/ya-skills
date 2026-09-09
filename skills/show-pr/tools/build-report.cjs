@@ -107,6 +107,9 @@ const html = `<!doctype html>
   .rnote { font-size: 12px; color: var(--sub); margin: 8px 0 0; line-height: 1.65; }
   .rresult { font-size: 12.5px; color: #86efac; margin: 8px 0 0; line-height: 1.6; }
   .rresult b { font-weight: 600; }
+  .rresult.warn { color: #fde047; }
+  .rcard.manual { border-color: rgba(234, 179, 8, 0.55); background: #16140b; }
+  .warnbadge { display: inline-block; margin-left: 10px; font-size: 10.5px; font-weight: 600; color: #fde047; border: 1px solid rgba(234, 179, 8, 0.6); border-radius: 7px; padding: 2px 8px; vertical-align: 1px; }
   .phint { font-size: 12px; color: var(--faint); margin: 0 0 14px; }
   .cmd { font-family: ui-monospace, monospace; font-size: 12px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: #a5d6ff; overflow-x: auto; margin: 8px 0; }
   .log { font-family: ui-monospace, monospace; font-size: 11.5px; background: #0d1119; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: #9fb0c8; white-space: pre-wrap; max-height: 420px; overflow: auto; margin: 8px 0; }
@@ -528,13 +531,15 @@ if (DOC.repro && DOC.repro.length) {
   const p = addSection('repro', '复现步骤');
   mkEl('p', 'phint', p).textContent = '枚举分支改动涉及的用例：每条给出复现命令与测试结果；未被自动化覆盖的用例单独注明，需手工验证。';
   DOC.repro.forEach(function (r, i) {
-    const card = mkEl('div', 'rcard step-card', p);
+    const card = mkEl('div', 'rcard step-card' + (r.manual ? ' manual' : ''), p);
     mkEl('div', 'rno', card).textContent = String(i + 1).padStart(2, '0');
-    mkEl('h3', 'rtitle', card).textContent = r.title;
+    const h3 = mkEl('h3', 'rtitle', card);
+    h3.textContent = r.title;
+    if (r.manual) mkEl('span', 'warnbadge', h3).textContent = '⚠ 未自动化覆盖';
     if (r.command) mkEl('pre', 'cmd', card).textContent = r.command;
     if (r.note) mkEl('p', 'rnote', card).textContent = r.note;
     if (r.result) {
-      const res = mkEl('p', 'rresult', card);
+      const res = mkEl('p', 'rresult' + (r.manual ? ' warn' : ''), card);
       const b = mkEl('b', '', res);
       b.textContent = '结果：';
       res.appendChild(document.createTextNode(r.result));

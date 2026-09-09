@@ -508,7 +508,8 @@
       "result": "自动化覆盖：5 项通过"
     },
     {
-      "title": "2,000 人广播只发 4 次批量请求（未自动化覆盖）",
+      "title": "2,000 人广播只发 4 次批量请求",
+      "manual": true,
       "note": "需本地 Firebase 模拟器 + Postmark 沙箱手工触发：观察日志中 POST /email/batch 恰为 4 次，无单封请求。",
       "result": "未自动化覆盖：需手工验证（对照 Reviewer 验证第 3 步）"
     }
