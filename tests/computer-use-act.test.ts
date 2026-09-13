@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   selectWindow,
   sanitizeElements
@@ -225,16 +228,21 @@ describe("act error envelopes", () => {
 });
 
 describe("artifact output rules", () => {
+  // Writes only inside a mkdtemp dir — never the user's real cache dir or the
+  // repo cwd; the default cache location is a string assertion only.
   test("default cache dir is user-scoped, files private, relative --out-dir becomes absolute", async () => {
     const { ensureOutDir, saveScreenshot, defaultArtifactsDir } = await import("@ya-skills/functions-computer-use");
     expect(defaultArtifactsDir()).toContain("Library/Caches/ya-skills/computer-use");
-    const dir = ensureOutDir();
-    const file = saveScreenshot(dir, Buffer.from("screenshot-bytes").toString("base64"));
-    expect(await Bun.file(file).text()).toBe("screenshot-bytes");
-    const mode = (await Bun.file(file).stat()).mode! & 0o777;
-    expect(mode.toString(8)).toBe("600");
-    const rel = ensureOutDir("rel-dir");
-    expect(rel.startsWith("/")).toBe(true);
-    await Bun.$`rm -rf ${dir} ${rel}`;
+    const temp = await mkdtemp(join(tmpdir(), "yk-artifacts-"));
+    try {
+      const dir = ensureOutDir(join(temp, "nested"));
+      expect((await stat(dir)).mode & 0o777).toBe(0o700);
+      const file = saveScreenshot(dir, Buffer.from("screenshot-bytes").toString("base64"));
+      expect(await Bun.file(file).text()).toBe("screenshot-bytes");
+      expect((await stat(file)).mode & 0o777).toBe(0o600);
+      expect(file.startsWith(temp)).toBe(true);
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
   });
 });

@@ -18,5 +18,6 @@
       "@ya-skills/functions-computer-use": ["packages/functions-computer-use/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts"]
+  "include": ["packages/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["tests/fixtures/**", "scripts/probes/**"]
 }

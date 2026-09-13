@@ -55,8 +55,11 @@ describe("package:release runtime assembly", () => {
     expect(symlinks).toEqual([]);
   });
 
+  // Pure-load variant: `list` reads only the catalog — no desktop, no
+  // native driver init. The desktop-touching `apps` variant lives in
+  // tests/computer-use-native.test.ts behind YK_CU_NATIVE_TESTS=1.
   test.skipIf(!runnable)(
-    "compiled yk runs from a hostile package.json cwd without executing project scripts",
+    "compiled yk loads from a hostile package.json cwd without executing project scripts",
     async () => {
       const exe = join(outDir, "yk");
       const hostile = await mkdtemp(join(tmpdir(), "cu-hostile-"));
@@ -69,7 +72,7 @@ describe("package:release runtime assembly", () => {
           dependencies: { "@trycua/cua-driver": "0.0.0-fake" }
         })
       );
-      const proc = Bun.spawn([exe, "computer-use", "apps", "--name", "Finder"], {
+      const proc = Bun.spawn([exe, "list"], {
         cwd: hostile,
         env: { ...Bun.env, NODE_PATH: "", YA_SKILLS_CATALOG_DIR: join(outDir, "skills") },
         stdout: "pipe",
@@ -81,7 +84,7 @@ describe("package:release runtime assembly", () => {
         proc.exited
       ]);
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Finder");
+      expect(stdout).toContain("computer-use");
       expect(await exists(join(hostile, "SENTINEL_RAN"))).toBe(false);
       await rm(hostile, { recursive: true, force: true });
     }
