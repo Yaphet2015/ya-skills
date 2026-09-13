@@ -12,6 +12,17 @@ import packageJson from "../../../package.json" with { type: "json" };
 async function main(argv: string[]) {
   const [command, ...args] = argv;
 
+  // Internal e2e worker bootstrap: exactly one absolute config path, handled
+  // before any public command or registry import.
+  if (command === "__computer-e2e-worker") {
+    const configPath = args[0];
+    if (args.length !== 1 || !configPath || !configPath.startsWith("/")) {
+      throw new Error("internal worker bootstrap expects exactly one absolute config path");
+    }
+    const { runWorkerFromConfig } = await import("@ya-skills/functions-computer-e2e");
+    process.exit(await runWorkerFromConfig(configPath));
+  }
+
   if (!command || isHelpFlag(command)) {
     printHelp();
     return;

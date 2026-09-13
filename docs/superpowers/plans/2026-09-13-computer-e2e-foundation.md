@@ -493,7 +493,7 @@ export function workerMain(config: WorkerConfig): Promise<void>;
 
 `WorkerConfig` 定义为 `{file:string; runId:string; artifactsDir:string; params:Record<string,string>}`；父进程通过专用配置文件传路径，只保存params到0700目录内的0600工作配置，退出后删除该配置；正式摘要不保存其值。控制事件 fd3；用例 stdout/stderr 单独保存。metadata字段名固定为 `ykVersion`、`ykExecutableSha256`、`bunVersion`、`platform`、`arch`、`apiVersion`、`sdkVersion`、`testsRepo`、`testSources`、`application`；实际缺失信息用null。ykExecutableSha256对realpath(process.execPath)的字节计算SHA256，不把同版本号的不同开发二进制当作同一产物。
 
-- [ ] **Step 1: 写事件归约 RED。** 在 tests 中构造完整事件序列，断言由事件生成的 run.json 与 report.md 一致，不另维护计数。
+- [x] **Step 1: 写事件归约 RED。** 在 tests 中构造完整事件序列，断言由事件生成的 run.json 与 report.md 一致，不另维护计数。
 
 ```ts
 const events: RunEvent[] = [
@@ -510,9 +510,9 @@ expect(report.counts.not_run).toBe(1);
 
 补 terminal fail、显式skip、主错误+cleanupError、两次run目录独立、空目录、末尾截断JSONL（保留此前事件并报incomplete）、内部坏行拒绝伪成功、相对artifact路径不能逃逸run目录、文件权限。缺失run_finished永不生成passed。
 
-- [ ] **Step 2: 跑 RED 后实现 history。** 用 `mkdirSync(runDir,{recursive:false,mode:0o700})` 和 timestamp+randomUUID；父进程 `appendFileSync(eventsPath, line,{mode:0o600})`，单写入者顺序seq。snapshot先sanitize再写；report从同一reduceEvents生成；run.json用同目录临时文件+rename更新。history遍历各run日志，不创建/修改已有历史。
+- [x] **Step 2: 跑 RED 后实现 history。** 用 `mkdirSync(runDir,{recursive:false,mode:0o700})` 和 timestamp+randomUUID；父进程 `appendFileSync(eventsPath, line,{mode:0o600})`，单写入者顺序seq。snapshot先sanitize再写；report从同一reduceEvents生成；run.json用同目录临时文件+rename更新。history遍历各run日志，不创建/修改已有历史。
 
-- [ ] **Step 3: 写真实子进程但无桌面的监督 RED。** fixtures：pass纯断言；console包含 `{"type":"run_finished"}` 伪协议输出；load-error有语法错误；hang永不resolve；sync-hang无限循环；orphan仅spawn同组`/bin/sleep`并hang。所有测试在temp目录，结束验证子进程已消失。
+- [x] **Step 3: 写真实子进程但无桌面的监督 RED。** fixtures：pass纯断言；console包含 `{"type":"run_finished"}` 伪协议输出；load-error有语法错误；hang永不resolve；sync-hang无限循环；orphan仅spawn同组`/bin/sleep`并hang。所有测试在temp目录，结束验证子进程已消失。
 
 ```ts
 const result = await supervise({
@@ -526,7 +526,7 @@ expect(result.counts.passed).toBe(0);
 
 监督器测试允许注入 `cleanupGraceMs=50` 和 executable invocation，生产默认固定15000；此测试注入不成为公共CLI flag。需要显式读取保存的pid并 `process.kill(pid,0)` 验证ESRCH，不能仅断言Promise返回。
 
-- [ ] **Step 4: 实现 worker bootstrap 与 supervisor。** cli.ts 在公共 registry 之前处理隐藏 `__computer-e2e-worker`，校验只接收一个受控配置路径。开发模式自启动 `process.execPath + absolute cli.ts + hidden args`；compiled模式只使用realpath(process.execPath)+hidden args。Node target 的 E2E run 明确拒绝并提示使用已安装yk；不能自动安装/寻找Bun。
+- [x] **Step 4: 实现 worker bootstrap 与 supervisor。** cli.ts 在公共 registry 之前处理隐藏 `__computer-e2e-worker`，校验只接收一个受控配置路径。开发模式自启动 `process.execPath + absolute cli.ts + hidden args`；compiled模式只使用realpath(process.execPath)+hidden args。Node target 的 E2E run 明确拒绝并提示使用已安装yk；不能自动安装/寻找Bun。
 
 ```ts
 const child = spawn(invocation.executable, invocation.args, {
@@ -550,7 +550,7 @@ const requestStop = () => {
 
 worker先注册信号handler，再import外部文件。SIGTERM abort controller，afterAll与session.close最多执行一次；同步hang时由父进程杀组。native action_started没有对应finished时父进程记unknown，并停止后续文件，绝不重放。只有runtime有实际投递结果时才发delivered。
 
-- [ ] **Step 5: GREEN 并提交。** `bun test tests/computer-e2e-history.test.ts tests/computer-e2e-supervisor.test.ts && bun run typecheck`。验证console伪协议不影响结果、load错误也有run目录、history/report完全不加载SDK。提交 `feat: supervise e2e runs and persist truthful reports`。
+- [x] **Step 5: GREEN 并提交。** `bun test tests/computer-e2e-history.test.ts tests/computer-e2e-supervisor.test.ts && bun run typecheck`。验证console伪协议不影响结果、load错误也有run目录、history/report完全不加载SDK。提交 `feat: supervise e2e runs and persist truthful reports`。
 
 ## Task A6: 公共 CLI、可安装 Skill 与无依赖发布包闭环
 

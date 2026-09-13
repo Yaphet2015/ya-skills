@@ -17,6 +17,7 @@
       },
       "dependencies": {
         "@ya-skills/core": "workspace:*",
+        "@ya-skills/functions-computer-e2e": "workspace:*",
         "@ya-skills/functions-computer-use": "workspace:*",
         "@ya-skills/functions-demo": "workspace:*",
         "@ya-skills/functions-pbench": "workspace:*",
