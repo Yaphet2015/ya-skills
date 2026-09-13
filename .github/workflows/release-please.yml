@@ -52,6 +52,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --registry=https://registry.npmjs.org
 
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test (default suite, desktop-free)
+        run: bun test
+
       - name: Package release asset
         id: package
         run: |
@@ -62,14 +68,14 @@ jobs:
           echo "asset_name=${asset}" >> "${GITHUB_OUTPUT}"
           echo "asset_sha256=${asset_sha256}" >> "${GITHUB_OUTPUT}"
 
-      - name: Test (after packaging so dist/release assertions run)
-        run: bun test
-
-      - name: Typecheck
-        run: bun run typecheck
+      - name: Release closed loop (packaged yk, no desktop)
+        run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts
 
       - name: Build node target
         run: bun run build
+
+      - name: Smoke
+        run: bun run smoke
 
       - name: Upload release asset
         env:

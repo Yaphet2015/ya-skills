@@ -2,11 +2,13 @@ import { createFunctionRegistry } from "@ya-skills/core";
 import { createDemoCommands } from "@ya-skills/functions-demo";
 import { createPbenchCommands } from "@ya-skills/functions-pbench";
 import { createComputerUseCommands } from "@ya-skills/functions-computer-use";
+import { createComputerE2ECommands } from "@ya-skills/functions-computer-e2e";
 
 export function createCliFunctionRegistry() {
   return createFunctionRegistry([
     ...createDemoCommands(),
     ...createPbenchCommands(),
-    ...createComputerUseCommands()
+    ...createComputerUseCommands(),
+    ...createComputerE2ECommands()
   ]);
 }

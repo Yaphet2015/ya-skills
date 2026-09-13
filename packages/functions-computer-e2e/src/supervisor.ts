@@ -120,7 +120,8 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
     }
   }
 
-  const { runDir, runId } = createRunDir(options.outDir);
+  const outRoot = resolve(options.outDir); // run records/config paths are always absolute
+  const { runDir, runId } = createRunDir(outRoot);
   const eventsPath = join(runDir, EVENTS_FILE);
   let seq = 0;
   const append = (type: RunEvent["type"], payload: Record<string, unknown>): RunEvent => {
@@ -184,7 +185,8 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
       child = spawn(invocation.executable, invocation.args, {
         cwd: process.cwd(),
         detached: true,
-        stdio: ["ignore", "pipe", "pipe", "pipe"],
+        // stdout/stderr go straight into the run record; fd3 is the protocol.
+        stdio: ["ignore", stdoutFd, stderrFd, "pipe"],
         env: { ...process.env, BUN_CONFIG_NO_CLEAR_TERMINAL: "1" }
       });
     } catch (error) {

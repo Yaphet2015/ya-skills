@@ -30,19 +30,25 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --registry=https://registry.npmjs.org
 
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test (default suite, desktop-free)
+        run: bun test
+
       - name: Package release asset
         run: |
           version="${GITHUB_REF_NAME#v}"
           bun run package:release -- --version "${version}"
 
-      - name: Test
-        run: bun test
+      - name: Release closed loop (packaged yk, no desktop)
+        run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts
 
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Build node target + smoke inputs
+      - name: Build node target
         run: bun run build
+
+      - name: Smoke
+        run: bun run smoke
 
       - name: Publish release
         env:

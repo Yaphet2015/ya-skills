@@ -47,6 +47,10 @@ function sh(label: string, cmd: string, args: string[]): void {
   }
 }
 
+// 0. Regenerate the installed api.d.ts from source so the packaged Skill
+// cannot drift from the runtime contract.
+sh("generate e2e api types", "bun", ["scripts/generate-computer-e2e-api.ts"]);
+
 // 1. Compile yk with the pinned flags (kept in sync with package.json).
 sh(
   "build yk",
@@ -98,7 +102,14 @@ for (const rel of REQUIRED) {
     process.exit(1);
   }
 }
-for (const mustExist of [join(outRoot, "yk"), join(outRoot, "skills", "computer-use", "SKILL.md")]) {
+const REQUIRED_SKILLS = [
+  join(outRoot, "skills", "computer-use", "SKILL.md"),
+  join(outRoot, "skills", "computer-e2e", "SKILL.md"),
+  join(outRoot, "skills", "computer-e2e", "skill.json"),
+  join(outRoot, "skills", "computer-e2e", "references", "api.d.ts"),
+  join(outRoot, "skills", "computer-e2e", "examples", "pure.e2e.ts")
+];
+for (const mustExist of [join(outRoot, "yk"), ...REQUIRED_SKILLS]) {
   if (!existsSync(mustExist)) {
     console.error(`missing release file: ${mustExist}`);
     process.exit(1);

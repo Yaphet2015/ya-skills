@@ -4,7 +4,8 @@
 - `packages/cli` owns the `yk` command-line entrypoint and command routing.
 - `packages/core` owns shared catalog, dependency resolution, install, uninstall, target detection, and function-registry logic.
 - `packages/functions-*` packages own independent `yk <domain> <action>` command implementations.
-- `packages/functions-computer-use` runs the Cua Driver in-process (Bun) and must keep its SDK import lazy: no native load from `list`/`install`/help paths. Its platform package is an optionalDependency; macOS release packaging must assert it exists. Compiled builds locate the SDK beside the realpath'd executable via `YA_SKILLS_COMPILED` + `runtime/computer-use/node_modules`.
+- `packages/computer-runtime` owns the Cua Driver dependency and every desktop primitive (session budgets, cleanup, privacy); `packages/functions-computer-use` and `packages/functions-computer-e2e` only orchestrate over it. The SDK import stays lazy: no native load from `list`/`install`/help paths. Compiled builds locate the SDK beside the realpath'd executable via `YA_SKILLS_COMPILED` + `runtime/computer-use/node_modules`.
+- `packages/functions-computer-e2e` runs consumer `*.e2e.ts` suites in self-spawned workers (fd3 protocol, events.jsonl as the single source of truth, reports only from event reduction). Default tests must stay desktop-free; packaged closed-loop tests run only under `YK_RELEASE_TESTS=1` after `package:release`.
 - `skills/` is the local skill catalog installed by `yk install`.
 - `tests/` contains cross-package behavior tests.
 
@@ -34,7 +35,7 @@
 - Published install path is `brew tap Yaphet2015/tap && brew install ya-skills`.
 - The tap repository is `Yaphet2015/homebrew-tap`.
 - The release workflow publishes macOS arm64 assets named `ya-skills-v<version>-macos-arm64.tar.gz` plus `.sha256`.
-- Release tarballs must contain the compiled `yk` binary, the `skills/` catalog, and the `runtime/` sidecar (release runners package before running tests so packaging assertions see `dist/release`).
+- Release tarballs must contain the compiled `yk` binary, the `skills/` catalog, and the `runtime/` sidecar. Release runners gate in this order: typecheck, default desktop-free tests, `package:release`, `YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts`, build, smoke.
 - Packaged installs rely on `YA_SKILLS_CATALOG_DIR` pointing to the installed catalog; keep this env override working before changing catalog lookup.
 - Keep `bun.lock` public-registry compatible for GitHub-hosted release runners.
 - After a release, update the Homebrew formula asset URL and sha256 in the tap. Do not set formula `version`; Homebrew scans it from the GitHub release URL.

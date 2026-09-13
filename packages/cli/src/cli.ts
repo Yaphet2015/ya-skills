@@ -6,6 +6,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { installSkills, loadCatalog, uninstallSkills, type FunctionCommand, type SkillCatalog } from "@ya-skills/core";
+import { runWorkerFromConfig } from "@ya-skills/functions-computer-e2e";
 import { createCliFunctionRegistry } from "./function-registry.js";
 import packageJson from "../../../package.json" with { type: "json" };
 
@@ -19,7 +20,6 @@ async function main(argv: string[]) {
     if (args.length !== 1 || !configPath || !configPath.startsWith("/")) {
       throw new Error("internal worker bootstrap expects exactly one absolute config path");
     }
-    const { runWorkerFromConfig } = await import("@ya-skills/functions-computer-e2e");
     process.exit(await runWorkerFromConfig(configPath));
   }
 

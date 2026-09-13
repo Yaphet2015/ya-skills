@@ -62,8 +62,10 @@ Screenshots land in `~/Library/Caches/ya-skills/computer-use/` (override with
   command refuses; narrow the selector (`--window`, `--click-role`), do not
   click "the first match".
 - **Typing needs focus.** Click the field first (background click sets
-  window focus), then `--type`. If the draft does not appear, click once more
-  and retype once — never blind-loop retries.
+  window focus), then `--type`. If the draft does not appear, re-perceive
+  ONCE to confirm the actual state — while delivery is uncertain, do NOT
+  retype; a repeated action may land twice. Show the user the evidence and
+  let them decide.
 - **An echo is not success.** Text visible in AX after typing may be a stale
   mirror; re-perceive once before concluding.
 - **Destructive actions announce first.** Before deleting, sending messages,

@@ -566,7 +566,7 @@ worker先注册信号handler，再import外部文件。SIGTERM abort controller�
 - Consumes: A5 supervise/readHistory/formatReport。
 - Produces: spec §6 三命令；`createComputerE2ECommands(): FunctionCommand[]`；Skill `dependsOn:["computer-use"]`；外部包不包含新增npm分发资产。
 
-- [ ] **Step 1: 写参数与安装 RED。** `parseE2EArgs(action,argv)` 返回区分run/history/report的联合；测试无文件、未知flag、重复param key、非法预算、重复单值flag、文件不存在、require-version不符均在worker/SDK前拒绝。不接受glob作为隐式发现规则；shell已展开多个路径则按传入顺序运行。
+- [x] **Step 1: 写参数与安装 RED。** `parseE2EArgs(action,argv)` 返回区分run/history/report的联合；测试无文件、未知flag、重复param key、非法预算、重复单值flag、文件不存在、require-version不符均在worker/SDK前拒绝。不接受glob作为隐式发现规则；shell已展开多个路径则按传入顺序运行。
 
 ```ts
 expect(() => parseE2EArgs('run', ['a.e2e.ts', '--param', 'x=1', '--param', 'x=2']))
@@ -577,7 +577,7 @@ expect(() => parseE2EArgs('run', ['a.e2e.ts', '--retry', '3']))
 
 catalog测试安装 computer-e2e 到临时项目，断言两个Skill、references/api.d.ts、examples/pure.e2e.ts都存在，无node_modules，无源码绝对路径。扫描安装后的SKILL本地引用，每个引用都存在；不要指向未随包安装的repo `docs/`。
 
-- [ ] **Step 2: 跑 RED，然后实现命令和文案。** run执行后设置 `process.exitCode=summary.exitCode` 并返回 `JSON.stringify(summary)`，失败不能用顶层catch一律改为1而丢130/143/2。history和report只有文件读取，help/非法参数不触SDK。命令description含完整flags或本地usage文本，修正旧help只给一句说明的误导。
+- [x] **Step 2: 跑 RED，然后实现命令和文案。** run执行后设置 `process.exitCode=summary.exitCode` 并返回 `JSON.stringify(summary)`，失败不能用顶层catch一律改为1而丢130/143/2。history和report只有文件读取，help/非法参数不触SDK。命令description含完整flags或本地usage文本，修正旧help只给一句说明的误导。
 
 Skill metadata：
 
@@ -598,7 +598,7 @@ SKILL必须写明：探索→确认稳定谓词和后置条件→编写Suite→�
 
 `api.d.ts` 从A2/A4公共types用TypeScript声明输出生成（开发时用已有typescript），生成脚本遍历导出、拒绝残留 `@ya-skills/*` 或 `@trycua/*` import；测试重新生成后diff为0。不是消费方运行要求。
 
-- [ ] **Step 3: 写真实发布包 RED（无桌面）。** 用临时目录解包，PATH=/usr/bin:/bin，无node/npm/bun；运行以下闭环。release测试模式 `YK_RELEASE_TESTS=1` 时产物缺失必须FAIL，不允许skip；默认不构建/运行native。
+- [x] **Step 3: 写真实发布包 RED（无桌面）。** 用临时目录解包，PATH=/usr/bin:/bin，无node/npm/bun；运行以下闭环。release测试模式 `YK_RELEASE_TESTS=1` 时产物缺失必须FAIL，不允许skip；默认不构建/运行native。
 
 ```sh
 export YA_SKILLS_CATALOG_DIR="$extract/skills"
@@ -611,7 +611,7 @@ export YA_SKILLS_CATALOG_DIR="$extract/skills"
 
 必须断言：没有node_modules；只有yk自启动工作进程；pure用例不触SDK；external TS relative imports可用；case失败退出1、skip退出2；bin symlink/空cwd/有空格路径/hostile package.json+bunfig均通过；SDK固定解析位置结构测试通过；native文件仍在原sidecar路径。旧computer-use参数与帮助测试不能回归。
 
-- [ ] **Step 4: 更新单一打包入口和两个workflow。** package:release先生成types再编译yk、复制两个Skill和原runtime；不增加额外npm资产。workflow顺序固定：安装开发deps→typecheck→默认纯tests→package:release→`YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts`→上传。发布CI不读取Finder，不申请TCC。两个workflow写相同命令，测试断言顺序而不是只搜字符串。
+- [x] **Step 4: 更新单一打包入口和两个workflow。** package:release先生成types再编译yk、复制两个Skill和原runtime；不增加额外npm资产。workflow顺序固定：安装开发deps→typecheck→默认纯tests→package:release→`YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts`→上传。发布CI不读取Finder，不申请TCC。两个workflow写相同命令，测试断言顺序而不是只搜字符串。
 
 ```sh
 bun run typecheck
@@ -624,7 +624,7 @@ bun run smoke
 
 执行这些命令时开启shell pipefail或不加tail管道；保存原始exitCode。Node build/smoke仅验证现有帮助/catalog等，不能据此声称Node支持E2E外部TS。
 
-- [ ] **Step 5: GREEN、文档一致性与提交。** README双语说明“无消费方npm安装”；AGENTS写包职责、默认测试不碰桌面、release gate要求；docs列出未授权真实UI与Homebrew验收。提交 `feat: ship dependency-free computer-e2e commands and skill`。
+- [x] **Step 5: GREEN、文档一致性与提交。** README双语说明“无消费方npm安装”；AGENTS写包职责、默认测试不碰桌面、release gate要求；docs列出未授权真实UI与Homebrew验收。提交 `feat: ship dependency-free computer-e2e commands and skill`。
 
 ## Task A7: 验收交接，不越权做真实桌面操作
 

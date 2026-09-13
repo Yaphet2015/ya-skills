@@ -51,7 +51,7 @@ yk pbench capture --source codex --yes   # run a domain command
 - **Functions become commands** — selected skill logic is reachable as `yk <domain> <action>`, so the same catalog powers both agent workflows and plain shell automation.
 - **Dependency-aware, never destructive** — `yk install` resolves required skills before installing; `yk uninstall` removes only what you ask for and never silently nukes shared dependencies.
 - **Batteries included** — ships ready-to-use skills for benchmarking, transcript extraction, and design grilling.
-- **Single command entrypoint** — `yk` ships as a Homebrew-pourable macOS arm64 binary that bundles the catalog; native-driver domains like computer-use carry their runtime files inside the package, so installs never depend on a source checkout or an extra Node runtime.
+- **Single command entrypoint** — `yk` ships as a Homebrew-pourable macOS arm64 binary that bundles the catalog; native-driver domains like computer-use/computer-e2e carry their runtime files inside the package, so installs never depend on a source checkout or an extra Node runtime.
 - **Bun + TypeScript monorepo** — `packages/core` owns catalog/install logic, `packages/cli` owns routing, and each `packages/functions-*` package owns one domain. Clean boundaries, fast builds.
 
 ## 📦 Available Skills
@@ -66,6 +66,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
 | **computer-use** | Drive any macOS desktop app (native, Electron, Chromium) via background-first AX perception and actions — inspect app state, reproduce UI issues, operate visible windows. macOS arm64 only. | `yk install computer-use` |
+| **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
 | **show-pr** | Manually invoke `show-pr` to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, per-case test coverage with real results, verification screenshots or video, a decision-point design doc, and suggested manual tests in one HTML page. It never triggers implicitly. | `yk install show-pr` |
 
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
@@ -111,7 +112,7 @@ brew tap Yaphet2015/tap
 brew install ya-skills
 ```
 
-The tap lives at [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap). The formula installs the compiled `yk` binary, the bundled `skills/` catalog, and the `runtime/` sidecar (Cua Driver SDK + macOS arm64 natives for `yk computer-use`) into `libexec`, and wraps `yk` with `YA_SKILLS_CATALOG_DIR` pointing at the installed catalog — so packaged installs never depend on the source checkout layout, `NODE_PATH`, or an extra Node runtime.
+The tap lives at [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap). The formula installs the compiled `yk` binary, the bundled `skills/` catalog, and the `runtime/` sidecar (Cua Driver SDK + macOS arm64 natives for `yk computer-use`/`yk computer-e2e`) into `libexec`, and wraps `yk` with `YA_SKILLS_CATALOG_DIR` pointing at the installed catalog — so packaged installs never depend on the source checkout layout, `NODE_PATH`, or an extra Node runtime.
 
 ### From source (requires [Bun](https://bun.sh))
 
@@ -224,7 +225,9 @@ This is a Bun workspace monorepo:
 - `packages/core` — owns shared catalog, install, uninstall, target detection, dependency resolution, and function-registry logic.
 - `packages/functions-demo` — a tiny sample `yk demo <action>` command package used by CLI/function-registry tests.
 - `packages/functions-pbench` — the independent `yk pbench <action>` command package.
-- `packages/functions-computer-use` — the `yk computer-use <action>` commands (Cua Driver runs in-process; macOS arm64 only).
+- `packages/functions-computer-use` — the `yk computer-use <action>` commands (thin orchestration over the shared runtime; macOS arm64 only).
+- `packages/computer-runtime` — the shared desktop session both computer-use and computer-e2e run on (owns the Cua SDK dependency, budgets, cleanup, privacy).
+- `packages/functions-computer-e2e` — the `yk computer-e2e <run|history|report>` commands: suite validation, sequential worker supervision, run records.
 - `skills/` — the local skill catalog installed by `yk install`.
 
 ## Release

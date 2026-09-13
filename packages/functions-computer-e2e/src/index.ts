@@ -20,16 +20,18 @@ export type {
   WorkerEventType
 } from "./types.js";
 export type { ApplicationInfo } from "./context.js";
+export { createComputerE2ECommands } from "./commands.js";
+export { parseE2EArgs, E2E_USAGE, DEFAULT_OUT_DIR, DEFAULT_HISTORY_LIMIT, type E2ERequest } from "./args.js";
 
 export { runWorkerFromConfig, workerMain, type WorkerConfig } from "./worker.js";
 export {
   DEFAULT_CLEANUP_GRACE_MS,
-  DEFAULT_RUN_TIMEOUT_MS,
   WORKER_COMMAND,
   supervise,
   type RunOptions,
   type SuperviseOptions
 } from "./supervisor.js";
+export { DEFAULT_RUN_TIMEOUT_MS } from "./args.js";
 export {
   ARTIFACTS_DIR,
   EVENTS_FILE,
