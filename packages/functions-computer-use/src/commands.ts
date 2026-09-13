@@ -1,5 +1,6 @@
 import type { FunctionCommand } from "@ya-skills/core";
 import { parseRequest } from "./args.js";
+import { runDoctor } from "./runtime.js";
 
 // Commands own validation and orchestration only; driver lifecycle lives in
 // runtime.ts, observation in observe.ts, actions in act.ts. run() returns a
@@ -13,7 +14,14 @@ export function createComputerUseCommands(): FunctionCommand[] {
       domain,
       action: "doctor",
       description: "Check platform, runtime files, driver load, and read-only permission status.",
-      run: () => "doctor: not implemented yet"
+      run: async () => {
+        const report = await runDoctor();
+        const json = JSON.stringify(report, null, 2);
+        if (!report.ok) {
+          throw new Error(`doctor found problems:\n${json}`);
+        }
+        return json;
+      }
     },
     {
       domain,
