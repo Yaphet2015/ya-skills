@@ -388,7 +388,7 @@ export function runSuite(suite: Suite, context: CaseContext,
 
 `WorkerEvent` 为 spec §8 除 run_started/run_finished 外的事件 `{type,payload}` 联合，types.ts 中穷举合法 payload；主进程随后添加 seq/runId/time。runtime事件承载懒加载后实际SDK版本；不为填报告而初始化未使用的driver。导出类型生成 Skill api.d.ts，不能手写第二份漂移接口。
 
-- [ ] **Step 1: 写 RED：钩子失败、跳过、失败后不继续。** 使用以下完整局部helper；测试导入`mkdtempSync/rmSync`、`tmpdir/join`和`afterEach`，SkipError从本workspace内部suite.ts导出，不能增加到消费方API。
+- [x] **Step 1: 写 RED：钩子失败、跳过、失败后不继续。** 使用以下完整局部helper；测试导入`mkdtempSync/rmSync`、`tmpdir/join`和`afterEach`，SkipError从本workspace内部suite.ts导出，不能增加到消费方API。
 
 ```ts
 const directories: string[] = [];
@@ -420,9 +420,9 @@ expect(result.errors[0]!.phase).toBe('beforeAll');
 
 另测重复 suite/case id、空 suite、非法apiVersion、非函数run、负/NaN预算、同步抛错、async抛错、skip理由必填、afterAll一次且不覆盖主错、失败后case不执行、step begin/end配对、cleanup失败不算通过。纯 fixtures 不得调用 native。
 
-- [ ] **Step 2: 跑 RED。** `bun test tests/computer-e2e-suite.test.ts`，Expected: runner 未实现，而不是测试自身类型错误。
+- [x] **Step 2: 跑 RED。** `bun test tests/computer-e2e-suite.test.ts`，Expected: runner 未实现，而不是测试自身类型错误。
 
-- [ ] **Step 3: 实现 validate + 顺序状态机。** 核心顺序：
+- [x] **Step 3: 实现 validate + 顺序状态机。** 核心顺序：
 
 ```ts
 let stopped = false;
@@ -451,9 +451,9 @@ try {
 
 runSuite为每个case/hook创建不修改原对象的context wrapper；覆盖step以绑定当前caseId/hookName并记录开始/结束，覆盖skip以抛SkipError。wrapper的computer/capture/params复用注入项。所有开始/结束事件包含稳定 case id；worker从config统一补充file，case id最终由父进程组合为 `relativeFile::caseId`。收集完成先发完整清单再执行任何 hook。只创建懒 Computer，纯 suite 不初始化 SDK。
 
-- [ ] **Step 4: GREEN 和退出判定测试。** 函数 `exitCodeFor(result: SuiteResult): 0|1|2`：errors非空或failed/interrupted→1；无case或skipped/not_run→2；否则0。显式断言 `[passed,skipped]` 为2，不能以“没有fail”为0。
+- [x] **Step 4: GREEN 和退出判定测试。** 函数 `exitCodeFor(result: SuiteResult): 0|1|2`：errors非空或failed/interrupted→1；无case或skipped/not_run→2；否则0。显式断言 `[passed,skipped]` 为2，不能以“没有fail”为0。
 
-- [ ] **Step 5: 提交。** `bun test tests/computer-e2e-suite.test.ts && bun run typecheck`；提交 `feat: execute explicit computer e2e suites sequentially`。
+- [x] **Step 5: 提交。** `bun test tests/computer-e2e-suite.test.ts && bun run typecheck`；提交 `feat: execute explicit computer e2e suites sequentially`。
 
 ## Task A5: 自启动监督、事件事实来源、历史报告
 

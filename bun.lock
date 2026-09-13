@@ -36,15 +36,19 @@
       "name": "@ya-skills/core",
       "version": "0.1.0",
     },
+    "packages/functions-computer-e2e": {
+      "name": "@ya-skills/functions-computer-e2e",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ya-skills/computer-runtime": "workspace:*",
+      },
+    },
     "packages/functions-computer-use": {
       "name": "@ya-skills/functions-computer-use",
       "version": "0.1.0",
       "dependencies": {
-        "@trycua/cua-driver": "0.27.0",
+        "@ya-skills/computer-runtime": "workspace:*",
         "@ya-skills/core": "workspace:*",
-      },
-      "optionalDependencies": {
-        "@trycua/cua-driver-darwin-arm64": "0.27.0",
       },
     },
     "packages/functions-demo": {
@@ -106,6 +110,8 @@
     "@ya-skills/computer-runtime": ["@ya-skills/computer-runtime@workspace:packages/computer-runtime"],
 
     "@ya-skills/core": ["@ya-skills/core@workspace:packages/core"],
+
+    "@ya-skills/functions-computer-e2e": ["@ya-skills/functions-computer-e2e@workspace:packages/functions-computer-e2e"],
 
     "@ya-skills/functions-computer-use": ["@ya-skills/functions-computer-use@workspace:packages/functions-computer-use"],
 
