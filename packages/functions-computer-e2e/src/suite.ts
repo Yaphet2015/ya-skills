@@ -92,9 +92,37 @@ function withBudget<T>(budgetMs: number, promise: Promise<T>): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function wrapContext(context: CaseContext, ownerId: string, steps: StepResult[], emit: (event: WorkerEvent) => void): CaseContext {
+function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): CaseContext["computer"] {
+  const refused = async (): Promise<never> => {
+    throw new Error("the owning case was interrupted — no further desktop operations");
+  };
+  const check = <A extends unknown[], R>(fn: (...a: A) => Promise<R>) =>
+    (...a: A): Promise<R> => {
+      signal.throwIfAborted();
+      return fn(...a);
+    };
+  return {
+    apps: signal.aborted ? refused : check(computer.apps),
+    windows: check(computer.windows),
+    snapshot: check(computer.snapshot),
+    click: check(computer.click),
+    type: check(computer.type),
+    key: check(computer.key),
+    scroll: check(computer.scroll),
+    waitFor: check(computer.waitFor)
+  };
+}
+
+function wrapContext(
+  context: CaseContext,
+  ownerId: string,
+  steps: StepResult[],
+  emit: (event: WorkerEvent) => void,
+  signal?: AbortSignal
+): CaseContext {
   return {
     ...context,
+    ...(signal ? { computer: guardComputer(context.computer, signal), signal } : {}),
     step: async <T>(name: string, work: () => Promise<T>): Promise<T> => {
       emit({ type: "step_started", payload: { caseId: ownerId, name } });
       try {
@@ -159,6 +187,11 @@ export async function runSuite(
       cases.push({ id: item.id, name: item.name, status: "not_run" });
       continue;
     }
+    // Per-case abort: a timed-out case's zombie promise must not keep
+    // delivering desktop actions during afterAll.
+    const caseController = new AbortController();
+    const propagate = () => caseController.abort();
+    context.signal.addEventListener("abort", propagate, { once: true });
     if (item.skip !== undefined) {
       cases.push({ id: item.id, name: item.name, status: "skipped", reason: item.skip });
       emit({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: item.skip } });
@@ -167,7 +200,7 @@ export async function runSuite(
     const budget = item.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS;
     emit({ type: "case_started", payload: { caseId: item.id, timeoutMs: budget } });
     try {
-      await withBudget(budget, Promise.resolve(item.run(wrapContext(context, item.id, steps, emit))));
+      await withBudget(budget, Promise.resolve(item.run(wrapContext(context, item.id, steps, emit, caseController.signal))));
       cases.push({ id: item.id, name: item.name, status: "passed" });
       emit({ type: "case_finished", payload: { caseId: item.id, status: "passed" } });
     } catch (error) {
@@ -175,6 +208,7 @@ export async function runSuite(
         cases.push({ id: item.id, name: item.name, status: "skipped", reason: error.message });
         emit({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: error.message } });
       } else if (error instanceof CaseTimeoutError) {
+        caseController.abort();
         cases.push({ id: item.id, name: item.name, status: "interrupted", reason: error.message });
         emit({ type: "case_finished", payload: { caseId: item.id, status: "interrupted", reason: error.message } });
         stopped = true;
@@ -186,6 +220,7 @@ export async function runSuite(
         stopped = true;
       }
     }
+    context.signal.removeEventListener("abort", propagate);
   }
 
   emit({ type: "hook_started", payload: { hook: "afterAll", timeoutMs: hookBudget } });

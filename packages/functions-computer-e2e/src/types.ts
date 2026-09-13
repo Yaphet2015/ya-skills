@@ -55,7 +55,6 @@ export interface CaseResult {
   name: string;
   status: CaseStatus;
   reason?: string;
-  actionOutcome?: "delivered" | "not_delivered" | "unknown";
 }
 
 export interface StepResult {

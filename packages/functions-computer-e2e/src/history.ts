@@ -236,7 +236,7 @@ export function reduceEvents(events: readonly RunEvent[]): RunSummary {
   } else if (failures) {
     status = "failed";
     exitCode = 1;
-  } else if (counts.skipped > 0 || counts.not_run > 0) {
+  } else if (counts.skipped > 0 || counts.not_run > 0 || cases.length === 0) {
     status = "passed";
     exitCode = 2;
   } else {

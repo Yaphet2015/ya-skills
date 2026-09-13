@@ -151,8 +151,12 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
   let stopped = false;
 
   const stopSignal = options.stopSignal;
+  let activeStop: (() => void) | null = null;
   const onAbort = () => {
     stopped = true;
+    // A signal must stop the RUNNING worker (SIGTERM to its group, then the
+    // bounded SIGKILL grace) — not just prevent the next file from starting.
+    activeStop?.();
   };
   stopSignal?.addEventListener("abort", onAbort, { once: true });
 
@@ -233,7 +237,10 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
     const clearTimers = (): void => {
       if (watchdog) clearTimeout(watchdog);
       if (killTimer) clearTimeout(killTimer);
+      if (drainTimer) clearTimeout(drainTimer);
+      if (activeStop === requestStop) activeStop = null;
     };
+    activeStop = requestStop;
 
     const fd3 = child.stdio[3] as import("node:stream").Readable | null;
     const rl = fd3 ? createInterface({ input: fd3 }) : null;
@@ -277,7 +284,13 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
       child.once("exit", (code, signal) => resolveExit({ exitCode: code, signal }));
     });
     // Do not lose the final events: wait for fd3 to close (bounded).
-    await Promise.race([streamClosed, new Promise((r) => setTimeout(r, 500))]);
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      streamClosed,
+      new Promise((r) => {
+        drainTimer = setTimeout(r, 500);
+      })
+    ]);
     clearTimers();
     closeSync(stdoutFd);
     closeSync(stderrFd);

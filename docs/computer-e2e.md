@@ -44,10 +44,13 @@ and `node:` builtins work; the file's own directory needs no node_modules.
 ## Verification status
 
 - Unit/contract: suite validation, sequential fail-stop execution, budgets,
-  event reduction, corruption refusal, supervisor kills (sync `while(true)`
-  loops, async hangs, same-group grandchildren), signal exit codes — covered
-  by the default `bun test` suite with fake backends and real child
-  processes, desktop-free.
+  per-case abort, event reduction, corruption refusal, supervisor kills
+  (sync `while(true)` loops, async hangs, same-group grandchildren, and
+  signal-driven stops of the running worker) — covered by the default
+  `bun test` suite with fake backends and real child processes, desktop-free.
+- If the parent yk is SIGKILLed, a worker config file (containing `params`)
+  can remain inside the run directory (0700); delete stale run dirs you do
+  not trust.
 - Packaged loop: install → run (external TS, relative imports) → history →
   report through the compiled yk under `PATH=/usr/bin:/bin` — covered by
   `YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts` on

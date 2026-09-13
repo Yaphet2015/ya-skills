@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { parseE2EArgs } from "../packages/functions-computer-e2e/src/args.js";
 
 describe("parseE2EArgs run", () => {
@@ -109,12 +111,21 @@ describe("parseE2EArgs history/report", () => {
 });
 
 describe("api.d.ts generation", () => {
-  test("regenerating produces exactly the committed reference (no drift)", () => {
+  test("regenerating produces exactly the committed reference (no drift, no workspace mutation)", async () => {
     const committed = readFileSync(resolve("skills/computer-e2e/references/api.d.ts"), "utf8");
-    const proc = Bun.spawnSync(["bun", "scripts/generate-computer-e2e-api.ts"], { cwd: resolve("."), stdout: "pipe", stderr: "pipe" });
-    expect(proc.exitCode).toBe(0);
-    const regenerated = readFileSync(resolve("skills/computer-e2e/references/api.d.ts"), "utf8");
-    expect(regenerated).toBe(committed);
+    const temp = await mkdtemp(join(tmpdir(), "yk-api-"));
+    try {
+      const target = join(temp, "api.d.ts");
+      const proc = Bun.spawnSync(["bun", "scripts/generate-computer-e2e-api.ts", "--out", target], {
+        cwd: resolve("."),
+        stdout: "pipe",
+        stderr: "pipe"
+      });
+      expect(proc.exitCode).toBe(0);
+      expect(readFileSync(target, "utf8")).toBe(committed);
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
   });
 });
 

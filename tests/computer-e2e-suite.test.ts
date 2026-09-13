@@ -275,11 +275,22 @@ describe("runSuite (sequential, fail-stop)", () => {
     expect(events[1]!.type).toBe("hook_started");
   });
 
-  test("context passthrough: params identity and computer are the injected ones", async () => {
+  test("context passthrough: params keep identity and the computer delegates to the injected one", async () => {
     const base = makeContext();
     const params = { token: "x" } as Readonly<Record<string, string>>;
-    const injected: CaseContext = { ...base, params };
-    let seen: unknown = null;
+    let calls = 0;
+    const injected: CaseContext = {
+      ...base,
+      params,
+      computer: {
+        ...base.computer,
+        apps: async () => {
+          calls++;
+          return [];
+        }
+      }
+    };
+    let seenParams: unknown = null;
     await runSuite(
       {
         apiVersion: 1,
@@ -290,7 +301,8 @@ describe("runSuite (sequential, fail-stop)", () => {
             id: "a",
             name: "reads context",
             async run(ctx) {
-              seen = { params: ctx.params, computer: ctx.computer };
+              seenParams = ctx.params;
+              await ctx.computer.apps();
             }
           }
         ]
@@ -298,7 +310,66 @@ describe("runSuite (sequential, fail-stop)", () => {
       injected,
       () => {}
     );
-    expect(seen).toEqual({ params, computer: injected.computer });
+    expect(seenParams).toBe(params);
+    expect(calls).toBe(1);
+  });
+
+  test("a timed-out case's zombie continuation is refused, not delivered", async () => {
+    const base = makeContext();
+    let zombieActed = 0;
+    let zombieRefused = 0;
+    const injected: CaseContext = {
+      ...base,
+      computer: {
+        ...base.computer,
+        apps: async () => {
+          zombieActed++;
+          return [];
+        }
+      }
+    };
+    const result = await runSuite(
+      {
+        apiVersion: 1,
+        id: "s",
+        name: "s",
+        tests: [
+          {
+            id: "late",
+            name: "acts after its own deadline",
+            timeoutMs: 25,
+            run(ctx) {
+              return new Promise((resolve) => {
+                setTimeout(() => {
+                  // This continuation belongs to a case whose budget is gone.
+                  try {
+                    void ctx.computer.apps().then(
+                      () => {
+                        zombieActed++;
+                        resolve();
+                      },
+                      () => {
+                        zombieRefused++;
+                        resolve();
+                      }
+                    );
+                  } catch {
+                    zombieRefused++; // the guard throws synchronously
+                    resolve();
+                  }
+                }, 60);
+              });
+            }
+          }
+        ]
+      },
+      injected,
+      () => {}
+    );
+    expect(result.cases[0]!.status).toBe("interrupted");
+    await new Promise((r) => setTimeout(r, 100)); // let the zombie continuation fire
+    expect(zombieActed).toBe(0);
+    expect(zombieRefused).toBe(1);
   });
 });
 

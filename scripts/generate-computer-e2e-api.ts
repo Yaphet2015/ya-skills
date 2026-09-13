@@ -13,7 +13,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_TYPES = join(root, "packages/computer-runtime/src/types.ts");
 const E2E_TYPES = join(root, "packages/functions-computer-e2e/src/types.ts");
 const CONTEXT_TYPES = join(root, "packages/functions-computer-e2e/src/context.ts");
-const OUT = join(root, "skills/computer-e2e/references/api.d.ts");
+const outArg = process.argv.indexOf("--out");
+const OUT = outArg !== -1 ? resolve(process.argv[outArg + 1]!) : join(root, "skills/computer-e2e/references/api.d.ts");
 
 // The consumer surface: everything a .e2e.ts file can reference.
 const RUNTIME_SURFACE = ["Target", "WindowRef", "AppRef", "AxElement", "Snapshot", "Predicate", "ScrollDirection", "ScrollSpec", "Computer"];

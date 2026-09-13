@@ -122,8 +122,11 @@ export async function workerMain(config: WorkerConfig): Promise<number> {
   try {
     await session.close();
   } catch (error) {
-    // Cleanup failures must not turn a passing run into a silent pass.
-    console.error(`[worker] session cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+    // Cleanup failures must not turn a passing run into a silent pass:
+    // they ride the event stream so the reduction can never report 0.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[worker] session cleanup failed: ${message}`);
+    emit({ type: "hook_finished", payload: { hook: "session-close", status: "failed", reason: `session cleanup failed: ${message}` } });
     exitCode = 1;
   }
   return exitCode;
