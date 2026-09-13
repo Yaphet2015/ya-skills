@@ -65,11 +65,8 @@ jobs:
         id: package
         run: |
           version="${{ needs.release-please.outputs.version }}"
+          bun run package:release -- --version "${version}"
           asset="ya-skills-v${version}-macos-arm64.tar.gz"
-          mkdir -p dist/release/ya-skills
-          cp dist/yk dist/release/ya-skills/yk
-          cp -R skills dist/release/ya-skills/skills
-          tar -czf "${asset}" -C dist/release/ya-skills yk skills
           asset_sha256="$(shasum -a 256 "${asset}" | awk '{print $1}')"
           printf '%s  %s\n' "${asset_sha256}" "${asset}" | tee "${asset}.sha256"
           echo "asset_name=${asset}" >> "${GITHUB_OUTPUT}"

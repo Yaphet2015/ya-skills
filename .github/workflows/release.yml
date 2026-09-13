@@ -42,12 +42,8 @@ jobs:
       - name: Package release asset
         run: |
           version="${GITHUB_REF_NAME#v}"
-          asset="ya-skills-v${version}-macos-arm64.tar.gz"
-          mkdir -p dist/release/ya-skills
-          cp dist/yk dist/release/ya-skills/yk
-          cp -R skills dist/release/ya-skills/skills
-          tar -czf "${asset}" -C dist/release/ya-skills yk skills
-          shasum -a 256 "${asset}" | tee "${asset}.sha256"
+          bun run package:release -- --version "${version}"
+          shasum -a 256 "ya-skills-v${version}-macos-arm64.tar.gz" | tee "ya-skills-v${version}-macos-arm64.tar.gz.sha256"
 
       - name: Publish release
         env:
