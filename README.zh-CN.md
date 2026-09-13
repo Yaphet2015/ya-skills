@@ -51,7 +51,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 - **函数即命令** —— 部分 Skill 的底层逻辑能通过 `yk <domain> <action>` 调用，同一份目录既能驱动 Agent 工作流，也能驱动纯命令行自动化。
 - **感知依赖、绝不破坏** —— `yk install` 会先解析并安装所需 Skill；`yk uninstall` 只删除你指定的内容，绝不会悄悄删除共享依赖。
 - **开箱即用** —— 自带可用 Skill，覆盖基准测试、视频文稿提取和设计追问。
-- **单一编译二进制** —— `yk` 以可 Homebrew 安装的 macOS arm64 二进制形式发布，并内置目录，安装时不依赖源码检出。
+- **单一命令入口** —— `yk` 以可 Homebrew 安装的 macOS arm64 二进制形式发布，并内置目录；computer-use 等需要原生驱动的领域会随包附带运行资源，安装时不依赖源码检出或额外 Node 运行时。
 - **Bun + TypeScript 单仓多包** —— `packages/core` 负责目录/安装逻辑，`packages/cli` 负责路由，每个 `packages/functions-*` 包负责一个领域。边界清晰、构建快速。
 
 ## 📦 可用 Skills
@@ -222,6 +222,7 @@ bun run smoke            # 快速端到端冒烟测试
 - `packages/core` —— 负责共享的目录、安装、卸载、目标检测、依赖解析与函数注册逻辑。
 - `packages/functions-demo` —— 一个很小的 `yk demo <action>` 示例命令包，用于 CLI / function-registry 测试。
 - `packages/functions-pbench` —— 独立的 `yk pbench <action>` 命令包。
+- `packages/functions-computer-use` —— `yk computer-use <action>` 命令包（Cua Driver 同进程运行；仅 macOS arm64）。
 - `skills/` —— 由 `yk install` 安装的本地 skill 目录。
 
 ## 发布

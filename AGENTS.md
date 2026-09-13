@@ -4,6 +4,7 @@
 - `packages/cli` owns the `yk` command-line entrypoint and command routing.
 - `packages/core` owns shared catalog, dependency resolution, install, uninstall, target detection, and function-registry logic.
 - `packages/functions-*` packages own independent `yk <domain> <action>` command implementations.
+- `packages/functions-computer-use` runs the Cua Driver in-process (Bun) and must keep its SDK import lazy: no native load from `list`/`install`/help paths. Its platform package is an optionalDependency; macOS release packaging must assert it exists. Compiled builds locate the SDK beside the realpath'd executable via `YA_SKILLS_COMPILED` + `runtime/computer-use/node_modules`.
 - `skills/` is the local skill catalog installed by `yk install`.
 - `tests/` contains cross-package behavior tests.
 
@@ -43,4 +44,5 @@
 - Keep shared behavior in `packages/core`; keep CLI parsing and output in `packages/cli`.
 - Do not put domain command logic in `packages/cli`.
 - Update README when public CLI behavior changes.
+- computer-use release assets include `runtime/` beside `yk`; use `bun run package:release` (never hand-assemble) and keep both release workflows on that single packaging script.
 - Prefer adding a failing test before changing behavior.

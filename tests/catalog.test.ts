@@ -355,3 +355,28 @@ test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => 
   expect(stdout).toContain("homebrew-only\n  Packaged catalog skill");
   expect(stdout).not.toContain("pbench");
 });
+
+test("root catalog exposes the computer-use skill with its command functions", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const computerUse = catalog.byName.get("computer-use");
+
+  expect(computerUse?.dependsOn).toEqual([]);
+  expect(computerUse?.functions.map((f) => f.action)).toEqual([
+    "doctor",
+    "apps",
+    "windows",
+    "perceive",
+    "act"
+  ]);
+
+  const skill = await readFile(resolve("skills", "computer-use", "SKILL.md"), "utf8");
+  expect(skill).toContain("yk computer-use apps");
+  expect(skill).toContain("yk computer-use windows --pid");
+  expect(skill).toContain("yk computer-use perceive --pid");
+  expect(skill).toContain("yk computer-use act --pid");
+  expect(skill).toContain("yk computer-use doctor");
+  expect(skill).not.toContain("cowork-e2e");
+  expect(skill).not.toContain("cowork_app");
+  expect(skill).toContain("background");
+  expect(skill).toContain("--activate");
+});
