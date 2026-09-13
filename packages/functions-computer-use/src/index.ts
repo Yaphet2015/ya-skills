@@ -12,6 +12,7 @@ export {
   COMMAND_DEADLINE_MS,
   CLEANUP_DEADLINE_MS,
   compiledSdkUrl,
+  isCompiledRuntime,
   isSupportedPlatform,
   loadSdk,
   runDoctor,
@@ -21,3 +22,17 @@ export {
   type DriverHarness,
   type PlatformInfo
 } from "./runtime.js";
+export {
+  selectWindow,
+  sanitizeElements,
+  bigintSafeReplacer,
+  type AxElement,
+  type WindowRef
+} from "./observe.js";
+export {
+  clickWith,
+  clickPredicate,
+  normalizeText,
+  type ClickDeps
+} from "./act.js";
+export { defaultArtifactsDir, ensureOutDir, artifactPath } from "./artifacts.js";
