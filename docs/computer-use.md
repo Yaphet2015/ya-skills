@@ -10,6 +10,7 @@ yk computer-use apps [--name TEXT]
 yk computer-use windows --pid PID
 yk computer-use perceive --pid PID [--window ID] [--shot] [--out-dir DIR]
 yk computer-use act --pid PID [--window ID] ACTION   # --click-text/--click-contains [--click-role] | --type | --key | --scroll
+# common flags for perceive/act: --shot, --out-dir DIR, --activate (explicit user request only)
 ```
 
 The agent-facing usage guide lives in the skill itself
@@ -39,7 +40,8 @@ directory, the yk install prefix, or your project.
 - Failure: non-zero exit; post-driver failures print a JSON body with
   `error.code` / `error.message` (e.g. `degraded_snapshot`,
   `post_action_observe_failed` with `actionDelivered: true`,
-  `action_refused`). Input-validation failures print plain text + usage.
+  `action_refused`, `command_timeout` with `actionOutcome: "unknown"`).
+  Input-validation failures print plain text + usage.
 - windowId values are decimal strings (they exceed `Number.MAX_SAFE_INTEGER`);
   pass them back verbatim.
 
@@ -49,9 +51,10 @@ The release tarball ships `yk` plus `runtime/computer-use/node_modules/`
 (SDK + darwin-arm64 native `.node`/`.dylib`, ~52 MiB). The compiled binary
 locates that directory beside its realpath'd executable and loads the SDK at
 runtime — packaged installs never depend on a source checkout, `NODE_PATH`,
-or the current working directory's `package.json` (build flag
-`--compile-autoload-package-json` is validated against untrusted-cwd
-replacement in the packaging tests).
+or the current working directory's `package.json` (the
+`--compile-autoload-package-json` flag is covered by the hostile-cwd test in
+`tests/computer-use-packaging.test.ts`, which runs wherever the packaged
+binary exists).
 
 ## Verification status
 

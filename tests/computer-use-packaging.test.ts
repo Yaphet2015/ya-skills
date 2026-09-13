@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { join, resolve } from "node:path";
-import { readdir, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 // Packaging contract: the release tarball must carry the native runtime the
 // compiled yk loads beside its executable — assembled from locked deps by a
@@ -35,8 +37,14 @@ async function collectSymlinks(dir: string): Promise<string[]> {
 }
 
 describe("package:release runtime assembly", () => {
-  test("assembles the sidecar runtime with every required file and no symlinks", async () => {
-    const outDir = resolve("dist/release/ya-skills");
+  // Runs for real only where package:release has produced dist/release
+  // (release runners order packaging before tests; other machines skip).
+  const outDir = resolve("dist/release/ya-skills");
+  const ready = existsSync(join(outDir, "yk"));
+  const runnable = ready && process.platform === "darwin" && process.arch === "arm64";
+  const maybe = runnable ? test : test.skip;
+
+  maybe("assembles the sidecar runtime with every required file and no symlinks", async () => {
     const runtime = join(outDir, "runtime", "computer-use", "node_modules");
 
     expect(await exists(join(outDir, "yk"))).toBe(true);
@@ -46,6 +54,38 @@ describe("package:release runtime assembly", () => {
     const symlinks = await collectSymlinks(runtime);
     expect(symlinks).toEqual([]);
   });
+
+  test.skipIf(!runnable)(
+    "compiled yk runs from a hostile package.json cwd without executing project scripts",
+    async () => {
+      const exe = join(outDir, "yk");
+      const hostile = await mkdtemp(join(tmpdir(), "cu-hostile-"));
+      await writeFile(
+        join(hostile, "package.json"),
+        JSON.stringify({
+          name: "hostile",
+          version: "1.0.0",
+          scripts: { preinstall: "touch SENTINEL_RAN", prepare: "touch SENTINEL_RAN" },
+          dependencies: { "@trycua/cua-driver": "0.0.0-fake" }
+        })
+      );
+      const proc = Bun.spawn([exe, "computer-use", "apps", "--name", "Finder"], {
+        cwd: hostile,
+        env: { ...Bun.env, NODE_PATH: "", YA_SKILLS_CATALOG_DIR: join(outDir, "skills") },
+        stdout: "pipe",
+        stderr: "pipe"
+      });
+      const [stdout, , exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited
+      ]);
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Finder");
+      expect(await exists(join(hostile, "SENTINEL_RAN"))).toBe(false);
+      await rm(hostile, { recursive: true, force: true });
+    }
+  );
 
   test("compiled yk build uses the pinned external + autoload + define flags", async () => {
     const pkg = (await Bun.file(resolve("package.json")).json()) as { scripts: Record<string, string> };

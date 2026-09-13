@@ -52,25 +52,24 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --registry=https://registry.npmjs.org
 
-      - name: Test
-        run: bun test
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Build macOS arm64 binary
-        run: bun run build:binary:macos-arm64
-
       - name: Package release asset
         id: package
         run: |
           version="${{ needs.release-please.outputs.version }}"
           bun run package:release -- --version "${version}"
           asset="ya-skills-v${version}-macos-arm64.tar.gz"
-          asset_sha256="$(shasum -a 256 "${asset}" | awk '{print $1}')"
-          printf '%s  %s\n' "${asset_sha256}" "${asset}" | tee "${asset}.sha256"
+          asset_sha256="$(awk '{print $1}' "${asset}.sha256")"
           echo "asset_name=${asset}" >> "${GITHUB_OUTPUT}"
           echo "asset_sha256=${asset_sha256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Test (after packaging so dist/release assertions run)
+        run: bun test
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build node target
+        run: bun run build
 
       - name: Upload release asset
         env:

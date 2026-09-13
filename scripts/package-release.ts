@@ -7,7 +7,7 @@
 // Both release workflows call this script; never hand-assemble the layout.
 
 import { createRequire } from "node:module";
-import { cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import packageJson from "../package.json" with { type: "json" };
@@ -30,9 +30,9 @@ function arg(name: string): string {
 
 const version = arg("--version");
 if (version !== packageJson.version) {
-  // Release-please passes the bumped version; warn loudly if it drifts from
-  // package.json so a stale checkout cannot ship mislabeled assets.
-  console.error(`warning: --version ${version} != package.json ${packageJson.version}`);
+  // A stale checkout must never ship assets whose name/binary disagree.
+  console.error(`--version ${version} != package.json ${packageJson.version} — rebase and retry`);
+  process.exit(1);
 }
 
 const root = resolve(import.meta.dir, "..");
@@ -70,7 +70,7 @@ const resolvePkg = (name: string): string =>
   name.startsWith("@ubjs/") ? cuaRequire.resolve(`${name}/package.json`) : pkgRequire.resolve(`${name}/package.json`);
 for (const name of Object.keys(PINNED)) {
   const pkgJsonPath = resolvePkg(name);
-  const installed = JSON.parse(spawnSync("cat", [pkgJsonPath], { encoding: "utf8" }).stdout) as {
+  const installed = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as {
     name: string;
     version: string;
   };

@@ -109,7 +109,7 @@ brew tap Yaphet2015/tap
 brew install ya-skills
 ```
 
-Tap 仓库位于 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。该 formula 会安装编译好的 `yk` 二进制和内置的 `skills/` 目录，并用 `YA_SKILLS_CATALOG_DIR` 包装 `yk`，指向已安装的目录——因此打包安装完全不依赖源码检出布局。
+Tap 仓库位于 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。该 formula 会把编译好的 `yk` 二进制、内置的 `skills/` 目录、以及 `runtime/` 随包资源（Cua Driver SDK 与 macOS arm64 原生库，供 `yk computer-use` 使用）装进 `libexec`，并用 `YA_SKILLS_CATALOG_DIR` 包装 `yk` 指向已安装的目录——因此打包安装完全不依赖源码检出布局、`NODE_PATH` 或额外的 Node 运行时。
 
 ### 从源码构建（需要 [Bun](https://bun.sh)）
 
@@ -239,7 +239,7 @@ bun run smoke            # 快速端到端冒烟测试
    - `ya-skills-v<version>-macos-arm64.tar.gz`
    - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
 
-资源上传放在 Release Please 工作流里执行，因为由默认 `GITHUB_TOKEN` 创建的 tag 不会触发其他工作流。`.github/workflows/release.yml` 仍可用于手动推送 `v*` tag。发布后，请用新的发布资源 URL 和 sha256 更新 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。不要写 formula `version`；Homebrew 会从 GitHub release URL 读出版本。
+资源上传放在 Release Please 工作流里执行，因为由默认 `GITHUB_TOKEN` 创建的 tag 不会触发其他工作流。`.github/workflows/release.yml` 仍可用于手动推送 `v*` tag。同一工作流会通过 `scripts/update-ya-skills-formula.py` 自动用新的发布资源 URL 和 sha256 更新 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)；若 tap formula 丢失 runtime 安装块，脚本会明确失败。不要写 formula `version`；Homebrew 会从 GitHub release URL 读出版本。
 
 ## 贡献
 

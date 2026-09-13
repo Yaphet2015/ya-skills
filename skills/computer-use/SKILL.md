@@ -11,8 +11,9 @@ keys, scrolling). Work in short steps: perceive → decide ONE action → act �
 read the returned post-action perception → verify. Never script a whole flow
 blind.
 
-All commands work from any directory. `yk computer-use <command> --help`
-prints the full flag reference.
+All commands work from any directory. Flags are documented below and in
+`docs/computer-use.md`; `yk computer-use <command> --help` prints the one-line
+command description.
 
 ## Setup (one-time)
 
@@ -75,7 +76,9 @@ Screenshots land in `~/Library/Caches/ya-skills/computer-use/` (override with
   user is actively using; prefer your own spawned instance for mutating flows.
 - **One app/window at a time;** no parallel driving.
 - If an `act` fails with `actionDelivered: true`, the action WAS delivered —
-  continue with `perceive`, never repeat the act.
+  continue with `perceive`, never repeat the act. A `command_timeout` error
+  means delivery is UNKNOWN: observe with `perceive` before doing anything
+  else; never blindly re-run the act.
 
 ## Verified behavior notes (2026-09-13, macOS arm64)
 

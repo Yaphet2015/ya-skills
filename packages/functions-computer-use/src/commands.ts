@@ -1,11 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
 import type { FunctionCommand } from "@ya-skills/core";
 import { parseRequest, type ParsedRequest } from "./args.js";
 import { runDoctor, withDriver, loadSdk, COMMAND_DEADLINE_MS } from "./runtime.js";
 import { selectWindow, sanitizeElements, bigintSafeReplacer, type AxElement, type WindowRef } from "./observe.js";
 import { clickWith, clickPredicate } from "./act.js";
-import { ensureOutDir, artifactPath } from "./artifacts.js";
+import { ensureOutDir, saveScreenshot } from "./artifacts.js";
 
 // Commands own validation, orchestration, and result envelopes. Driver calls
 // happen inside withDriver (bounded deadline, ordered cleanup). Success prints
@@ -110,10 +109,7 @@ async function perceiveEnvelope(
     elements: snap.elements
   };
   if (snap.imageBase64) {
-    const dir = ensureOutDir(outDir);
-    const file = artifactPath(dir, "cu.png");
-    writeFileSync(file, Buffer.from(snap.imageBase64, "base64"), { mode: 0o600 });
-    payload.screenshot = file;
+    payload.screenshot = saveScreenshot(ensureOutDir(outDir), snap.imageBase64);
   }
   return JSON.stringify(payload, bigintSafeReplacer);
 }
@@ -249,11 +245,26 @@ async function runReal(request: ParsedRequest): Promise<string> {
   });
 }
 
-export function createComputerUseCommands(): FunctionCommand[] {
+export function createComputerUseCommands(
+  deps: { runReal?: typeof runReal } = {}
+): FunctionCommand[] {
+  const doRun = deps.runReal ?? runReal;
   const domain = "computer-use";
   const run = (action: string) => async (args: string[]): Promise<string> => {
     const request = parseRequest(action, args);
-    return runReal(request);
+    try {
+      return await doRun(request);
+    } catch (e) {
+      // A timeout on an act may or may not have delivered the action — report
+      // it as unknown and forbid replay; the agent's ONLY next step is perceive.
+      if (request.kind === "act" && /timed out/.test(e instanceof Error ? e.message : String(e))) {
+        throw jsonError("command_timeout", "the action command timed out; delivery could not be confirmed", {
+          actionOutcome: "unknown",
+          nextStep: "run perceive to observe the current state; do NOT repeat the act"
+        });
+      }
+      throw e;
+    }
   };
   return [
     {

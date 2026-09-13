@@ -111,7 +111,7 @@ brew tap Yaphet2015/tap
 brew install ya-skills
 ```
 
-The tap lives at [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap). The formula installs the compiled `yk` binary and the bundled `skills/` catalog, and wraps `yk` with `YA_SKILLS_CATALOG_DIR` pointing at the installed catalog — so packaged installs never depend on the source checkout layout.
+The tap lives at [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap). The formula installs the compiled `yk` binary, the bundled `skills/` catalog, and the `runtime/` sidecar (Cua Driver SDK + macOS arm64 natives for `yk computer-use`) into `libexec`, and wraps `yk` with `YA_SKILLS_CATALOG_DIR` pointing at the installed catalog — so packaged installs never depend on the source checkout layout, `NODE_PATH`, or an extra Node runtime.
 
 ### From source (requires [Bun](https://bun.sh))
 
@@ -241,7 +241,7 @@ Releases are automated with [Release Please](https://github.com/googleapis/relea
    - `ya-skills-v<version>-macos-arm64.tar.gz`
    - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
 
-The asset upload runs in the Release Please workflow because tags created by the default `GITHUB_TOKEN` do not trigger other workflows. `.github/workflows/release.yml` remains available for manual `v*` tag pushes. After publishing, update [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap) with the new release asset URL and sha256. Do not set formula `version`; Homebrew scans it from the GitHub release URL.
+The asset upload runs in the Release Please workflow because tags created by the default `GITHUB_TOKEN` do not trigger other workflows. `.github/workflows/release.yml` remains available for manual `v*` tag pushes. The same workflow then updates [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap) with the new release asset URL and sha256 via `scripts/update-ya-skills-formula.py`, which fails loudly if the tap formula ever loses the runtime-aware install block. Do not set formula `version`; Homebrew scans it from the GitHub release URL.
 
 ## Contributing
 

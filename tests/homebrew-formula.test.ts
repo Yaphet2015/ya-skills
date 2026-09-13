@@ -44,6 +44,12 @@ test("drops explicit formula version because brew audit infers it from the GitHu
   sha256 "oldsha"
   license :cannot_represent
 
+  def install
+    libexec.install "yk", "runtime"
+    pkgshare.install "skills"
+    (bin/"yk").write_env_script libexec/"yk", YA_SKILLS_CATALOG_DIR: pkgshare/"skills"
+  end
+
   test do
     assert_match "0.10.0", shell_output("#{bin}/yk --version")
   end
@@ -105,4 +111,49 @@ end
   );
   expect(result).toContain('sha256 "newsha"');
   expect(result).not.toMatch(/^\s*version /m);
+});
+
+test("updater fails loudly on a formula without the runtime install shape", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ya-skills-formula-old-"));
+  const formulaPath = join(dir, "ya-skills.rb");
+  try {
+    await writeFile(
+      formulaPath,
+      `class YaSkills < Formula
+  url "https://github.com/Yaphet2015/ya-skills/releases/download/v0.10.0/ya-skills-v0.10.0-macos-arm64.tar.gz"
+  sha256 "oldsha"
+
+  def install
+    libexec.install "yk"
+    pkgshare.install "skills"
+    (bin/"yk").write_env_script libexec/"yk", YA_SKILLS_CATALOG_DIR: pkgshare/"skills"
+  end
+end
+`
+    );
+
+    const process = Bun.spawn(["python3", script, formulaPath], {
+      env: {
+        ...Bun.env,
+        VERSION: "0.11.0",
+        TAG_NAME: "v0.11.0",
+        ASSET_NAME: "ya-skills-v0.11.0-macos-arm64.tar.gz",
+        ASSET_SHA256: "newsha"
+      },
+      stderr: "pipe",
+      stdout: "pipe"
+    });
+
+    const [stderr, exitCode] = await Promise.all([
+      new Response(process.stderr).text(),
+      process.exited
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('libexec.install "yk", "runtime"');
+    // and the formula was left untouched
+    expect(await readFile(formulaPath, "utf8")).toContain('libexec.install "yk"\n');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

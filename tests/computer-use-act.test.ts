@@ -3,7 +3,7 @@ import {
   selectWindow,
   sanitizeElements
 } from "@ya-skills/functions-computer-use";
-import { clickWith, normalizeText } from "@ya-skills/functions-computer-use";
+import { clickWith, createComputerUseCommands, normalizeText } from "@ya-skills/functions-computer-use";
 
 const win = (windowId: bigint, title: string) => ({ pid: 10, windowId, title });
 
@@ -177,5 +177,64 @@ describe("clickWith", () => {
       )
     ).rejects.toThrow(/elementToken/i);
     expect(clicks).toBe(0);
+  });
+});
+
+describe("act error envelopes", () => {
+  const commands = (runReal: (req: unknown) => Promise<string>) =>
+    createComputerUseCommands({ runReal: runReal as never });
+
+  test("a timeout on act reports actionOutcome unknown and forbids replay", async () => {
+    const act = commands(async () => {
+      throw new Error("command timed out after 30000ms");
+    }).find((c) => c.action === "act")!;
+    const error = await Promise.resolve(act.run(["--pid", "1", "--type", "hi"])).then(
+      () => null,
+      (e: Error) => e
+    );
+    const body = JSON.parse(error!.message) as {
+      error: { code: string; actionOutcome: string; nextStep: string };
+    };
+    expect(body.error.code).toBe("command_timeout");
+    expect(body.error.actionOutcome).toBe("unknown");
+    expect(body.error.nextStep).toMatch(/perceive/);
+    expect(body.error.nextStep).toMatch(/do NOT repeat/);
+  });
+
+  test("a timeout on perceive stays a plain timeout, not an act-outcome error", async () => {
+    const perceive = commands(async () => {
+      throw new Error("command timed out after 30000ms");
+    }).find((c) => c.action === "perceive")!;
+    const error = await Promise.resolve(perceive.run(["--pid", "1"])).then(
+      () => null,
+      (e: Error) => e
+    );
+    expect(error!.message).toBe("command timed out after 30000ms");
+  });
+
+  test("non-timeout act errors pass through untouched", async () => {
+    const act = commands(async () => {
+      throw new Error('{"error":{"code":"degraded_snapshot"}}');
+    }).find((c) => c.action === "act")!;
+    const error = await Promise.resolve(act.run(["--pid", "1", "--key", "Return"])).then(
+      () => null,
+      (e: Error) => e
+    );
+    expect(JSON.parse(error!.message).error.code).toBe("degraded_snapshot");
+  });
+});
+
+describe("artifact output rules", () => {
+  test("default cache dir is user-scoped, files private, relative --out-dir becomes absolute", async () => {
+    const { ensureOutDir, saveScreenshot, defaultArtifactsDir } = await import("@ya-skills/functions-computer-use");
+    expect(defaultArtifactsDir()).toContain("Library/Caches/ya-skills/computer-use");
+    const dir = ensureOutDir();
+    const file = saveScreenshot(dir, Buffer.from("screenshot-bytes").toString("base64"));
+    expect(await Bun.file(file).text()).toBe("screenshot-bytes");
+    const mode = (await Bun.file(file).stat()).mode! & 0o777;
+    expect(mode.toString(8)).toBe("600");
+    const rel = ensureOutDir("rel-dir");
+    expect(rel.startsWith("/")).toBe(true);
+    await Bun.$`rm -rf ${dir} ${rel}`;
   });
 });

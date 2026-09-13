@@ -35,4 +35,4 @@ export {
   normalizeText,
   type ClickDeps
 } from "./act.js";
-export { defaultArtifactsDir, ensureOutDir, artifactPath } from "./artifacts.js";
+export { defaultArtifactsDir, ensureOutDir, artifactPath, saveScreenshot } from "./artifacts.js";

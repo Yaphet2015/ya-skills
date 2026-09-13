@@ -74,14 +74,17 @@ function withDeadline<T>(label: string, promise: Promise<T>, deadlineMs: number)
 }
 
 async function cleanup(driver: MinimalDriver, errors: Error[], deadlineMs: number): Promise<void> {
+  // One shared budget across all steps (spec: cleanup gets at most 5s total).
+  const deadline = Date.now() + deadlineMs;
+  const remaining = () => Math.max(deadline - Date.now(), 1);
   // Every step runs even if the previous one failed; nothing masks the primary.
   try {
-    await withDeadline("endSession", Promise.resolve(driver.endSession({} as never)), deadlineMs);
+    await withDeadline("endSession", Promise.resolve(driver.endSession({} as never)), remaining());
   } catch (e) {
     errors.push(e instanceof Error ? e : new Error(String(e)));
   }
   try {
-    await withDeadline("shutdown", Promise.resolve(driver.shutdown()), deadlineMs);
+    await withDeadline("shutdown", Promise.resolve(driver.shutdown()), remaining());
   } catch (e) {
     errors.push(e instanceof Error ? e : new Error(String(e)));
   }
@@ -95,8 +98,10 @@ async function cleanup(driver: MinimalDriver, errors: Error[], deadlineMs: numbe
 export async function withDriver(harness: DriverHarness): Promise<string> {
   const deadlineMs = harness.deadlineMs ?? COMMAND_DEADLINE_MS;
   const cleanupDeadlineMs = harness.cleanupDeadlineMs ?? CLEANUP_DEADLINE_MS;
-  const sdk = await harness.load();
-  const driver = (await harness.create()) as MinimalDriver;
+  // The SAME deadline covers load/create/work: a hanging dylib load or driver
+  // create must not pin the CLI forever either.
+  const sdk = await withDeadline("sdk load", harness.load(), deadlineMs);
+  const driver = (await withDeadline("driver create", harness.create(), deadlineMs)) as MinimalDriver;
   const cleanupErrors: Error[] = [];
   let result: string;
   try {
