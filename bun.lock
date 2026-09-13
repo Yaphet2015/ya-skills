@@ -17,6 +17,7 @@
       },
       "dependencies": {
         "@ya-skills/core": "workspace:*",
+        "@ya-skills/functions-computer-use": "workspace:*",
         "@ya-skills/functions-demo": "workspace:*",
         "@ya-skills/functions-pbench": "workspace:*",
       },
@@ -24,6 +25,17 @@
     "packages/core": {
       "name": "@ya-skills/core",
       "version": "0.1.0",
+    },
+    "packages/functions-computer-use": {
+      "name": "@ya-skills/functions-computer-use",
+      "version": "0.1.0",
+      "dependencies": {
+        "@trycua/cua-driver": "0.27.0",
+        "@ya-skills/core": "workspace:*",
+      },
+      "optionalDependencies": {
+        "@trycua/cua-driver-darwin-arm64": "0.27.0",
+      },
     },
     "packages/functions-demo": {
       "name": "@ya-skills/functions-demo",
@@ -41,22 +53,58 @@
     },
   },
   "packages": {
-    "@types/bun": ["@types/bun@1.3.14", "https://registry.npmjs.org/@types/bun/-/bun-1.3.14.tgz", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
+    "@trycua/cua-driver": ["@trycua/cua-driver@0.27.0", "", { "dependencies": { "@ubjs/core": "0.31.0-3", "@ubjs/node": "0.31.0-3" }, "optionalDependencies": { "@trycua/cua-driver-darwin-arm64": "0.27.0", "@trycua/cua-driver-darwin-x64": "0.27.0", "@trycua/cua-driver-linux-arm64-gnu": "0.27.0", "@trycua/cua-driver-linux-x64-gnu": "0.27.0", "@trycua/cua-driver-win32-arm64-msvc": "0.27.0", "@trycua/cua-driver-win32-x64-msvc": "0.27.0" } }, "sha512-XIFUBvBUyb8BLuWEewtuHxKdhP2jcGA81Pwy6Gi1OTsmeA9iGbldfZ6KOZSP53ligeGl3UmQU1AJXwOfscj4Iw=="],
 
-    "@types/node": ["@types/node@25.9.2", "https://registry.npmjs.org/@types/node/-/node-25.9.2.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw=="],
+    "@trycua/cua-driver-darwin-arm64": ["@trycua/cua-driver-darwin-arm64@0.27.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-dur8DxiPv6Vp1y1CRe+TRvEgM/uC7kYqE9ES4ToTiB7cKj0ROSKMSR6nULLZCOMNwTiSVQAWBAXqn2snGxBnBQ=="],
+
+    "@trycua/cua-driver-darwin-x64": ["@trycua/cua-driver-darwin-x64@0.27.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-HOysa1awJoYkW7a3zmv8NzTn6Ryi3qNWCfeo0Q9TFR0+LlDGzcvIHPbQZs1ueEOpsbeANStXONYoTfr8tUWixw=="],
+
+    "@trycua/cua-driver-linux-arm64-gnu": ["@trycua/cua-driver-linux-arm64-gnu@0.27.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-cOcaDJpO05JNgU2BYxosNQaA95hDrrfA6z8OS/u2ln7941fIILhDMXpxVbZnpR3+P3ya+NxLWP5bj6F2Cam4Cw=="],
+
+    "@trycua/cua-driver-linux-x64-gnu": ["@trycua/cua-driver-linux-x64-gnu@0.27.0", "", { "os": "linux", "cpu": "x64" }, "sha512-2lNk6tYWoKlUlquzxQlv0HlaFOTjWFmoMwLklImjpb04BjIRLhVW+f6q4chKHKYWl0ojgd16xsAIXcTyc2BrXA=="],
+
+    "@trycua/cua-driver-win32-arm64-msvc": ["@trycua/cua-driver-win32-arm64-msvc@0.27.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-AeouniKQyBclyStltuWMRgFdD/7VmCIGg/osf8y7A/vljIOm959i9ErNvySRghmC0vplDK9sbaMtIlFMCMFhFA=="],
+
+    "@trycua/cua-driver-win32-x64-msvc": ["@trycua/cua-driver-win32-x64-msvc@0.27.0", "", { "os": "win32", "cpu": "x64" }, "sha512-6sWfW6aCjimgLW6PrMETtCFODUpymwU18ADrUucUWq/tRXN4uj0TDfS4t1jujAmyJU3vcZTd/vqYxBRMTVLMCA=="],
+
+    "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
+
+    "@types/node": ["@types/node@25.9.2", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw=="],
+
+    "@ubjs/core": ["@ubjs/core@0.31.0-3", "", {}, "sha512-39XrJgUZ2VVb561sSnkXPhczNoeBsNiSRArecsV0JE7CJq69ajFkcn9/tBAUS2NpgHkLIDU+z6Ks2+1wXnboxg=="],
+
+    "@ubjs/node": ["@ubjs/node@0.31.0-3", "", { "optionalDependencies": { "@ubjs/node-darwin-arm64": "0.31.0-3", "@ubjs/node-darwin-x64": "0.31.0-3", "@ubjs/node-linux-arm64-gnu": "0.31.0-3", "@ubjs/node-linux-arm64-musl": "0.31.0-3", "@ubjs/node-linux-x64-gnu": "0.31.0-3", "@ubjs/node-linux-x64-musl": "0.31.0-3", "@ubjs/node-win32-arm64-msvc": "0.31.0-3", "@ubjs/node-win32-x64-msvc": "0.31.0-3" } }, "sha512-qNMpi2LICNwxGXZyRF8fSDBSpbezyZbEsydrbiMPJOmtOWr4tmZIEl7jkWGHVGShoBvHfFo4eHp5B4UVP928Cg=="],
+
+    "@ubjs/node-darwin-arm64": ["@ubjs/node-darwin-arm64@0.31.0-3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-GGQVPLkVo4Gc8qVLW4IGvS8bjl8eHXyeP4a97ntGmsAdXwE5gsS29o8xUEFROjhwHKD+9sgVeblCSWVG3CpHsw=="],
+
+    "@ubjs/node-darwin-x64": ["@ubjs/node-darwin-x64@0.31.0-3", "", { "os": "darwin", "cpu": "x64" }, "sha512-2sc47u4XFYOsbmP5EW+Gx8m/yGrYnfFDFQm6+kz7goSWTNg84eEiz3COs9HKJDVuNJ5Khv5XipTO8CFadMLXCw=="],
+
+    "@ubjs/node-linux-arm64-gnu": ["@ubjs/node-linux-arm64-gnu@0.31.0-3", "", { "os": "linux", "cpu": "arm64" }, "sha512-YStVXhYz/5jvlWf/p4fhiVT72unYAbGugifFC9QmO/+hnroQDAQ5t8SARbsc15G4olMcamdIB+GETiUB7gmaYg=="],
+
+    "@ubjs/node-linux-arm64-musl": ["@ubjs/node-linux-arm64-musl@0.31.0-3", "", { "os": "linux", "cpu": "arm64" }, "sha512-Izp4nvfy/LmibzFowAztkoDOksCR2fb2zl6fh1ojR1HEsg0rAGruxtI8d3fn8DI0lBXwqmn6SF///oD4mFNJPQ=="],
+
+    "@ubjs/node-linux-x64-gnu": ["@ubjs/node-linux-x64-gnu@0.31.0-3", "", { "os": "linux", "cpu": "x64" }, "sha512-Xdm21blyg5U/kW6s7OMvgrr8coGTkUlt26DVR9x8gKISif+E3YwdEskbFScWqystAiJnfjw7xHEc8UMu0Qlz7Q=="],
+
+    "@ubjs/node-linux-x64-musl": ["@ubjs/node-linux-x64-musl@0.31.0-3", "", { "os": "linux", "cpu": "x64" }, "sha512-fFQ9BWS6i2LUH9SJgD9oEiKXXo/say59vHy7usFe1t7C2xvwvP34f5SuxXmWP9R8fHyA0aC4kIZ+TTwyHSv1Kw=="],
+
+    "@ubjs/node-win32-arm64-msvc": ["@ubjs/node-win32-arm64-msvc@0.31.0-3", "", { "os": "win32", "cpu": "arm64" }, "sha512-ID6rSz1NmPsWTNBBNAw4OnJ5Dj8pcbtNJtdPB3OxcGigLBd/e0x7buhSI7os6Mo5iYtEdCynBRQHFJwub5XSPg=="],
+
+    "@ubjs/node-win32-x64-msvc": ["@ubjs/node-win32-x64-msvc@0.31.0-3", "", { "os": "win32", "cpu": "x64" }, "sha512-wevs+Y+szwcCUT8IJFbB4/1nfxyRv/51l8oG7FGUPWD1xLPyuHfJBG27C+PDeC7KRzes/2n6aLo4DGZbr/LYTw=="],
 
     "@ya-skills/cli": ["@ya-skills/cli@workspace:packages/cli"],
 
     "@ya-skills/core": ["@ya-skills/core@workspace:packages/core"],
 
+    "@ya-skills/functions-computer-use": ["@ya-skills/functions-computer-use@workspace:packages/functions-computer-use"],
+
     "@ya-skills/functions-demo": ["@ya-skills/functions-demo@workspace:packages/functions-demo"],
 
     "@ya-skills/functions-pbench": ["@ya-skills/functions-pbench@workspace:packages/functions-pbench"],
 
-    "bun-types": ["bun-types@1.3.14", "https://registry.npmjs.org/bun-types/-/bun-types-1.3.14.tgz", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+    "bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "typescript": ["typescript@5.9.3", "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
-    "undici-types": ["undici-types@7.24.6", "https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz", {}, "sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg=="],
+    "undici-types": ["undici-types@7.24.6", "", {}, "sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg=="],
   }
 }
