@@ -22,6 +22,16 @@
         "@ya-skills/functions-pbench": "workspace:*",
       },
     },
+    "packages/computer-runtime": {
+      "name": "@ya-skills/computer-runtime",
+      "version": "0.1.0",
+      "dependencies": {
+        "@trycua/cua-driver": "0.27.0",
+      },
+      "optionalDependencies": {
+        "@trycua/cua-driver-darwin-arm64": "0.27.0",
+      },
+    },
     "packages/core": {
       "name": "@ya-skills/core",
       "version": "0.1.0",
@@ -92,6 +102,8 @@
     "@ubjs/node-win32-x64-msvc": ["@ubjs/node-win32-x64-msvc@0.31.0-3", "", { "os": "win32", "cpu": "x64" }, "sha512-wevs+Y+szwcCUT8IJFbB4/1nfxyRv/51l8oG7FGUPWD1xLPyuHfJBG27C+PDeC7KRzes/2n6aLo4DGZbr/LYTw=="],
 
     "@ya-skills/cli": ["@ya-skills/cli@workspace:packages/cli"],
+
+    "@ya-skills/computer-runtime": ["@ya-skills/computer-runtime@workspace:packages/computer-runtime"],
 
     "@ya-skills/core": ["@ya-skills/core@workspace:packages/core"],
 

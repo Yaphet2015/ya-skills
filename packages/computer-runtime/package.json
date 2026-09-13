@@ -1,0 +1,16 @@
+{
+  "name": "@ya-skills/computer-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./src/*": "./src/*"
+  },
+  "dependencies": {
+    "@trycua/cua-driver": "0.27.0"
+  },
+  "optionalDependencies": {
+    "@trycua/cua-driver-darwin-arm64": "0.27.0"
+  }
+}

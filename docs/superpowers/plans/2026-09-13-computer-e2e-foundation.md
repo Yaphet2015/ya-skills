@@ -197,7 +197,7 @@ export class ComputerError extends Error {
 
 另导出 `selectWindow`、`sanitizeElements`、`bigintSafeReplacer`、`ensureOutDir`、`saveScreenshot` 供两个内部入口共用，不放进消费方 Suite 接口。测试通过内部 `createSessionWithBackend(makeBackend, options)` 注入假 backend；不导出到 Skill。
 
-- [ ] **Step 1: 写失败测试。** 假 backend 接口与 Computer 相同的 `apps/windows/snapshot/type/key/scroll`，但点击接受 token：`clickToken(target, token): Promise<void>`；另有 `metadata/permissions/close`。测试文件局部假对象必须提供所有方法，默认未配置方法抛 `unexpected backend call`，而非悄悄成功。
+- [x] **Step 1: 写失败测试。** 假 backend 接口与 Computer 相同的 `apps/windows/snapshot/type/key/scroll`，但点击接受 token：`clickToken(target, token): Promise<void>`；另有 `metadata/permissions/close`。测试文件局部假对象必须提供所有方法，默认未配置方法抛 `unexpected backend call`，而非悄悄成功。
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -217,9 +217,9 @@ test('歧义时绝不投递动作', async () => {
 
 同文件新增：零匹配、缺 token、两次 stale 最多两次投递、非 stale 一次即停、type/key/scroll ToolResult.isError、密码 value 丢弃、数字 value 转字符串、waitFor 直到条件成立、非 degraded 错误立即抛（不能把权限错误吞成轮询）。`waitFor` 只允许 `degraded_snapshot` 作为暂态重读，默认 interval=500ms。
 
-- [ ] **Step 2: 运行 RED。** `bun test tests/computer-runtime.test.ts`。Expected: 模块不存在或接口缺失；不能因 SDK/TCC 缺失而红。
+- [x] **Step 2: 运行 RED。** `bun test tests/computer-runtime.test.ts`。Expected: 模块不存在或接口缺失；不能因 SDK/TCC 缺失而红。
 
-- [ ] **Step 3: 建私有 workspace 并移动已验证逻辑。** package name `@ya-skills/computer-runtime`，`private:true`，`type:module`，`exports:"./src/index.ts"`。此Task先在新包声明Cua依赖（版本按 Global Constraints，native为optionalDependency），A3切换旧入口时再删除旧包依赖声明。迁移中短暂共存不能作为最终发布状态。types中不出现Cowork名字；NodeNext导入使用`.js`。
+- [x] **Step 3: 建私有 workspace 并移动已验证逻辑。** package name `@ya-skills/computer-runtime`，`private:true`，`type:module`，`exports:"./src/index.ts"`。此Task先在新包声明Cua依赖（版本按 Global Constraints，native为optionalDependency），A3切换旧入口时再删除旧包依赖声明。迁移中短暂共存不能作为最终发布状态。types中不出现Cowork名字；NodeNext导入使用`.js`。
 
 `actions.ts` 中点击的核心代码必须保留如下条件，不能统一重试全部异常：
 
@@ -249,7 +249,7 @@ export async function clickUnique(
 
 `sdk.ts` 移入 realpath executable-relative loader 与编译 define 检查；侧载路径保持 `runtime/computer-use/node_modules`，不重命名已交付布局。包内只有此文件动态导入 Cua。
 
-- [ ] **Step 4: 写预算 RED，再实现绝对 deadline 和关闭防护。** 使用依赖注入 `now`/fake backend 控制 load=40ms、create=40ms、work=40ms，总预算100ms时必须失败；不是每个阶段再获得100ms。加载/创建 promise 迟到时必须最终清理创建物，不启动 work。
+- [x] **Step 4: 写预算 RED，再实现绝对 deadline 和关闭防护。** 使用依赖注入 `now`/fake backend 控制 load=40ms、create=40ms、work=40ms，总预算100ms时必须失败；不是每个阶段再获得100ms。加载/创建 promise 迟到时必须最终清理创建物，不启动 work。
 
 ```ts
 // 在每次原生操作开始时执行；load/create/work共用该操作的截止点。
@@ -265,7 +265,7 @@ const remaining = () => {
 
 `waitFor` 是多次只读snapshot组成的轮询，不套单次30秒总上限；它按调用者timeoutMs计算自己的绝对截止点，每次snapshot预算取该剩余时间与30000ms的较小者。必须测试一个60秒等待能在第40秒成功，防止误把整个E2E session限制为30秒。每次方法调用前检查 signal/session closed；动作超时将 session 标不可再用并记录 unknown。关闭幂等，顺序 endSession → shutdown → destroy，在一个5000ms剩余预算内尝试。Promise 超时不等于取消 native；明确禁止其迟到续体再次投递。SDK metadata/permission 使用同一懒加载，无操作的 session 不创建 native。初始化后在同一操作预算内读取metadata并缓存，通过onRuntime通知worker记录SDK版本；重复metadata调用返回缓存，不能为报告在close后重新打开driver。
 
-- [ ] **Step 5: GREEN + typecheck + 提交。** `bun test tests/computer-runtime.test.ts tests/computer-runtime-budget.test.ts && bun run typecheck`。Expected: 所有测试使用假 backend，无 SDK/TCC。将新 package 路径加入 tsconfig 后用 `bun install` 更新 workspace lock（这是开发依赖管理，不是消费方安装要求）。提交 `feat: share computer runtime behind a lazy session`，只 stage 本 Task 文件。
+- [x] **Step 5: GREEN + typecheck + 提交。** `bun test tests/computer-runtime.test.ts tests/computer-runtime-budget.test.ts && bun run typecheck`。Expected: 所有测试使用假 backend，无 SDK/TCC。将新 package 路径加入 tsconfig 后用 `bun install` 更新 workspace lock（这是开发依赖管理，不是消费方安装要求）。提交 `feat: share computer runtime behind a lazy session`，只 stage 本 Task 文件。
 
 ## Task A3: computer-use 改用共享 session，保持用户命令契约
 
