@@ -72,12 +72,25 @@ describe("package:release runtime assembly", () => {
           dependencies: { "@trycua/cua-driver": "0.0.0-fake" }
         })
       );
-      const proc = Bun.spawn([exe, "list"], {
-        cwd: hostile,
-        env: { ...Bun.env, NODE_PATH: "", YA_SKILLS_CATALOG_DIR: join(outDir, "skills") },
-        stdout: "pipe",
-        stderr: "pipe"
-      });
+      const run = (args: string[]) =>
+        Bun.spawn([exe, ...args], {
+          cwd: hostile,
+          env: { ...Bun.env, NODE_PATH: "", YA_SKILLS_CATALOG_DIR: join(outDir, "skills") },
+          stdout: "pipe",
+          stderr: "pipe"
+        });
+      // list AND computer-use --help: with a fake @trycua dependency in
+      // package.json, any SDK import on these paths would fail to resolve —
+      // this is the compiled-level laziness proof.
+      const help = run(["computer-use", "--help"]);
+      const [helpOut, , helpCode] = await Promise.all([
+        new Response(help.stdout).text(),
+        new Response(help.stderr).text(),
+        help.exited
+      ]);
+      expect(helpCode).toBe(0);
+      expect(helpOut).toContain("perceive");
+      const proc = run(["list"]);
       const [stdout, , exitCode] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),

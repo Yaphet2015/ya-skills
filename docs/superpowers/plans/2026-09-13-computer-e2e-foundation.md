@@ -278,7 +278,7 @@ const remaining = () => {
 - Consumes: A2 `createComputerSession`, Computer 方法及共享辅助函数。
 - Produces: 原 doctor/apps/windows/perceive/act flags 与 JSON 不变；原测试导出可暂时经 index re-export，不能留下第二份实现。
 
-- [ ] **Step 1: 写命令级 RED。** 注入 `createSession` 而不是只 stub 整个 runReal；这样测试能覆盖真正操作分支。
+- [x] **Step 1: 写命令级 RED。** 注入 `createSession` 而不是只 stub 整个 runReal；这样测试能覆盖真正操作分支。
 
 ```ts
 // 测试用 fakeComputer 必须由 tests 中的局部工厂提供所有 Computer 方法。
@@ -313,9 +313,9 @@ function makeSession(computer: Computer): ComputerSession {
 
 补 click拒绝、key拒绝、scroll拒绝、超时unknown且无重放、输入非法createSession次数0、help/list/install SDK importer次数0的进程测试。doctor 的参数也走 parseRequest，不能接受未知 flag。
 
-- [ ] **Step 2: 跑 RED。** `bun test tests/computer-use.test.ts tests/computer-use-act.test.ts`。Expected: 尚不支持 createSession 注入而失败。
+- [x] **Step 2: 跑 RED。** `bun test tests/computer-use.test.ts tests/computer-use-act.test.ts`。Expected: 尚不支持 createSession 注入而失败。
 
-- [ ] **Step 3: 最小替换 orchestration。** 参数解析保留；每个命令建立一个 session、finally close。示例：
+- [x] **Step 3: 最小替换 orchestration。** 参数解析保留；每个命令建立一个 session、finally close。示例：
 
 ```ts
 const session = createSession({ deadlineAt: Date.now() + COMMAND_DEADLINE_MS });
@@ -353,9 +353,9 @@ function postActionObserveError(error: unknown): Error {
 
 `scripts/package-release.ts` 的 createRequire 锚点由 functions-computer-use/package.json 改为 computer-runtime/package.json，PINNED/sidecar 不变；更新原测试导入，删除重复实现文件。
 
-- [ ] **Step 4: GREEN 与静态去重。** `bun test tests/computer-use.test.ts tests/computer-use-runtime.test.ts tests/computer-use-act.test.ts && bun run typecheck`。`rg '@trycua/cua-driver|stale_element_token' packages/functions-computer-use/src` 应不再找到 SDK 构造或重复 stale 循环；允许文档/类型 re-export，必须逐个解释。
+- [x] **Step 4: GREEN 与静态去重。** `bun test tests/computer-use.test.ts tests/computer-use-runtime.test.ts tests/computer-use-act.test.ts && bun run typecheck`。`rg '@trycua/cua-driver|stale_element_token' packages/functions-computer-use/src` 应不再找到 SDK 构造或重复 stale 循环；允许文档/类型 re-export，必须逐个解释。
 
-- [ ] **Step 5: 提交。** `git commit -m "refactor: route computer-use through shared runtime"`；stage 仅本 Task 文件及明确的删除项。
+- [x] **Step 5: 提交。** `git commit -m "refactor: route computer-use through shared runtime"`；stage 仅本 Task 文件及明确的删除项。
 
 ## Task A4: 实现有限 Suite 执行契约与可测的失败语义
 

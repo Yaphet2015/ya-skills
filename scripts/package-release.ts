@@ -63,7 +63,7 @@ cpSync(join(root, "skills"), join(outRoot, "skills"), { recursive: true });
 // 3. Copy the four locked runtime packages from the installed tree.
 // @ubjs/* are transitive deps of @trycua/cua-driver, so resolve them from
 // the cua-driver package (bun keeps them in node_modules/.bun).
-const pkgRequire = createRequire(join(root, "packages", "functions-computer-use", "package.json"));
+const pkgRequire = createRequire(join(root, "packages", "computer-runtime", "package.json"));
 const cuaPath = pkgRequire.resolve("@trycua/cua-driver/package.json");
 const cuaRequire = createRequire(cuaPath);
 const resolvePkg = (name: string): string =>

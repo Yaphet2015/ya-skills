@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   compiledSdkUrl,
   isSupportedPlatform,
-  runDoctor,
-  withDriver
+  runDoctor
 } from "@ya-skills/functions-computer-use";
+import { ComputerError, type Computer, type ComputerSession } from "@ya-skills/computer-runtime";
 
 describe("compiled SDK location", () => {
   test("locates the SDK beside the real executable, not the cwd", async () => {
@@ -46,132 +46,35 @@ describe("platform gate", () => {
   });
 });
 
-describe("driver lifecycle", () => {
-  test("always endSession + shutdown + destroys, keeping the primary error", async () => {
-    const calls: string[] = [];
-    const fakeSdk = {
-      CuaDriver: {
-        create() {
-          return {} as never;
-        }
-      }
-    };
-    const fakeDriver = {
-      async endSession() {
-        calls.push("endSession");
-      },
-      async shutdown() {
-        calls.push("shutdown");
-      },
-      uniffiDestroy() {
-        calls.push("destroy");
-      }
-    };
-    const error = await withDriver(
-      {
-        // The work callback throws; cleanup must still run in order.
-        work: async () => {
-          calls.push("work");
-          throw new Error("boom");
-        },
-        load: async () => fakeSdk,
-        create: async () => fakeDriver
-      }
-    ).then(
-      () => null,
-      (e: Error) => e
-    );
-    expect(error?.message).toBe("boom");
-    expect(calls).toEqual(["work", "endSession", "shutdown", "destroy"]);
-  });
+function makeSession(partial: Partial<ComputerSession>, computer: Computer): ComputerSession {
+  return {
+    computer,
+    metadata: async () => ({ driverVersion: "0.27.0", pid: process.pid }),
+    permissions: async () => ({ accessibility: true, screenRecording: true }),
+    close: async () => {},
+    ...partial
+  };
+}
 
-  test("cleanup failures do not mask the primary error", async () => {
-    const error = await withDriver({
-      work: async () => {
-        throw new Error("primary");
-      },
-      load: async () => ({ CuaDriver: { create: () => ({}) as never } }),
-      create: async () => ({
-        async endSession() {
-          throw new Error("cleanup-1");
-        },
-        async shutdown() {
-          throw new Error("cleanup-2");
-        },
-        uniffiDestroy() {}
-      })
-    }).then(
-      () => null,
-      (e: Error) => e
-    );
-    expect(error?.message).toBe("primary");
-  });
+const unexpected = async (): Promise<never> => {
+  throw new Error("unexpected computer call");
+};
+const idleComputer: Computer = {
+  apps: unexpected,
+  windows: unexpected,
+  snapshot: unexpected,
+  click: unexpected,
+  type: unexpected,
+  key: unexpected,
+  scroll: unexpected,
+  waitFor: unexpected
+};
 
-  test("a hanging call is abandoned after the deadline and reported as timeout, never retried", async () => {
-    let workStarted = 0;
-    const error = await withDriver({
-      work: () =>
-        new Promise((_resolve, reject) => {
-          workStarted++;
-          // Never resolves; only the deadline ends it.
-          void reject;
-        }),
-      load: async () => ({ CuaDriver: { create: () => ({}) as never } }),
-      create: async () => ({
-        async endSession() {},
-        async shutdown() {},
-        uniffiDestroy() {}
-      }),
-      deadlineMs: 20
-    }).then(
-      () => null,
-      (e: Error) => e
-    );
-    expect(workStarted).toBe(1);
-    expect(error?.message).toMatch(/timed out|deadline/i);
-  });
-
-  test("a hanging cleanup is abandoned after its own shorter deadline", async () => {
-    const started = Date.now();
-    const error = await withDriver({
-      work: async () => "ok",
-      load: async () => ({ CuaDriver: { create: () => ({}) as never } }),
-      create: async () => ({
-        async endSession() {
-          return new Promise(() => {});
-        },
-        async shutdown() {},
-        uniffiDestroy() {}
-      }),
-      deadlineMs: 1000,
-      cleanupDeadlineMs: 15
-    }).then(
-      () => null,
-      (e: Error) => e
-    );
-    expect(error).toBeNull();
-    expect(Date.now() - started).toBeLessThan(900);
-  });
-});
-
-describe("doctor report", () => {
-  const fakeLoad = async () => ({
-    CuaDriver: { create: () => ({}) as never },
-    currentMacOsPermissionStatus: () => ({ accessibility: true, screenRecording: true })
-  });
-
+describe("doctor report (session-backed)", () => {
   test("ok when platform, sdk, same-process driver, and permissions all pass", async () => {
     const report = await runDoctor({
       platformInfo: { platform: "darwin", arch: "arm64" },
-      load: fakeLoad,
-      create: async () => ({
-        async metadata() {
-          return { driverVersion: "0.27.0", pid: process.pid };
-        },
-        async endSession() {},
-        async shutdown() {},
-        uniffiDestroy() {}
-      })
+      createSession: () => makeSession({}, idleComputer)
     });
     expect(report.ok).toBe(true);
     expect(report.sdk.version).toBe("0.27.0");
@@ -182,48 +85,71 @@ describe("doctor report", () => {
   test("missing permissions keep doctor failing with a grant hint, never a dialog", async () => {
     const report = await runDoctor({
       platformInfo: { platform: "darwin", arch: "arm64" },
-      load: async () => ({
-        CuaDriver: { create: () => ({}) as never },
-        currentMacOsPermissionStatus: () => ({ accessibility: false, screenRecording: true })
-      }),
-      create: async () => ({
-        async metadata() {
-          return { driverVersion: "0.27.0", pid: process.pid };
-        },
-        async endSession() {},
-        async shutdown() {},
-        uniffiDestroy() {}
-      })
+      createSession: () =>
+        makeSession({ permissions: async () => ({ accessibility: false, screenRecording: true }) }, idleComputer)
     });
     expect(report.ok).toBe(false);
     expect(report.permissions.accessibility).toBe(false);
     expect(report.hints.join(" ")).toMatch(/grant Accessibility AND Screen Recording/i);
   });
 
-  test("unsupported platform fails before any sdk load", async () => {
-    let loads = 0;
+  test("a foreign-pid driver is not same-process", async () => {
+    const report = await runDoctor({
+      platformInfo: { platform: "darwin", arch: "arm64" },
+      createSession: () =>
+        makeSession({ metadata: async () => ({ driverVersion: "0.27.0", pid: 999999 }) }, idleComputer)
+    });
+    expect(report.driver.sameProcess).toBe(false);
+    expect(report.ok).toBe(false);
+    expect(report.hints.join(" ")).toMatch(/same-process assumption broken/);
+  });
+
+  test("unsupported platform fails before any session is created", async () => {
+    let sessions = 0;
     const report = await runDoctor({
       platformInfo: { platform: "linux", arch: "arm64" },
-      load: async () => {
-        loads++;
-        return fakeLoad();
+      createSession: () => {
+        sessions++;
+        return makeSession({}, idleComputer);
       }
     });
     expect(report.ok).toBe(false);
-    expect(loads).toBe(0);
+    expect(sessions).toBe(0);
     expect(report.hints.join(" ")).toMatch(/macOS arm64/);
   });
 
   test("missing runtime files point to reinstall, not to a dev checkout", async () => {
     const report = await runDoctor({
       platformInfo: { platform: "darwin", arch: "arm64" },
-      load: async () => {
-        throw new Error("Cannot find module 'file:///nowhere/runtime/computer-use/...'");
-      },
-      execPath: "/opt/homebrew/Cellar/ya-skills/0.18.0/bin/yk"
+      createSession: () =>
+        makeSession(
+          {
+            metadata: async () => {
+              throw new Error("Cannot find module 'file:///nowhere/runtime/computer-use/...'");
+            }
+          },
+          idleComputer
+        )
     });
     expect(report.ok).toBe(false);
     expect(report.hints.join(" ")).toMatch(/reinstall ya-skills/);
-    expect(report.hints.join(" ")).not.toMatch(/cowork/);
+    expect(report.hints.join(" ")).not.toMatch(/cowork/i);
+  });
+
+  test("cleanup failures surface as hints without failing the report", async () => {
+    const report = await runDoctor({
+      platformInfo: { platform: "darwin", arch: "arm64" },
+      createSession: () =>
+        makeSession(
+          {
+            close: async () => {
+              throw new ComputerError("cleanup_failed", "endSession timed out after 5000ms");
+            }
+          },
+          idleComputer
+        )
+    });
+    expect(report.ok).toBe(true);
+    expect(report.hints.join(" ")).toMatch(/cleanup issues/);
   });
 });

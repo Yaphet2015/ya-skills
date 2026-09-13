@@ -1,4 +1,4 @@
-export { createComputerUseCommands } from "./commands.js";
+export { createComputerUseCommands, clickPredicate, normalizeText } from "./commands.js";
 export {
   parseRequest,
   USAGE,
@@ -8,31 +8,20 @@ export {
   type ScrollSpec,
   type ScrollDirection
 } from "./args.js";
+export { COMMAND_DEADLINE_MS, CLEANUP_DEADLINE_MS, runDoctor, type DoctorDeps, type DoctorReport, type PlatformInfo } from "./runtime.js";
+// Desktop primitives live in @ya-skills/computer-runtime now; these
+// re-exports keep the historical import surface of this package working.
 export {
-  COMMAND_DEADLINE_MS,
-  CLEANUP_DEADLINE_MS,
+  bigintSafeReplacer,
   compiledSdkUrl,
+  ensureOutDir,
   isCompiledRuntime,
   isSupportedPlatform,
   loadSdk,
-  runDoctor,
-  withDriver,
-  type DoctorDeps,
-  type DoctorReport,
-  type DriverHarness,
-  type PlatformInfo
-} from "./runtime.js";
-export {
-  selectWindow,
   sanitizeElements,
-  bigintSafeReplacer,
+  saveScreenshot,
+  selectWindow,
+  defaultArtifactsDir,
   type AxElement,
   type WindowRef
-} from "./observe.js";
-export {
-  clickWith,
-  clickPredicate,
-  normalizeText,
-  type ClickDeps
-} from "./act.js";
-export { defaultArtifactsDir, ensureOutDir, artifactPath, saveScreenshot } from "./artifacts.js";
+} from "@ya-skills/computer-runtime";

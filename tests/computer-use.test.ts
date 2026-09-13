@@ -199,3 +199,147 @@ describe("parseRequest rejects before any driver exists", () => {
     expect((req as { windowId?: bigint }).windowId).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// command orchestration through an injected session (no SDK anywhere near)
+
+import { ComputerError, type Computer, type ComputerSession } from "@ya-skills/computer-runtime";
+
+function makeFakeComputer(overrides: Partial<Computer> = {}): Computer {
+  const unexpected = async (): Promise<never> => {
+    throw new Error("unexpected computer call");
+  };
+  return {
+    apps: unexpected,
+    windows: unexpected,
+    snapshot: unexpected,
+    click: unexpected,
+    type: unexpected,
+    key: unexpected,
+    scroll: unexpected,
+    waitFor: unexpected,
+    ...overrides
+  };
+}
+
+function makeSession(computer: Computer): ComputerSession {
+  return {
+    computer,
+    metadata: async () => ({ driverVersion: "0.27.0", pid: process.pid }),
+    permissions: async () => ({ accessibility: true, screenRecording: true }),
+    close: async () => {}
+  };
+}
+
+describe("command orchestration via injected session", () => {
+  test("act delivered but post-observe failure reports actionDelivered and never re-types", async () => {
+    const calls: string[] = [];
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 1, windowId: 2n, title: "Fixture" }],
+      type: async () => {
+        calls.push("type");
+      },
+      snapshot: async () => {
+        throw new Error("observation unavailable");
+      }
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    const action = commands.find((c) => c.action === "act")!;
+    const error = await Promise.resolve(action.run(["--pid", "1", "--type", "hello"])).then(
+      () => null,
+      (e: Error) => e
+    );
+    expect(JSON.parse(error!.message).error.actionDelivered).toBe(true);
+    expect(JSON.parse(error!.message).error.code).toBe("post_action_observe_failed");
+    expect(calls).toEqual(["type"]);
+  });
+
+  test("refused actions surface action_refused without retry", async () => {
+    for (const [flag, method] of [
+      [["--click-text", "Send"], "click"],
+      [["--key", "Return"], "key"],
+      [["--scroll", "down"], "scroll"]
+    ] as const) {
+      let attempts = 0;
+      const computer = makeFakeComputer({
+        windows: async () => [{ pid: 1, windowId: 2n, title: "F" }],
+        [method]: async () => {
+          attempts++;
+          throw new ComputerError("action_refused", `${method} was refused: nope`, "not_delivered");
+        }
+      } as Partial<Computer>);
+      const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+      const action = commands.find((c) => c.action === "act")!;
+      const error = await Promise.resolve(action.run(["--pid", "1", ...flag])).then(
+        () => null,
+        (e: Error) => e
+      );
+      expect(JSON.parse(error!.message).error.code).toBe("action_refused");
+      expect(attempts).toBe(1);
+    }
+  });
+
+  test("an act timeout maps to command_timeout with unknown outcome and a no-replay nextStep", async () => {
+    let attempts = 0;
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 1, windowId: 2n, title: "F" }],
+      type: async () => {
+        attempts++;
+        throw new ComputerError("command_timeout", "type timed out after 30000ms", "unknown");
+      }
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    const action = commands.find((c) => c.action === "act")!;
+    const error = await Promise.resolve(action.run(["--pid", "1", "--type", "x"])).then(
+      () => null,
+      (e: Error) => e
+    );
+    const body = JSON.parse(error!.message).error;
+    expect(body.code).toBe("command_timeout");
+    expect(body.actionOutcome).toBe("unknown");
+    expect(body.nextStep).toMatch(/do NOT repeat the act/);
+    expect(attempts).toBe(1);
+  });
+
+  test("invalid input never creates a session", () => {
+    let sessions = 0;
+    const commands = createComputerUseCommands({
+      createSession: () => {
+        sessions++;
+        return makeSession(makeFakeComputer());
+      }
+    });
+    for (const bad of [["perceive"], ["act"], ["windows"], ["act", "--pid", "1", "--type", "a", "--key", "b"]]) {
+      expect(() => commands.find((c) => c.action === (bad[0] as string))!.run(bad as string[])).toThrow();
+    }
+    expect(sessions).toBe(0);
+  });
+
+  test("doctor rejects unknown flags through the same strict parser", () => {
+    const commands = createComputerUseCommands();
+    expect(() => commands.find((c) => c.action === "doctor")!.run(["--verbose"])).toThrow(/unknown flag|not valid/i);
+  });
+
+  test("windows envelope keeps bigint-safe window ids", async () => {
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 1, windowId: 9876543210987654321n, title: "Big" }]
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    const out = (await commands.find((c) => c.action === "windows")!.run(["--pid", "1"])) as string;
+    expect(JSON.parse(out).windows[0].windowId).toBe("9876543210987654321");
+  });
+
+  test("perceive envelope carries pid, windowId, title, elements", async () => {
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 7, windowId: 9n, title: "Doc" }],
+      snapshot: async () => ({ elements: [{ role: "AXButton", label: "OK" }], title: "Doc" })
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    const out = (await commands.find((c) => c.action === "perceive")!.run(["--pid", "7"])) as string;
+    const body = JSON.parse(out);
+    expect(body.pid).toBe(7);
+    expect(body.windowId).toBe("9");
+    expect(body.title).toBe("Doc");
+    expect(body.elements[0].label).toBe("OK");
+  });
+});

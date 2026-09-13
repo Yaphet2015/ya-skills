@@ -9,9 +9,6 @@
   },
   "dependencies": {
     "@ya-skills/core": "workspace:*",
-    "@trycua/cua-driver": "0.27.0"
-  },
-  "optionalDependencies": {
-    "@trycua/cua-driver-darwin-arm64": "0.27.0"
+    "@ya-skills/computer-runtime": "workspace:*"
   }
 }
