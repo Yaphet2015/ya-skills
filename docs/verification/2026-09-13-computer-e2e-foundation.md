@@ -13,8 +13,24 @@
 | 发布包闭环（PATH=/usr/bin:/bin，无 node/npm/bun） | **PASS** | `YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts`：3 pass / 0 fail —— install → run（外部 TS + 相对导入 + 恶意 package.json）→ 失败 exit 1 / skip exit 2 → history → report；无 node_modules；sdkVersion=null |
 | Node 目标构建 + smoke | **PASS** | `bun run build`、`bun run smoke` exit 0（仅验证既有 help/catalog；Node 不支持 e2e 外部 TS，按设计拒绝） |
 | 独立只读评审 | **PASS（修复后）** | oracle 评审发现 B1/B2/R1 + N1–N8；B1/B2/R1/N1/N2/N3/N5 已修复并回归（commit `9c82335`），N4 已写入文档，N6 见 §4，N7/N8 记录为已知无害冗余 |
-| **真实桌面动作**（click/type/key/scroll 对真实授权窗口） | **未执行** | 需用户明确授权窗口与范围（计划 A7 Step 3），获准前不执行 |
+| **真实桌面动作**（用户授权：Cowork dev 主窗口，pid 50447 / windowId 12850） | **PASS（scroll 为设计内拒绝）** | 见 §1b 真机台账 |
 | **真实 Homebrew 安装** | **未执行** | 需另行授权；且当前 tap 若仍缺 runtime-aware 安装块则正式 brew 交付仍被阻断（`scripts/update-ya-skills-formula.py` 会拒绝更新并要求先更新 tap） |
+
+## 1b. 真机动作台账（2026-09-14，打包 yk，用户授权的 Cowork dev 窗口）
+
+| 动作 | 命令要点 | 结果 |
+|---|---|---|
+| doctor | 打包 yk，SDK 0.27.0 同进程 | PASS（ok:true，双权限 true） |
+| apps / windows / perceive | 定位 Electron dev pid 50447；10 窗口中唯一 `LogosCowork`（12850），按歧义规则显式 `--window` | PASS（286 元素；截图 0600 落 `~/Library/Caches/ya-skills/computer-use/`） |
+| 降级拒绝 | 窗口被遮挡时 perceive | PASS：`degraded_snapshot` 明确报错，未自动激活；用户露出窗口后恢复 |
+| **click** | 后台点击「收起侧边栏」 | PASS：286→165 元素，按钮标签翻转为「展开侧边栏」；再点击还原（286、标签复原、4 个会话项回归） |
+| **type** | 先后台点击 composer 聚焦，再 `--type "cuv7"` | PASS：AX `value == 'cuv7'`（投递+后置断言） |
+| **key** | `--key Backspace` ×4 | PASS：草稿清空，value 回到 placeholder 镜像态（label===value） |
+| **scroll** | 侧栏列表处 `--scroll down --amount 3` | **设计内拒绝**：`action_refused: Background scroll is unavailable for Electron/Chromium windows on macOS.`——诚实失败，非崩溃非假成功。前台变体（需 `--activate`）未执行，遵守"未经明确要求不前台"策略 |
+| 截图读图 | `perceive --shot` + gpt-5.6-luna(max) 子代理读图 | PASS：视觉确认侧栏展开、composer 仅 placeholder、无 `cuv7` 残留、无弹窗/异常；顶栏 `LogosCowork (v1.2.0·预发环境)` |
+| 不重放纪律 | 超时未知投递场景 | 未在真机制造（不对用户窗口人为制造超时）；单元/监督层已覆盖（poison + refused 续体回归测试） |
+
+副作用清理：草稿已清空、侧栏已还原、未发送任何消息、未创建会话（点击「新建会话」一次，业务上空会话未入列表，无残留证据）。焦点观察：click/type 均为 Background 投递；typing 生效说明后台点击建立了窗口焦点而无激活。
 
 ## 2. 门禁原始记录（2026-09-13T15:11:56Z，干净 dist 重建）
 
@@ -61,5 +77,6 @@ smoke: 0
 
 ## 6. 待用户决定
 
-1. 真实桌面动作授权：指定一个非敏感测试窗口与动作范围（后台 click/type/key/scroll + 事后观察），或明确跳过。
-2. 之后再决定是否进入 Cowork 消费计划（Task B1）。
+1. ~~真实桌面动作授权~~ —— 已完成（§1b）。
+2. 是否补测前台 scroll（`--activate`，会短暂抢焦点）——默认不做。
+3. 是否进入 Cowork 消费计划（Task B1）。

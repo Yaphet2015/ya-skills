@@ -638,9 +638,9 @@ bun run smoke
 
 - [x] **Step 1: 重新从干净dist构建并跑纯/发布包门禁。** 不复用之前dist；报告pass/fail/skip分别计数，skip原因具体到native授权项。验收文档代码块保存命令及真实退出码。
 - [x] **Step 2: 独立只读review。** 审查所有共享调用路径、预算、迟到promise、防重放、进程组、报告完整性、生成types、Skill可安装引用、无消费方依赖。按工具协议先发现agent；基础设施失败就停止报告，不偷偷换协议。审查问题修复后再运行相关门禁并复审，不能将首次BLOCK写成“全部修完”而没有证据。
-- [ ] **Step 3: 请求用户指定非敏感窗口及动作范围。** 获准前不执行。授权后用已打包yk做后台click/type/key/scroll与postcondition，验证未知结果不重放；记录权限/焦点/截图行为。未获准则本项明确未执行，不影响提供纯验证产物，但不声称生产验收完成。
-- [ ] **Step 4: 交接第二份计划。** 提供 `YK_BINARY` 的绝对路径与同目录runtime/、skills/；Cowork计划只消费产物，不import ya-skills源码。不自动发布或安装Homebrew；真实brew验证需要另行授权。已有tap若仍缺runtime-aware安装块，则正式Homebrew交付仍被阻断，必须由用户另行安排tap更新；本地tarball通过不等于brew已可用。
-- [ ] **Step 5: 提交验收文档。** `git add docs/verification/2026-09-13-computer-e2e-foundation.md docs/computer-e2e.md && git commit -m "docs: record computer-e2e verification evidence"`。未测项必须留在文档中。
+- [x] **Step 3: 请求用户指定非敏感窗口及动作范围。** 获准前不执行。授权后用已打包yk做后台click/type/key/scroll与postcondition，验证未知结果不重放；记录权限/焦点/截图行为。未获准则本项明确未执行，不影响提供纯验证产物，但不声称生产验收完成。
+- [x] **Step 4: 交接第二份计划。** 提供 `YK_BINARY` 的绝对路径与同目录runtime/、skills/；Cowork计划只消费产物，不import ya-skills源码。不自动发布或安装Homebrew；真实brew验证需要另行授权。已有tap若仍缺runtime-aware安装块，则正式Homebrew交付仍被阻断，必须由用户另行安排tap更新；本地tarball通过不等于brew已可用。
+- [x] **Step 5: 提交验收文档。** `git add docs/verification/2026-09-13-computer-e2e-foundation.md docs/computer-e2e.md && git commit -m "docs: record computer-e2e verification evidence"`。未测项必须留在文档中。
 
 ## Self-review / Coverage
 
