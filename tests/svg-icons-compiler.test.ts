@@ -100,7 +100,7 @@ test("vendored library includes 225 drawings and compiles folder", async () => {
   const { loadLibrary, compileToSvg } = await import(compilerPath);
   const library = loadLibrary(srcDir);
   expect(library).toHaveLength(225);
-  const folder = library.find((icon) => icon.name === "folder");
+  const folder = library.find((icon: { name: string }) => icon.name === "folder");
   expect(folder).toBeDefined();
   const svg = compileToSvg(folder, { library });
   expect(svg).toContain('viewBox="0 0 24 24"');
