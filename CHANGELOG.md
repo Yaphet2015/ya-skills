@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.19.0](https://github.com/Yaphet2015/ya-skills/compare/v0.18.0...v0.19.0) (2026-09-14)
+
+
+### Features
+
+* add eli18 skill ([a0827ea](https://github.com/Yaphet2015/ya-skills/commit/a0827eacb2ba5a9784ac52cc95903a87c7738b8a))
+* add svg-icons catalog skill ([87c6b78](https://github.com/Yaphet2015/ya-skills/commit/87c6b781b4bb9d8d76b5447f498e9ba4181389af))
+* **computer-use:** lazy SDK loader, bounded driver lifecycle, doctor ([8fea91a](https://github.com/Yaphet2015/ya-skills/commit/8fea91a842a81ab33a192f008a1c4ae849f28c86))
+* **computer-use:** perceive/act wiring with privacy and delivery honesty ([15095db](https://github.com/Yaphet2015/ya-skills/commit/15095db68345e746ef35c9798db5f2db03ffa26f))
+* **computer-use:** register domain commands with strict request parser ([e193bdb](https://github.com/Yaphet2015/ya-skills/commit/e193bdba7ffc2c46dfe1b3161f93373eb737376a))
+* execute explicit computer e2e suites sequentially ([9fca463](https://github.com/Yaphet2015/ya-skills/commit/9fca463e6950d110f671f5800bb13c7df2a1a655))
+* **homebrew:** formula installs runtime sidecar into libexec ([85c4622](https://github.com/Yaphet2015/ya-skills/commit/85c462254abac4a2cf97b827b9d83f540ab1f9c8))
+* **release:** sidecar runtime packaging via single package:release entrypoint ([e349ad5](https://github.com/Yaphet2015/ya-skills/commit/e349ad5cb943c983ea742715ef27eb8d2c39d468))
+* share computer runtime behind a lazy session ([b815f8b](https://github.com/Yaphet2015/ya-skills/commit/b815f8b745fbe50ce2b773ac4d8137fec71cd635))
+* ship dependency-free computer-e2e commands and skill ([02ecc6b](https://github.com/Yaphet2015/ya-skills/commit/02ecc6b70cc3d182091c308e8156e33e8614c244))
+* **skill:** installable computer-use skill, docs, and catalog wiring ([2b7826c](https://github.com/Yaphet2015/ya-skills/commit/2b7826c301c0b68b355bd8822fba820942d8c6fd))
+* supervise e2e runs and persist truthful reports ([56a830a](https://github.com/Yaphet2015/ya-skills/commit/56a830a69042ede4e3dc3e08610b2415d700bf58))
+
+
+### Bug Fixes
+
+* assert packaged ykVersion against package.json ([8e1f3fa](https://github.com/Yaphet2015/ya-skills/commit/8e1f3faf2d22872a94bda2bd5ea0ba018df5b7b0))
+* **computer-e2e:** review blockers — cleanup honesty, signal stops, zombie guards ([9c82335](https://github.com/Yaphet2015/ya-skills/commit/9c82335c03168f8632e3503561491738d5acfa18))
+* **computer-e2e:** terminal event carries the post-reduction exit code ([f06950b](https://github.com/Yaphet2015/ya-skills/commit/f06950bf2398bfd019da55c7fc57931e6d6bacef))
+* **computer-use:** review fixes — timeout semantics, packaging test gating, formula shape guard ([ef132fb](https://github.com/Yaphet2015/ya-skills/commit/ef132fb3f08c8b0b0c4729a90a2883ef99470a7d))
+* type the svg-icons library find callback ([c7b5c40](https://github.com/Yaphet2015/ya-skills/commit/c7b5c4083c18e5da8019a4c7d9b43c2d98c67e53))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
