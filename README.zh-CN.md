@@ -51,7 +51,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 - **函数即命令** —— 部分 Skill 的底层逻辑能通过 `yk <domain> <action>` 调用，同一份目录既能驱动 Agent 工作流，也能驱动纯命令行自动化。
 - **感知依赖、绝不破坏** —— `yk install` 会先解析并安装所需 Skill；`yk uninstall` 只删除你指定的内容，绝不会悄悄删除共享依赖。
 - **开箱即用** —— 自带可用 Skill，覆盖基准测试、视频文稿提取和设计追问。
-- **单一编译二进制** —— `yk` 以可 Homebrew 安装的 macOS arm64 二进制形式发布，并内置目录，安装时不依赖源码检出。
+- **单一命令入口** —— `yk` 以可 Homebrew 安装的 macOS arm64 二进制形式发布，并内置目录；computer-use/computer-e2e 等需要原生驱动的领域会随包附带运行资源，安装时不依赖源码检出或额外 Node 运行时。
 - **Bun + TypeScript 单仓多包** —— `packages/core` 负责目录/安装逻辑，`packages/cli` 负责路由，每个 `packages/functions-*` 包负责一个领域。边界清晰、构建快速。
 
 ## 📦 可用 Skills
@@ -62,6 +62,8 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
 | **pbench** | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
+| **computer-use** | 通过后台优先的 AX 感知与操作驱动任意 macOS 桌面应用——检查应用状态、复现 UI 问题、操作可见窗口。仅 macOS arm64。 | `yk install computer-use` |
+| **computer-e2e** | 确定性桌面回放：项目本地 `*.e2e.ts` 套件由同一个 yk 执行，带执行历史与报告——使用方零 npm 安装、零 Node/Vitest/SDK 依赖。依赖 computer-use。 | `yk install computer-e2e` |
 | **eli5** | 当读者完全不懂这个主题来解释：用 HTML artifact，大图、少字。 | `yk install eli5` |
 | **eli18** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli18` |
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
@@ -110,7 +112,7 @@ brew tap Yaphet2015/tap
 brew install ya-skills
 ```
 
-Tap 仓库位于 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。该 formula 会安装编译好的 `yk` 二进制和内置的 `skills/` 目录，并用 `YA_SKILLS_CATALOG_DIR` 包装 `yk`，指向已安装的目录——因此打包安装完全不依赖源码检出布局。
+Tap 仓库位于 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。该 formula 会把编译好的 `yk` 二进制、内置的 `skills/` 目录、以及 `runtime/` 随包资源（Cua Driver SDK 与 macOS arm64 原生库，供 `yk computer-use`/`yk computer-e2e` 使用）装进 `libexec`，并用 `YA_SKILLS_CATALOG_DIR` 包装 `yk` 指向已安装的目录——因此打包安装完全不依赖源码检出布局、`NODE_PATH` 或额外的 Node 运行时。
 
 ### 从源码构建（需要 [Bun](https://bun.sh)）
 
@@ -223,6 +225,9 @@ bun run smoke            # 快速端到端冒烟测试
 - `packages/core` —— 负责共享的目录、安装、卸载、目标检测、依赖解析与函数注册逻辑。
 - `packages/functions-demo` —— 一个很小的 `yk demo <action>` 示例命令包，用于 CLI / function-registry 测试。
 - `packages/functions-pbench` —— 独立的 `yk pbench <action>` 命令包。
+- `packages/computer-runtime` —— computer-use 与 computer-e2e 共享的桌面会话层（持有 Cua SDK 依赖、预算、清理与隐私规则）。
+- `packages/functions-computer-use` —— `yk computer-use <action>` 命令包（在共享运行时之上做薄编排；仅 macOS arm64）。
+- `packages/functions-computer-e2e` —— `yk computer-e2e <run|history|report>` 命令包：套件校验、顺序 worker 监督与执行记录。
 - `skills/` —— 由 `yk install` 安装的本地 skill 目录。
 
 ## 发布
@@ -239,7 +244,7 @@ bun run smoke            # 快速端到端冒烟测试
    - `ya-skills-v<version>-macos-arm64.tar.gz`
    - `ya-skills-v<version>-macos-arm64.tar.gz.sha256`
 
-资源上传放在 Release Please 工作流里执行，因为由默认 `GITHUB_TOKEN` 创建的 tag 不会触发其他工作流。`.github/workflows/release.yml` 仍可用于手动推送 `v*` tag。发布后，请用新的发布资源 URL 和 sha256 更新 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)。不要写 formula `version`；Homebrew 会从 GitHub release URL 读出版本。
+资源上传放在 Release Please 工作流里执行，因为由默认 `GITHUB_TOKEN` 创建的 tag 不会触发其他工作流。`.github/workflows/release.yml` 仍可用于手动推送 `v*` tag。同一工作流会通过 `scripts/update-ya-skills-formula.py` 自动用新的发布资源 URL 和 sha256 更新 [Yaphet2015/homebrew-tap](https://github.com/Yaphet2015/homebrew-tap)；若 tap formula 丢失 runtime 安装块，脚本会明确失败。不要写 formula `version`；Homebrew 会从 GitHub release URL 读出版本。
 
 ## 贡献
 

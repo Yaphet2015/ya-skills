@@ -1,0 +1,2 @@
+export const COMMAND_DEADLINE_MS = 30_000;
+export const CLEANUP_DEADLINE_MS = 5_000;

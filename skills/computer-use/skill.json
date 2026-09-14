@@ -1,0 +1,11 @@
+{
+  "name": "computer-use",
+  "description": "Use when a task needs real desktop UI interaction on macOS, such as inspecting app state, reproducing a UI issue, or operating a visible window.",
+  "functions": [
+    { "domain": "computer-use", "action": "doctor" },
+    { "domain": "computer-use", "action": "apps" },
+    { "domain": "computer-use", "action": "windows" },
+    { "domain": "computer-use", "action": "perceive" },
+    { "domain": "computer-use", "action": "act" }
+  ]
+}

@@ -6,11 +6,22 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { installSkills, loadCatalog, uninstallSkills, type FunctionCommand, type SkillCatalog } from "@ya-skills/core";
+import { runWorkerFromConfig } from "@ya-skills/functions-computer-e2e";
 import { createCliFunctionRegistry } from "./function-registry.js";
 import packageJson from "../../../package.json" with { type: "json" };
 
 async function main(argv: string[]) {
   const [command, ...args] = argv;
+
+  // Internal e2e worker bootstrap: exactly one absolute config path, handled
+  // before any public command or registry import.
+  if (command === "__computer-e2e-worker") {
+    const configPath = args[0];
+    if (args.length !== 1 || !configPath || !configPath.startsWith("/")) {
+      throw new Error("internal worker bootstrap expects exactly one absolute config path");
+    }
+    process.exit(await runWorkerFromConfig(configPath));
+  }
 
   if (!command || isHelpFlag(command)) {
     printHelp();

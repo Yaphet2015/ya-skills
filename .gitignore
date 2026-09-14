@@ -6,3 +6,4 @@ dist/
 SPEC/
 __pycache__/
 *.py[cod]
+ya-skills-v*-macos-arm64.tar.gz*
