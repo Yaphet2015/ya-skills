@@ -75,6 +75,12 @@ smoke: 0
 - Cowork 消费计划：`/Users/phaethon/workspace/temu/cowork-e2e/docs/superpowers/plans/2026-09-13-cowork-e2e-consumer-migration.md`
 - 注意：产物目录是**本地构建**，未发布、未 brew 安装；tap 更新不自动执行。
 
+## 6a. 追记（2026-09-14，消费方迁移评审后）
+
+- 上游修复：`run_finished` 事件载荷此前记录终态前的占位退出码（成功 run 记 1，与 run.json 的 0 矛盾）。已修复并以回归测试锁定（commit 见分支历史）。
+- **交接产物更新**：修复后的重建产物 SHA256 前缀 `ca5348f0b19f1376`（取代 `4960d3ac…`；版本仍 0.18.0）。Cowork 消费方验证以新产物为准。
+- 本地产物由 Bun 1.4.0 构建（run 元数据如实记录）；正式发布由 CI 以钉死的 bun-v1.3.14 构建，发布后应以正式产物复验（残余风险，已记）。
+
 ## 6. 待用户决定
 
 1. ~~真实桌面动作授权~~ —— 已完成（§1b）。
