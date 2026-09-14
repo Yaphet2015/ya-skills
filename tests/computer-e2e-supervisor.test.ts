@@ -257,3 +257,27 @@ describe("zero-case honesty (N1)", () => {
     expect(summary.status).toBe("passed");
   });
 });
+
+describe("terminal event honesty", () => {
+  test("run_finished payload exitCode matches the final reduction for a passing run", async () => {
+    const outDir = tempOut();
+    const suiteDir = mkdtempSync(join(tmpdir(), "yk-term-ok-"));
+    const { writeFileSync } = await import("node:fs");
+    const file = join(suiteDir, "ok.e2e.ts");
+    writeFileSync(file, `export default { apiVersion: 1, id: 'ok', name: 'ok', tests: [{ id: 'only', name: 'only', run() {} }] };\n`);
+    const result = await supervise({
+      files: [file],
+      params: {},
+      outDir,
+      timeoutMs: 30_000
+    });
+    expect(result.exitCode).toBe(0);
+    const events = readFileSync(join(outDir, result.runId, EVENTS_FILE), "utf8");
+    const terminal = events
+      .split("\n")
+      .filter((l) => l.includes('"run_finished"'))
+      .map((l) => JSON.parse(l))
+      .pop() as { payload: { exitCode: number } };
+    expect(terminal.payload.exitCode).toBe(0); // not the pre-terminal placeholder
+  }, 20_000);
+});

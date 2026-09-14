@@ -312,14 +312,27 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
   }
   stopSignal?.removeEventListener("abort", onAbort);
 
-  // Final reduction from the recorded facts, then the terminal event.
+  // Final reduction from the recorded facts, then the terminal event. The
+  // payload's exitCode must match the POST-terminal reduction: a "missing
+  // terminal event" placeholder here would contradict the summary and break
+  // the events-as-single-source-of-truth contract, so compute the final
+  // shape with a synthetic terminal FIRST, then record it for real.
   const eventsSoFar = readFileSync(eventsPath, "utf8")
     .split("\n")
     .filter((line) => line.trim() !== "")
     .map((line) => JSON.parse(line) as RunEvent);
-  const pre = reduceEvents(eventsSoFar);
+  const syntheticTerminal: RunEvent = {
+    schemaVersion: 1,
+    runId,
+    seq: seq + 1,
+    time: "",
+    type: "run_finished",
+    payload: {}
+  };
+  const finalLike = reduceEvents([...eventsSoFar, syntheticTerminal]);
   const terminal = append("run_finished", {
-    exitCode: pre.exitCode,
+    exitCode: finalLike.exitCode,
+    status: finalLike.status,
     skippedFiles: absoluteFiles.filter((f) => !executed.has(f)).map((f) => toDisplayFile(f)),
     workerExitCodes
   });
