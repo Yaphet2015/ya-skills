@@ -17,7 +17,8 @@ import {
   type Target
 } from "@ya-skills/computer-runtime";
 import { parseRequest, type ClickSpec, type ParsedRequest } from "./args.js";
-import { runDoctor, COMMAND_DEADLINE_MS } from "./runtime.js";
+import { COMMAND_DEADLINE_MS } from "./consts.js";
+import { runDoctor } from "./runtime.js";
 
 export type { ComputerSession } from "@ya-skills/computer-runtime";
 

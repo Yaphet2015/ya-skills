@@ -76,7 +76,7 @@ describe("supervise (real child processes, no desktop)", () => {
     const runDir = join(outDir, result.runId);
     expect(existsSync(join(runDir, SUMMARY_FILE))).toBe(true);
     expect(existsSync(join(runDir, REPORT_FILE))).toBe(true);
-    expect(readRun(runDir).summary.exitCode).toBe(2);
+    expect(readRun(runDir).exitCode).toBe(2);
   }, 20_000);
 
   test("an all-passing external suite exits 0 and its sdk metadata stays null", async () => {

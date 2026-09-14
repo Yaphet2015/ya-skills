@@ -301,11 +301,7 @@ export function formatReport(summary: RunSummary): string {
   return `${lines.join("\n")}\n`;
 }
 
-export interface ReadRunResult {
-  summary: RunSummary;
-}
-
-export function readRun(runDir: string): ReadRunResult {
+export function readRun(runDir: string): RunSummary {
   const raw = readFileSync(join(runDir, EVENTS_FILE), "utf8");
   const events: RunEvent[] = [];
   const lines = raw.split("\n");
@@ -324,13 +320,13 @@ export function readRun(runDir: string): ReadRunResult {
           summary.status = "incomplete";
           summary.exitCode = 1;
         }
-        return { summary };
+        return summary;
       }
       const summary = reduceEvents(events);
       summary.errors.push(`events.jsonl contains a corrupt line ${i + 1} — refusing to report success`);
       summary.status = summary.status === "passed" ? "incomplete" : summary.status;
       summary.exitCode = 1;
-      return { summary };
+      return summary;
     }
     if (
       typeof parsed === "object" &&
@@ -344,10 +340,10 @@ export function readRun(runDir: string): ReadRunResult {
       summary.errors.push(`events.jsonl line ${i + 1} is not a valid event — refusing to report success`);
       summary.status = summary.status === "passed" ? "incomplete" : summary.status;
       summary.exitCode = 1;
-      return { summary };
+      return summary;
     }
   }
-  return { summary: reduceEvents(events) };
+  return reduceEvents(events);
 }
 
 export async function readHistory(outDir: string, limit: number): Promise<RunSummary[]> {
@@ -366,7 +362,7 @@ export async function readHistory(outDir: string, limit: number): Promise<RunSum
     if (summaries.length >= limit) break;
     const runDir = join(outDir, name);
     try {
-      summaries.push(readRun(runDir).summary);
+      summaries.push(readRun(runDir));
     } catch {
       // a directory without readable events.jsonl is not a run; skip it
     }

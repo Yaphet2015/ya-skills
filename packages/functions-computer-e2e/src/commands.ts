@@ -66,7 +66,7 @@ export function createComputerE2ECommands(): FunctionCommand[] {
       description: "Render one run's Markdown report: yk computer-e2e report <run-dir>.",
       run: async (args: string[]) => {
         const request = parseE2EArgs("report", args);
-        return formatReport(readRun(request.runDir).summary);
+        return formatReport(readRun(request.runDir));
       }
     }
   ];

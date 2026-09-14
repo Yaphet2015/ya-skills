@@ -8,7 +8,8 @@ export {
   type ScrollSpec,
   type ScrollDirection
 } from "./args.js";
-export { COMMAND_DEADLINE_MS, CLEANUP_DEADLINE_MS, runDoctor, type DoctorDeps, type DoctorReport, type PlatformInfo } from "./runtime.js";
+export { COMMAND_DEADLINE_MS, CLEANUP_DEADLINE_MS } from "./consts.js";
+export { runDoctor, type DoctorDeps, type DoctorReport, type PlatformInfo } from "./runtime.js";
 // Desktop primitives live in @ya-skills/computer-runtime now; these
 // re-exports keep the historical import surface of this package working.
 export {

@@ -43,7 +43,6 @@ export {
   readHistory,
   readRun,
   reduceEvents,
-  type ReadRunResult,
   type RunEvent,
   type RunSummary
 } from "./history.js";

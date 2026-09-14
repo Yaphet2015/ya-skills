@@ -169,8 +169,8 @@ describe("run directory records", () => {
         eventLine(ev(4, "case_finished", { file: "x.e2e.ts", id: "x", status: "skipped", reason: "why" }, b.runId)) +
         eventLine(FINISH(5, { exitCode: 2 }, b.runId))
     );
-    const summaryA = readRun(a.runDir).summary;
-    const summaryB = readRun(b.runDir).summary;
+    const summaryA = readRun(a.runDir);
+    const summaryB = readRun(b.runDir);
     expect(summaryA.counts.passed).toBe(0);
     expect(summaryA.status).toBe("passed");
     expect(summaryB.counts.skipped).toBe(1);
@@ -197,7 +197,7 @@ describe("run directory records", () => {
         eventLine(CASE_DONE(4, "a.e2e.ts", "a", "passed")) +
         '{"schemaVersion":1,"runId":"r","seq":5,"time":"t","type":"run_fin'
     );
-    const summary = readRun(runDir).summary;
+    const summary = readRun(runDir);
     expect(summary.counts.passed).toBe(1);
     expect(summary.status).toBe("incomplete");
     expect(summary.errors.join(" ")).toMatch(/truncated/);
@@ -212,7 +212,7 @@ describe("run directory records", () => {
         "NOT JSON AT ALL\n" +
         eventLine(FINISH(2))
     );
-    const summary = readRun(runDir).summary;
+    const summary = readRun(runDir);
     expect(summary.status).not.toBe("passed");
     expect(summary.errors.join(" ")).toMatch(/corrupt|not a valid event/);
   });

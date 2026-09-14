@@ -11,8 +11,6 @@ import {
 
 export { compiledSdkUrl, isCompiledRuntime, isSupportedPlatform, loadSdk } from "@ya-skills/computer-runtime";
 
-export { COMMAND_DEADLINE_MS, CLEANUP_DEADLINE_MS } from "./consts.js";
-
 export interface DoctorReport {
   ok: boolean;
   platform: string;
