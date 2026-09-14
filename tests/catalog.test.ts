@@ -155,6 +155,14 @@ test("root catalog exposes the a-share-data skill", async () => {
   expect(aShareData?.functions).toEqual([]);
 });
 
+test("root catalog exposes the svg-icons skill without CLI functions", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const svgIcons = catalog.byName.get("svg-icons");
+
+  expect(svgIcons?.description).toContain("/svg-icons");
+  expect(svgIcons?.functions).toEqual([]);
+});
+
 test("root catalog exposes the show-pr skill as manual-only", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const showPr = catalog.byName.get("show-pr");

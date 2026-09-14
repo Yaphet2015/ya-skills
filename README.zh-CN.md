@@ -68,6 +68,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **eli18** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli18` |
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
 | **validator** | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
+| **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |
 
 > `pbench-runner` 是内部资产，会由 `yk pbench run --manual`（或兼容的 `start` 命令）自动安装，无需从目录手动安装。
 
