@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import packageJson from "../package.json" with { type: "json" };
 
 // The packaged closed loop, desktop-free: install the skill from the
 // packaged catalog, run external suites with the compiled yk under a
@@ -68,7 +69,7 @@ describe("packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH
       expect(summary.counts.passed).toBe(1);
       expect(summary.counts.skipped).toBe(1);
       expect(summary.metadata.sdkVersion).toBeNull(); // pure suites never load native
-      expect(summary.metadata.ykVersion).toBe("0.18.0");
+      expect(summary.metadata.ykVersion).toBe(packageJson.version);
 
       // A failing suite exits 1 and names the case.
       const failing = join(consumer, "fail.e2e.ts");
