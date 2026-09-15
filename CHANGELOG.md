@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/Yaphet2015/ya-skills/compare/v0.20.0...v0.21.0) (2026-09-15)
+
+
+### Features
+
+* compact yk list and shorten catalog skill descriptions ([17f0cfd](https://github.com/Yaphet2015/ya-skills/commit/17f0cfd1b41e4bdb5c75da6072c1191d5ee448d9))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
