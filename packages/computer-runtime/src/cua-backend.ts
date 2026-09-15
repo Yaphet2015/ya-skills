@@ -6,6 +6,8 @@ import { spawnSync } from "node:child_process";
 import type {
   AppRef,
   Backend,
+  NativeObservationLike,
+  Point,
   ScrollDirection,
   ScrollSpec,
   Snapshot,
@@ -17,6 +19,16 @@ import type { ComputerSession, SessionOptions } from "./session.js";
 import { ComputerError, createSessionWithBackend } from "./session.js";
 import { isSupportedPlatform, loadSdk } from "./sdk.js";
 import { normalizeElements, sanitizeElements } from "./observe.js";
+
+// The SDK's WindowStateOutput with the session-injected metadata re-attached.
+// Type import only — this alias never enters the generated public api list.
+import type { WindowStateOutput } from "@trycua/cua-driver";
+export type NativeObservation = WindowStateOutput & {
+  observationId: string;
+  capturedAt: number;
+  epoch: string;
+  revision: number;
+};
 
 type Sdk = typeof import("@trycua/cua-driver");
 
@@ -108,6 +120,50 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
         title: state.windowTitle ?? "",
         ...(imageBase64 ? { imageBase64 } : {})
       };
+    },
+
+    // Agentic observation path: unlike snapshot(), degraded AX is NOT an
+    // error here — channels are returned as the driver produced them and
+    // validity is projected per channel (see observe.ts). Verified A1 facts:
+    // windowBounds/screenshot dims only come back with the screenshot
+    // channel; at least one channel is required (InvalidArguments otherwise).
+    async observe(
+      target: Target,
+      options: { accessibility: boolean; screenshot: boolean; maxDimension?: number }
+    ): Promise<NativeObservationLike> {
+      if (!options.accessibility && !options.screenshot) {
+        throw new ComputerError(
+          "invalid_request",
+          "observe requires at least one channel (accessibility or screenshot)"
+        );
+      }
+      wakeAxOnce(target.pid, woken);
+      const state = (await driver.getWindowState(
+        sdk.GetWindowStateInput.new({
+          pid: target.pid,
+          windowId: target.windowId,
+          includeAccessibilityTree: options.accessibility,
+          includeScreenshot: options.screenshot,
+          ...(options.maxDimension !== undefined ? { maxDimension: options.maxDimension } : {})
+        }) as never
+      )) as NativeObservation;
+      return state as unknown as NativeObservationLike;
+    },
+
+    // Window-local PIXEL coordinates (screenshot space, top-left origin) —
+    // the unit verified by the A1 probe. The session layer maps/validates
+    // observation coordinates into this space before calling.
+    async clickPoint(target: Target, point: Point): Promise<ToolResultLike> {
+      const result = await driver.click(
+        sdk.ClickInput.new({
+          target: windowTarget(target),
+          position: new sdk.ClickPosition.Coordinates({ x: point.x, y: point.y }),
+          deliveryMode: sdk.InputDeliveryMode.Background,
+          button: sdk.ClickButton.Left,
+          count: 1
+        }) as never
+      );
+      return (result ?? { isError: false }) as ToolResultLike;
     },
 
     async clickToken(target: Target, token: string): Promise<ToolResultLike> {

@@ -16,10 +16,22 @@ export async function clickUnique(
   for (let attempt = 0; ; attempt++) {
     const matches = (await deps.snapshot()).filter(predicate);
     if (matches.length !== 1) {
-      throw new Error(`expected exactly one ${description}, found ${matches.length}`);
+      // Pre-dispatch lookup failure: nothing was sent to the driver, so the
+      // outcome is not_delivered — never unknown native delivery.
+      throw new ComputerError(
+        "no_unique_match",
+        `expected exactly one ${description}, found ${matches.length} — refine the selector or re-observe`,
+        "not_delivered"
+      );
     }
     const token = matches[0]!.elementToken;
-    if (!token) throw new Error(`matched element has no elementToken (${description})`);
+    if (!token) {
+      throw new ComputerError(
+        "no_unique_match",
+        `matched element has no elementToken (${description}) — re-observe and retry`,
+        "not_delivered"
+      );
+    }
     try {
       await deps.click(token);
       return;

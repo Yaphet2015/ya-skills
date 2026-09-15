@@ -6,11 +6,14 @@ import { mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  createAutoLeases,
   createComputerSession,
+  createObservationStore,
   saveScreenshot,
   type ComputerSession,
   type Target
 } from "@ya-skills/computer-runtime";
+import { sessionRoot } from "@ya-skills/computer-session";
 import { exitCodeFor, runSuite, validateSuite } from "./suite.js";
 import type { CaseContext, WorkerEvent } from "./types.js";
 
@@ -45,8 +48,17 @@ export async function workerMain(config: WorkerConfig): Promise<number> {
   const runDir = dirname(config.artifactsDir);
   const relFromRun = (abs: string): string => relative(runDir, abs);
 
+  // Run-private observation store + shared target leases: visual clicks
+  // (observe → clickPoint) work inside a run, and an active session's lease
+  // refuses concurrent E2E mutations against the same app (B3 shared
+  // ownership across every entry path).
+  const observationStore = createObservationStore(join(config.artifactsDir, "observations"));
+  const leases = createAutoLeases(sessionRoot(), "e2e");
   const session: ComputerSession = createComputerSession({
     signal: controller.signal,
+    artifactsDir: config.artifactsDir,
+    observationStore,
+    leases,
     onRuntime: (info) => emit({ type: "runtime", payload: { sdkVersion: info.driverVersion } }),
     onAction: (event) => {
       if (event.phase === "started") {
@@ -119,15 +131,25 @@ export async function workerMain(config: WorkerConfig): Promise<number> {
     console.error(`[worker] suite crashed: ${error instanceof Error ? error.message : String(error)}`);
     exitCode = 1;
   }
+  let sessionCleanupSucceeded = true;
   try {
     await session.close();
   } catch (error) {
     // Cleanup failures must not turn a passing run into a silent pass:
     // they ride the event stream so the reduction can never report 0.
+    // Do NOT call releaseAll after this: the runtime deliberately retains the
+    // target lease when native termination is not proven.
+    sessionCleanupSucceeded = false;
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[worker] session cleanup failed: ${message}`);
     emit({ type: "hook_finished", payload: { hook: "session-close", status: "failed", reason: `session cleanup failed: ${message}` } });
     exitCode = 1;
+  }
+  if (sessionCleanupSucceeded) try {
+    await leases.releaseAll();
+  } catch (error) {
+    console.error(`[worker] lease release failed: ${error instanceof Error ? error.message : String(error)}`);
+    exitCode = exitCode === 0 ? 1 : exitCode;
   }
   return exitCode;
 }

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, isAbsolute } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { installSkills, loadCatalog, uninstallSkills, type FunctionCommand, type SkillCatalog } from "@ya-skills/core";
 import { runWorkerFromConfig } from "@ya-skills/functions-computer-e2e";
+import { driverWorkerMain, execWorkerMain, hostMain } from "@ya-skills/computer-session";
 import { createCliFunctionRegistry } from "./function-registry.js";
 import packageJson from "../../../package.json" with { type: "json" };
 
@@ -21,6 +22,22 @@ async function main(argv: string[]) {
       throw new Error("internal worker bootstrap expects exactly one absolute config path");
     }
     process.exit(await runWorkerFromConfig(configPath));
+  }
+
+  // Internal session host / worker bootstraps: same strict shape as the
+  // e2e worker. No public help surface, no SDK loading before dispatch.
+  if (command === "__computer-session-host" || command === "__computer-driver-worker" || command === "__computer-exec-worker") {
+    const configPath = args[0];
+    if (args.length !== 1 || !configPath || !isAbsolute(configPath)) {
+      throw new Error(`internal ${command} bootstrap expects exactly one absolute config path`);
+    }
+    process.exit(
+      command === "__computer-session-host"
+        ? await hostMain(configPath)
+        : command === "__computer-driver-worker"
+          ? await driverWorkerMain(configPath)
+          : await execWorkerMain(configPath)
+    );
   }
 
   if (!command || isHelpFlag(command)) {

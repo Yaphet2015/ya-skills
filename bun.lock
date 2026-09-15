@@ -33,6 +33,13 @@
         "@trycua/cua-driver-darwin-arm64": "0.27.0",
       },
     },
+    "packages/computer-session": {
+      "name": "@ya-skills/computer-session",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ya-skills/computer-runtime": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@ya-skills/core",
       "version": "0.1.0",
@@ -42,6 +49,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@ya-skills/computer-runtime": "workspace:*",
+        "@ya-skills/computer-session": "workspace:*",
       },
     },
     "packages/functions-computer-use": {
@@ -49,6 +57,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@ya-skills/computer-runtime": "workspace:*",
+        "@ya-skills/computer-session": "workspace:*",
         "@ya-skills/core": "workspace:*",
       },
     },
@@ -109,6 +118,8 @@
     "@ya-skills/cli": ["@ya-skills/cli@workspace:packages/cli"],
 
     "@ya-skills/computer-runtime": ["@ya-skills/computer-runtime@workspace:packages/computer-runtime"],
+
+    "@ya-skills/computer-session": ["@ya-skills/computer-session@workspace:packages/computer-session"],
 
     "@ya-skills/core": ["@ya-skills/core@workspace:packages/core"],
 

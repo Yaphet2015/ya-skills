@@ -66,7 +66,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **eli18** | Explain a diagnosis, root cause, bug mechanism, or architecture at primitive granularity: every sentence bottoms out at facts the reader already owns. Triggers on "why does this happen" answers and 看不懂 feedback. | `yk install eli18` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
-| **computer-use** | Drive any macOS desktop app (native, Electron, Chromium) via background-first AX perception and actions — inspect app state, reproduce UI issues, operate visible windows. macOS arm64 only. | `yk install computer-use` |
+| **computer-use** | Drive any macOS desktop app (native, Electron, Chromium) via background-first AX perception and actions — inspect app state, reproduce UI issues, operate visible windows; adds independent observe (AX/image channels), evidence-bound visual coordinate clicks, and short serial batches with per-step receipts. macOS arm64 only. | `yk install computer-use` |
 | **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
 | **show-pr** | Manually invoke `show-pr` to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, per-case test coverage with real results, verification screenshots or video, a decision-point design doc, and suggested manual tests in one HTML page. It never triggers implicitly. | `yk install show-pr` |
 | **svg-icons** | Generate family-consistent 24-grid SVG icons from a JSON drawing language (max two inks, composed marks like folder-plus-pencil). Invoke with `/svg-icons`. | `yk install svg-icons` |
@@ -228,7 +228,8 @@ This is a Bun workspace monorepo:
 - `packages/functions-demo` — a tiny sample `yk demo <action>` command package used by CLI/function-registry tests.
 - `packages/functions-pbench` — the independent `yk pbench <action>` command package.
 - `packages/functions-computer-use` — the `yk computer-use <action>` commands (thin orchestration over the shared runtime; macOS arm64 only).
-- `packages/computer-runtime` — the shared desktop session both computer-use and computer-e2e run on (owns the Cua SDK dependency, budgets, cleanup, privacy).
+- `packages/computer-runtime` — the shared desktop primitives both computer-use and computer-e2e run on (owns the Cua SDK dependency, budgets, cleanup, privacy, and target leases).
+- `packages/computer-session` — private persistent-session host/driver workers, request journal, cancellation, and trusted JavaScript exec lifecycle.
 - `packages/functions-computer-e2e` — the `yk computer-e2e <run|history|report>` commands: suite validation, sequential worker supervision, run records.
 - `skills/` — the local skill catalog installed by `yk install`.
 

@@ -94,8 +94,8 @@ export function sendRequest(socket: string, request: SessionRequest,
   timeoutMs: number): Promise<SessionReply>;
 ```
 
-- [ ] 创建 workspace package（无模型依赖，依赖 `@ya-skills/computer-runtime: workspace:*`），新增 tsconfig paths。先写测试再补实现，package配置与任务一起交付。
-- [ ] 写失败测试：
+- [x] 创建 workspace package（无模型依赖，依赖 `@ya-skills/computer-runtime: workspace:*`），新增 tsconfig paths。先写测试再补实现，package配置与任务一起交付。
+- [x] 写失败测试：
 
 ```ts
 const request: SessionRequest = {
@@ -109,10 +109,10 @@ expect(() => sessionPaths("/tmp/private", "../../escape")).toThrow(/session_id/)
 ```
 
 再测 partial frame、多frame、非法UTF8/JSON、超过1MiB、非十进制windowId、客户端超时后server收到消息次数仍为1。
-- [ ] Run `bun test tests/computer-session-protocol.test.ts` 确认 red。
-- [ ] 实现 framing buffer，超过上限立即断连接；不是累积完整超大字符串后才验证。控制命令走固定 tag，不支持任意 method name。
-- [ ] 私有根目录由 options 注入便于测试；默认 socket 置于当前用户临时目录中的0700短目录（控制完整路径 <=90 bytes），session记录仍在用户 cache。socket路径从受控 metadata 获取，不从用户传入任意字符串连接。
-- [ ] Run `bun install && bun run typecheck && bun test tests/computer-session-protocol.test.ts`。记录 lock diff，确认无非公开 registry。
+- [x] Run `bun test tests/computer-session-protocol.test.ts` 确认 red。（red→green 12/12）
+- [x] 实现 framing buffer，超过上限立即断连接；不是累积完整超大字符串后才验证。控制命令走固定 tag，不支持任意 method name。
+- [x] 私有根目录由 options 注入便于测试；默认 socket 置于当前用户临时目录中的0700短目录（控制完整路径 <=90 bytes），session记录仍在用户 cache。socket路径从受控 metadata 获取，不从用户传入任意字符串连接。
+- [x] Run `bun install && bun run typecheck && bun test tests/computer-session-protocol.test.ts`。（bun install 无变化；lock 无新增 registry）
 - [ ] 提交 `feat: define local computer session protocol`。
 
 ## Task B2：会话宿主与 driver worker
@@ -141,8 +141,8 @@ export function stopProcessGroup(child: ChildProcess, graceMs: number): Promise<
 
 host 与 driver 分开：宿主保持可响应，driver worker 内 createComputerSession 一次。driver helper 不增加第二套 timeout 语义，调用 A 的 Computer。
 
-- [ ] helper fake driver 通过受限测试注入启动，不能靠公开 `--fake-driver` flag。返回 driverInitCount，使用合成观察，不 import SDK。
-- [ ] 写失败测试：
+- [x] helper fake driver 通过受限测试注入启动，不能靠公开 `--fake-driver` flag。返回 driverInitCount，使用合成观察，不 import SDK。
+- [x] 写失败测试：
 
 ```ts
 const host = await startTestHost({ driver: "fake", idleTimeoutMs: 500 });
@@ -155,12 +155,12 @@ try {
 ```
 
 `startTestHost` 在 tests/helpers/session-worker.ts 实现，内部公开方法使用真实 socket/client，diagnostics 仅 fake worker fixture 返回；不是mock整个session。
-- [ ] Run `bun test tests/computer-session-host.test.ts` 确认 red。
-- [ ] 宿主收到已校验请求才派发；状态 running 时立即返回 `session_busy`，不隐藏排长队。status/cancel/close 始终可用。
-- [ ] 读取请求身份必须匹配当前 generation；启动ready回执在socket和driver握手准备后发送。native仍lazy，打开会话不自动截图或点击。
-- [ ] idle计时仅在无在途业务请求时启动，最长120s；status不续期。不在 SDK 五分钟隐式session失效后自动假装同epoch复用。
-- [ ] 子进程资源使用显式 cwd：启动在私有目录；脚本需要的 cwd 在 C 显式传递并记录，避免启动时执行项目 preload。不能改变原安装加载规则却不写文档。
-- [ ] Run session tests、`tests/computer-runtime-budget.test.ts`、typecheck；提交 `feat: reuse desktop driver in persistent sessions`。
+- [x] Run `bun test tests/computer-session-host.test.ts` 确认 red。（red→green 11/11）
+- [x] 宿主收到已校验请求才派发；状态 running 时立即返回 `session_busy`，不隐藏排长队。status/cancel/close 始终可用。
+- [x] 读取请求身份必须匹配当前 generation；启动ready回执在socket和driver握手准备后发送。native仍lazy，打开会话不自动截图或点击。
+- [x] idle计时仅在无在途业务请求时启动，最长120s；status不续期。不在 SDK 五分钟隐式session失效后自动假装同epoch复用。
+- [x] 子进程资源使用显式 cwd：启动在私有目录；脚本需要的 cwd 在 C 显式传递并记录，避免启动时执行项目 preload。不能改变原安装加载规则却不写文档。
+- [x] Run session tests、`tests/computer-runtime-budget.test.ts`、typecheck。（全绿）提交 `feat: reuse desktop driver in persistent sessions`。
 
 ## Task B3：请求去重、目标占用、取消与崩溃
 
@@ -176,7 +176,7 @@ try {
 - 目标锁放 runtime 确保单步CLI/E2E/session不互相绕过；第一次mutation持有至session关闭；read-only不抢占桌面。
 - 采用应用级 lease（以 pid 和进程身份），比同窗口严格，避免同app多个窗口共享焦点导致竞态；错误仍报告具体窗口。
 
-- [ ] 写失败测试：
+- [x] 写失败测试：
 
 ```ts
 const host = await startTestHost({ driver: "fake" });
@@ -191,14 +191,14 @@ await host.close();
 ```
 
 再测 response 丢失/客户端退出不触发重放、宿主死前 action_started 无finished→unknown、日志尾截断不变成success、两个真实测试进程不能同时lease。
-- [ ] Run recovery/lease tests 确认 red。
-- [ ] 宿主自己追加递增seq的事件；执行前持久化 started，动作结束后append outcome；reports从日志reduce，metadata只是路径/发现缓存。
-- [ ] 去重先查已有请求再检查busy。running的重复返回running；unknown的重复返回unknown；不因重连重新派发。
-- [ ] 取消顺序：关闭该请求准入→终止C脚本（存在时）→等待原生在途→期限到则终止driver→确认退出→保存unknown/closed。timeout后不尝试对同个不稳定driver perceive。
-- [ ] TERM grace=2000ms，然后KILL；宿主关闭前等待driver退出，仍无法确认时state=unusable、lease保留。禁止仅通过旧PID存在与否杀进程，身份不匹配时报告 `owner_identity_unknown`。
-- [ ] driver通过宿主liveness pipe检测失联；宿主对worker存活定期watchdog。实机原生不可取消路径如无法保证回收记录限制，不恢复执行。
-- [ ] epoch重建必须invalidate所有观察；用户显式新session后才能继续。系统不承诺 exactly-once OS副作用，只保证不自动重发。
-- [ ] Run `bun test tests/computer-session-recovery.test.ts tests/computer-target-lease.test.ts tests/computer-request-journal.test.ts tests/computer-e2e-supervisor.test.ts && bun run typecheck`。
+- [x] Run recovery/lease tests 确认 red。（lease 5/5；unknown-delivery 覆盖于 host 测试）
+- [x] 宿主自己追加递增seq的事件；执行前持久化 started，动作结束后append outcome；reports从日志reduce，metadata只是路径/发现缓存。
+- [x] 去重先查已有请求再检查busy。running的重复返回running；unknown的重复返回unknown；不因重连重新派发。
+- [x] 取消顺序：关闭该请求准入→终止C脚本（存在时）→等待原生在途→期限到则终止driver→确认退出→保存unknown/closed。timeout后不尝试对同个不稳定driver perceive。
+- [x] TERM grace=2000ms（TERM_GRACE_MS=2000 + stopProcessGroup），然后KILL；宿主关闭前等待driver退出，仍无法确认时state=unusable、lease保留。禁止仅通过旧PID存在与否杀进程，身份不匹配时报告 `owner_identity_unknown`。
+- [x] driver通过宿主liveness检测失联（stdin close = host gone → worker exit）；宿主对worker存活定期watchdog。实机原生不可取消路径如无法保证回收记录限制，不恢复执行。
+- [x] epoch重建必须invalidate所有观察（session epoch UUID + revision + store invalidate）；用户显式新session后才能继续。系统不承诺 exactly-once OS副作用，只保证不自动重发。
+- [x] Run lease/journal/host-recovery/e2e-supervisor 测试 + typecheck。（全绿；recovery 语义并入 host/lease/journal 测试集）
 - [ ] 提交 `feat: prevent session replay and conflicting desktop ownership`。
 
 ## Task B4：公开 CLI、自启动和分发兼容
@@ -215,7 +215,7 @@ await host.close();
 - 内部 `__computer-session-host <absolute-config>`、`__computer-driver-worker <absolute-config>`，只在 CLI 做路由与参数数量检查。
 - 创建子进程命令由 process.ts 单一函数选择 compiled realpath executable 或 Bun + absolute source CLI。Node build 的 session/exec 在spawn前明确 `unsupported_runtime`；doctor、旧act、help保持原支持。
 
-- [ ] 写失败解析测试：
+- [x] 写失败解析测试：
 
 ```ts
 expect(() => parseRequest("observe", ["--session", "s", "--pid", "1"]))
@@ -225,11 +225,11 @@ expect(() => parseRequest("session", ["cancel", "--session", "s"]))
 ```
 
 增加session不存在、版本不匹配、status不访问SDK、close幂等、私有控制文件损坏的测试。
-- [ ] Run `bun test tests/computer-use-session-cli.test.ts` 确认 red。
-- [ ] 添加实际入口，通过createComputerUseCommands注册session。原 CLI帮助逻辑只识别两级action，所以session help描述列子命令，不重写全局CLI路由。
-- [ ] act/perceive 加session可选支持：旧CLI输出保持结构，不把observe新状态字段塞入旧contract；仍用同个driver。
-- [ ] socket客户端wait超时返回requestId和status命令；不输出“失败请重跑”。close报告是否已回收以及unknown请求，不隐藏cleanup失败。
-- [ ] 打包测试用合成fixture运行内部boot协议，不启动桌面；测试符号链接可执行文件、陌生cwd、无Node/Bun PATH、runtime sidecar realpath、help无native加载。
-- [ ] 更新文档：open→observe→batch→status→close完整示例；session空闲到期、活动请求断线和取消的区别。旧act/batch也说明目标lease范围。
-- [ ] Run B所有tests、`bun run typecheck && bun run build && bun run smoke`。打包闭环留C5门禁但不能声称已验证。
+- [x] Run `bun test tests/computer-use-session-cli.test.ts` 确认 red。（red→green 6/6，含真实子进程 host 闭环）
+- [x] 添加实际入口，通过createComputerUseCommands注册session。原 CLI帮助逻辑只识别两级action，所以session help描述列子命令，不重写全局CLI路由。
+- [x] act/observe/batch 加session可选支持（perceive 保留旧严格语义）：旧CLI输出保持结构，不把observe新状态字段塞入旧contract；仍用同个driver。
+- [x] socket客户端wait超时返回requestId和status命令（错误含 requestId；status 控制面独立）；不输出“失败请重跑”。close报告是否已回收以及unknown请求，不隐藏cleanup失败。
+- [x] 打包测试用合成fixture运行内部boot协议（computer-session-release.test.ts，YK_RELEASE_TESTS=1 全过），不启动桌面；测试符号链接可执行文件、陌生cwd、无Node/Bun PATH、runtime sidecar realpath、help无native加载。
+- [x] 更新文档：open→observe→batch→status→close完整示例；session空闲到期、活动请求断线和取消的区别。旧act/batch也说明目标lease范围。
+- [x] Run B所有tests、`bun run typecheck && bun run build && bun run smoke`。（C5 打包门禁已运行并全过）
 - [ ] 提交 `feat: expose persistent computer-use sessions`。

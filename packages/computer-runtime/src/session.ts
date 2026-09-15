@@ -7,7 +7,13 @@ import type {
   AxElement,
   Backend,
   BackendFactory,
+  BatchRequest,
+  BatchResult,
   Computer,
+  NativeObservationLike,
+  ObserveOptions,
+  Observation,
+  PointClick,
   Predicate,
   ScrollSpec,
   Snapshot,
@@ -16,6 +22,14 @@ import type {
   WindowRef
 } from "./types.js";
 import { clickUnique, waitForElements } from "./actions.js";
+import { normalizeElements, projectObservation } from "./observe.js";
+import { artifactPath, ensureOutDir, saveScreenshot } from "./artifacts.js";
+import { copyFileSync, statSync } from "node:fs";
+import { mapImagePointToDriverPixels } from "./coordinates.js";
+import { frameMatchesObservation, pngSha256, type ObservationStore } from "./observation-store.js";
+import { validateBatch, runBatch, DEFAULT_BATCH_TIMEOUT_MS } from "./batch.js";
+import { acquireTargetLease, LeaseError, type LeaseHandle, type LeaseOwner } from "./target-lease.js";
+import { randomUUID } from "node:crypto";
 
 export type { AxElement, Backend, BackendFactory, ToolResultLike } from "./types.js";
 
@@ -32,16 +46,87 @@ export class ComputerError extends Error {
   }
 }
 
+/** Mutation leases (B3): every mutation entry path (single-step CLI, batch
+ * CLI, E2E) acquires the shared app-level target lease at the FIRST mutation
+ * and releases it when the enclosing computer session closes. Session hosts
+ * instead hold one lease for their configured target from open to close and
+ * pass external ownership — the hosted driver session sets NO leases so it
+ * never double-acquires its own host's lease. */
+export interface MutationLeases {
+  acquire(target: Target): Promise<LeaseHandle>;
+}
+
+/** Default auto-leases for non-session entry paths: one generation per
+ * computer session, leases keyed by app pid, released together on close. */
+export function createAutoLeases(
+  root: string,
+  kind: LeaseOwner["kind"]
+): MutationLeases & { releaseAll(): Promise<void> } {
+  const generation = randomUUID();
+  const handles = new Map<number, LeaseHandle>();
+  return {
+    async acquire(target) {
+      const existing = handles.get(target.pid);
+      if (existing) return existing;
+      const acquired = await acquireTargetLease(root, target, {
+        generation,
+        pid: process.pid,
+        // The process-start probe is synchronous and can delay a desktop
+        // worker cold start under Bun 1.3. PID reuse remains conservative
+        // (a live PID blocks reclamation); persistent hosts include the
+        // stronger start identity because they already have boot time.
+        kind
+      });
+      // SessionImpl releases its handle during close. Remove the cached
+      // handle then, otherwise a later one-shot session in this same process
+      // would reuse a lease file that has already been deleted.
+      const handle: LeaseHandle = {
+        owner: acquired.owner,
+        refreshOwner: acquired.refreshOwner,
+        async release() {
+          try {
+            await acquired.release();
+          } finally {
+            if (handles.get(target.pid) === handle) handles.delete(target.pid);
+          }
+        }
+      };
+      handles.set(target.pid, handle);
+      return handle;
+    },
+    async releaseAll() {
+      const pending = [...handles.values()];
+      handles.clear();
+      const errors: unknown[] = [];
+      for (const handle of pending) {
+        try {
+          await handle.release();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length > 0) throw errors[0];
+    }
+  };
+}
+
 export interface SessionOptions {
   onRuntime?: (info: { driverVersion: string; pid: number }) => void;
   signal?: AbortSignal;
   deadlineAt?: number;
+  artifactsDir?: string;
+  observationStore?: ObservationStore;
+  /** Shared target-lease enforcement for mutation entry paths. */
+  leases?: MutationLeases;
   onAction?: (event: {
     phase: "started" | "finished";
-    kind: "click" | "type" | "key" | "scroll";
+    kind: "click" | "click_point" | "type" | "key" | "scroll";
     outcome?: "delivered" | "not_delivered" | "unknown";
-  }) => void;
+  }) => unknown;
 }
+
+/** Observations older than this are never clickable (A3 store test). */
+export const OBSERVATION_TTL_MS = 60_000;
 
 export interface ComputerSession {
   computer: Computer;
@@ -56,6 +141,16 @@ interface InternalOptions extends SessionOptions {
 
 function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && /timed out/.test(error.message);
+}
+
+/** Known, explicitly-refused driver outcomes (nothing was delivered): the
+ * driver rejected the request BEFORE synthesizing input. Anything else that
+ * escapes a native call mid-flight is treated as unknown delivery (A4). */
+function isKnownDriverRefusal(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const e = error as { name?: unknown; message?: unknown; tag?: unknown };
+  const signature = `${String(e.name ?? "")} ${String(e.message ?? "")} ${String((e as { tag?: { tag?: unknown } }).tag?.tag ?? "")}`;
+  return /DriverError\.(Tool|InvalidArguments)/.test(signature);
 }
 
 function withDeadline<T>(label: string, promise: Promise<T>, deadlineMs: number): Promise<T> {
@@ -85,6 +180,24 @@ class SessionImpl implements ComputerSession {
   private closePromise: Promise<void> | null = null;
   private runtimeInfo: { driverVersion: string; pid: number } | null = null;
   private runtimeNotified = false;
+  /** Driver lifecycle identity: every session is a new epoch. */
+  private readonly epoch = randomUUID();
+  /** Bumped on every local mutation start (A4 staleness signal). */
+  private revision = 0;
+  /** App leases held by this computer session (first mutation per pid). */
+  private readonly leaseHandles = new Map<number, LeaseHandle>();
+  /** Every backend operation remains tracked after a Promise.race timeout.
+   * A timed-out wrapper is not proof that native work stopped; close waits for
+   * this set (or keeps the target lease when it cannot drain). */
+  private readonly nativeInFlight = new Set<Promise<unknown>>();
+  /** Absolute deadline of the batch currently executing (A5 budget
+   * propagation): every native read/action/wait during a batch is capped by
+   * it, not just the steps around it. */
+  private batchDeadlineAt: number | null = null;
+  /** Per-request cancellation for a hosted batch. This is separate from the
+   * session-wide signal so one cancelled request does not poison a reused
+   * driver session. */
+  private batchSignal: AbortSignal | null = null;
 
   constructor(
     private readonly factory: BackendFactory,
@@ -96,23 +209,15 @@ class SessionImpl implements ComputerSession {
         this.read("list windows", (b) => b.windows(pid, opts?.onScreenOnly ?? false)),
       snapshot: (target: Target, opts?: { screenshot?: boolean }) =>
         this.read("snapshot", (b) => b.snapshot(target, opts?.screenshot ?? false)),
+      observe: (target: Target, opts?: ObserveOptions) => this.observe(target, opts),
+      clickPoint: (target: Target, point) => this.clickPoint(target, point),
+      batch: (target: Target, request, signal?: AbortSignal) => this.batch(target, request, signal),
       click: (target: Target, predicate: Predicate, description: string) =>
-        this.action("click", async (b) => {
-          await clickUnique(
-            {
-              snapshot: async () => (await b.snapshot(target, false)).elements,
-              click: async (token) => {
-                await b.clickToken(target, token);
-              }
-            },
-            predicate,
-            description
-          );
-        }),
-      type: (target: Target, text: string) => this.action("type", (b) => b.type(target, text)),
+        this.clickViaToken(target, predicate, description),
+      type: (target: Target, text: string) => this.action("type", target, (b) => b.type(target, text)),
       key: (target: Target, key: string, modifiers?: string[]) =>
-        this.action("key", (b) => b.key(target, key, modifiers)),
-      scroll: (target: Target, spec: ScrollSpec) => this.action("scroll", (b) => b.scroll(target, spec)),
+        this.action("key", target, (b) => b.key(target, key, modifiers)),
+      scroll: (target: Target, spec: ScrollSpec) => this.action("scroll", target, (b) => b.scroll(target, spec)),
       waitFor: (target: Target, predicate, description: string, opts?: { timeoutMs?: number; intervalMs?: number }) =>
         this.waitFor(target, predicate, description, opts)
     };
@@ -128,11 +233,34 @@ class SessionImpl implements ComputerSession {
         "a previous action timed out with unknown delivery; this session refuses further operations — perceive the current state in a fresh session instead of replaying"
       );
     }
-    if (this.options.signal?.aborted) {
+    if (this.nativeInFlight.size > 0) {
+      throw new ComputerError(
+        "session_busy",
+        "a previous native operation is still settling; wait for cleanup or use a fresh session"
+      );
+    }
+    if (this.options.signal?.aborted || this.batchSignal?.aborted) {
       throw new ComputerError("aborted", "the operation was aborted");
     }
     const cap = uncapped ? Infinity : OP_LIMIT_MS;
-    return Math.min(this.options.deadlineAt ?? Infinity, Date.now() + cap);
+    return Math.min(
+      this.options.deadlineAt ?? Infinity,
+      this.batchDeadlineAt ?? Infinity,
+      Date.now() + cap
+    );
+  }
+
+  /** Final admission check immediately before invoking a backend method.
+   * Awaiting a lease, journal callback, invalidation, or driver setup can
+   * consume the entire caller budget; no native request may cross the seam
+   * after cancellation or expiration. */
+  private assertDispatchAllowed(deadlineAt: number, outcome?: "not_delivered"): void {
+    if (this.options.signal?.aborted || this.batchSignal?.aborted) {
+      throw new ComputerError("aborted", "the operation was aborted", outcome);
+    }
+    if (Date.now() >= deadlineAt) {
+      throw new ComputerError("command_timeout", "operation budget exhausted before native dispatch", outcome);
+    }
   }
 
   private wrapAborted(error: unknown): unknown {
@@ -140,6 +268,26 @@ class SessionImpl implements ComputerSession {
       return new ComputerError("aborted", "the operation was aborted");
     }
     return error;
+  }
+
+  private trackNative<T>(promise: Promise<T>): Promise<T> {
+    const tracked = Promise.resolve(promise);
+    this.nativeInFlight.add(tracked);
+    void tracked.then(
+      () => this.nativeInFlight.delete(tracked),
+      () => this.nativeInFlight.delete(tracked)
+    );
+    return tracked;
+  }
+
+  private async waitForNativeIdle(deadlineAt: number): Promise<boolean> {
+    while (this.nativeInFlight.size > 0 && Date.now() < deadlineAt) {
+      await Promise.race([
+        ...this.nativeInFlight,
+        new Promise((resolve) => setTimeout(resolve, Math.max(deadlineAt - Date.now(), 1)))
+      ]).catch(() => undefined);
+    }
+    return this.nativeInFlight.size === 0;
   }
 
   private async ensureReady(deadlineAt: number): Promise<Backend> {
@@ -162,7 +310,7 @@ class SessionImpl implements ComputerSession {
     };
     let sdk: unknown;
     try {
-      sdk = await withDeadline("sdk load", this.factory.load(), remaining());
+      sdk = await withDeadline("sdk load", this.trackNative(this.factory.load()), remaining());
     } catch (error) {
       if (isTimeoutError(error)) this.poisoned = true;
       throw this.wrapAborted(error);
@@ -170,7 +318,7 @@ class SessionImpl implements ComputerSession {
     const createPromise = this.factory.create(sdk);
     let backend: Backend;
     try {
-      backend = await withDeadline("driver create", createPromise, remaining());
+      backend = await withDeadline("driver create", this.trackNative(createPromise), remaining());
     } catch (error) {
       if (isTimeoutError(error)) {
         // Promise timeouts do not cancel native work: the creation may still
@@ -189,7 +337,7 @@ class SessionImpl implements ComputerSession {
     // Metadata rides in the SAME operation budget, is cached, and its failure
     // is non-fatal — reporting must never re-open a driver for a version.
     try {
-      const meta = await withDeadline("metadata", backend.metadata(), remaining());
+      const meta = await withDeadline("metadata", this.trackNative(backend.metadata()), remaining());
       if (meta?.driverVersion !== undefined && meta?.pid !== undefined) {
         this.runtimeInfo = { driverVersion: meta.driverVersion, pid: meta.pid };
         this.notifyRuntime();
@@ -211,8 +359,9 @@ class SessionImpl implements ComputerSession {
   private async read<T>(label: string, fn: (backend: Backend) => Promise<T>): Promise<T> {
     const deadlineAt = this.beginOp();
     const backend = await this.ensureReady(deadlineAt);
+    this.assertDispatchAllowed(deadlineAt);
     try {
-      return await withDeadline(label, fn(backend), Math.max(deadlineAt - Date.now(), 1));
+      return await withDeadline(label, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
     } catch (error) {
       if (isTimeoutError(error)) {
         throw new ComputerError("command_timeout", (error as Error).message);
@@ -221,46 +370,401 @@ class SessionImpl implements ComputerSession {
     }
   }
 
+  // ---- observe: independent channels, metadata injection, image persist ---
+
+  private stampObservation(raw: unknown): NativeObservationLike {
+    return {
+      ...(raw as object),
+      observationId: randomUUID(),
+      capturedAt: Date.now(),
+      epoch: this.epoch,
+      revision: this.revision
+    } as NativeObservationLike;
+  }
+
+  private persistImage(raw: NativeObservationLike): string | undefined {
+    const base64 = raw.images?.[0]?.dataBase64;
+    try {
+      if (typeof base64 === "string" && base64.length > 0) {
+        return saveScreenshot(ensureOutDir(this.options.artifactsDir), base64);
+      }
+      const source = raw.screenshotFilePath;
+      if (typeof source === "string" && source.length > 0) {
+        const stats = statSync(source);
+        if (!stats.isFile() || stats.size <= 0) throw new Error(`screenshot file is empty or not a regular file: ${source}`);
+        const destination = artifactPath(ensureOutDir(this.options.artifactsDir), "cu.png");
+        copyFileSync(source, destination);
+        return destination;
+      }
+      return undefined;
+    } catch (error) {
+      // Fail loud: the screenshot bytes exist but the evidence artifact does
+      // not. A "usable" image channel without a persisted file would be a
+      // fabricated success (A2/A3 fail-loud contract).
+      throw new ComputerError(
+        "artifact_write_failed",
+        `the screenshot could not be persisted: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async readObservation(
+    target: Target,
+    channels: { accessibility: boolean; screenshot: boolean; maxDimension?: number }
+  ): Promise<NativeObservationLike> {
+    return this.read("observe", (b) => b.observe(target, channels));
+  }
+
+  private async observe(target: Target, opts?: ObserveOptions): Promise<Observation> {
+    const mode = opts?.mode ?? "auto";
+    if (mode !== "auto" && mode !== "ax" && mode !== "image" && mode !== "both") {
+      throw new ComputerError("invalid_request", `unknown observation mode: ${String(mode)}`);
+    }
+    if (opts?.maxDimension !== undefined &&
+      (!Number.isSafeInteger(opts.maxDimension) || opts.maxDimension < 64 || opts.maxDimension > 8192)) {
+      throw new ComputerError("invalid_request", "maxDimension must be a safe integer between 64 and 8192");
+    }
+    if (opts?.selector !== undefined &&
+      (typeof opts.selector.text !== "string" || opts.selector.text.length === 0 ||
+        (opts.selector.match !== "exact" && opts.selector.match !== "contains") ||
+        (opts.selector.role !== undefined && (typeof opts.selector.role !== "string" || opts.selector.role.length === 0)))) {
+      throw new ComputerError("invalid_request", "observation selector is invalid");
+    }
+    let raw: NativeObservationLike;
+    let requested: { accessibility: boolean; screenshot: boolean };
+    if (mode === "ax") {
+      requested = { accessibility: true, screenshot: false };
+      raw = await this.readObservation(target, requested);
+    } else if (mode === "image" || mode === "both") {
+      requested = { accessibility: mode === "both", screenshot: true };
+      raw = await this.readObservation(target, requested);
+    } else {
+      // auto: AX first; only take a screenshot when AX is insufficient. The
+      // second frame (with its own metadata) becomes the latest observation.
+      // Insufficient means incomplete, degraded/truncated, OR an empty tree:
+      // a complete-but-empty AX view cannot suppress the visual fallback.
+      const axOnly = await this.readObservation(target, { accessibility: true, screenshot: false });
+      const axUsable =
+        axOnly.elementsComplete === true &&
+        axOnly.degraded !== true &&
+        axOnly.truncated !== true &&
+        normalizeElements(axOnly.elements).length > 0;
+      if (axUsable && !opts?.maxDimension) {
+        requested = { accessibility: true, screenshot: false };
+        raw = axOnly;
+      } else {
+        requested = { accessibility: true, screenshot: true };
+        raw = await this.readObservation(target, requested);
+      }
+    }
+    const stamped = this.stampObservation(raw);
+    const view = projectObservation(stamped, opts ?? {}, requested);
+    if (view.image.status === "usable" || view.image.status === "degraded") {
+      const path = this.persistImage(stamped);
+      if (path === undefined) {
+        throw new ComputerError(
+          "artifact_write_failed",
+          "the driver reported an image channel but supplied no usable image artifact"
+        );
+      }
+      view.image = { ...view.image, originalPath: path, ...(view.image.geometry ? { path } : {}) };
+      if (view.image.geometry && opts?.maxDimension !== undefined) {
+          // Explicit same-frame derived image via system sips; the original
+          // PNG stays on disk as evidence. Never upscaling. A derivation
+          // failure fails the observe loudly — the caller asked for a scaled
+          // image and must learn it was not produced (the original PNG is
+          // still on disk as evidence).
+          const { resizeScreenshot } = await import("./observation-store.js");
+          let resized: Awaited<ReturnType<typeof resizeScreenshot>>;
+          try {
+            resized = await resizeScreenshot(path, opts.maxDimension, this.options.signal);
+          } catch (error) {
+            throw new ComputerError(
+              "artifact_derivation_failed",
+              `the requested screenshot resize failed: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+          if (resized.path !== path) {
+            view.image = {
+              ...view.image,
+              path: resized.path,
+              geometry: {
+                ...view.image.geometry!,
+                sentWidth: resized.width,
+                sentHeight: resized.height
+              }
+            };
+          }
+        }
+      }
+    if (this.options.observationStore) {
+      try {
+        await this.options.observationStore.save(view);
+      } catch (error) {
+        // The click credential was not persisted: without the store record
+        // this observation can never back a visual click, so the observe
+        // fails loud instead of returning an unusable "success".
+        throw new ComputerError(
+          "observation_store_failed",
+          `persisting the observation failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+    return view;
+  }
+
+  // ---- clickPoint: evidence-bound visual click (A4) -----------------------
+
+  private async clickPoint(target: Target, point: PointClick): Promise<void> {
+    const store = this.options.observationStore;
+    if (!store) {
+      throw new ComputerError("observation_required", "clickPoint requires an observation store — run observe first");
+    }
+    let observation: Observation;
+    try {
+      observation = await store.get(point.observationId);
+    } catch (error) {
+      throw new ComputerError(
+        "unknown_observation",
+        `observation ${point.observationId} is not usable: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    if (observation.target.pid !== target.pid || observation.target.windowId !== target.windowId) {
+      throw new ComputerError("stale_observation", "observation belongs to a different target");
+    }
+    if (Date.now() - observation.capturedAt > OBSERVATION_TTL_MS) {
+      throw new ComputerError("stale_observation", "observation is older than 60s — observe again");
+    }
+    if (observation.revision !== this.revision) {
+      throw new ComputerError("stale_observation", "a mutation has started since the observation was taken");
+    }
+    // Fresh-frame validation before EVERY evidence-bound click — including
+    // same-epoch clicks. A window can move, resize, navigate, or be changed
+    // by the app/user without any local facade mutation; only the CURRENT
+    // frame can prove the recorded coordinates still apply (spec §5.2).
+    const fresh = await this.readObservation(target, { accessibility: false, screenshot: true });
+    if (fresh.pid !== target.pid || fresh.windowId !== target.windowId) {
+      throw new ComputerError("stale_observation", "the current frame belongs to a different target — observe again");
+    }
+    if (fresh.screenshotFrameValid !== true) {
+      throw new ComputerError(
+        "stale_observation",
+        "the current frame's validity is unconfirmed (screenshotFrameValid not true) — observe again"
+      );
+    }
+    const freshPath = this.persistImage(fresh);
+    if (
+      freshPath === undefined ||
+      fresh.windowBounds === undefined ||
+      !frameMatchesObservation(observation, {
+        windowBounds: fresh.windowBounds,
+        pngHash: pngSha256(freshPath)
+      })
+    ) {
+      throw new ComputerError(
+        "stale_observation",
+        "the window changed since the observation (geometry or pixels) — observe again"
+      );
+    }
+    const geometry = observation.image.geometry;
+    if (observation.image.status !== "usable" || !geometry) {
+      throw new ComputerError("stale_observation", "observation has no usable image geometry");
+    }
+    const driverPoint = mapImagePointToDriverPixels({ x: point.x, y: point.y }, geometry);
+    if (driverPoint === null) {
+      throw new ComputerError(
+        "invalid_point",
+        `point (${point.x}, ${point.y}) is outside the observation image (${geometry.sentWidth}x${geometry.sentHeight})`
+      );
+    }
+    await this.action("click_point", target, async (b) => b.clickPoint(target, driverPoint));
+  }
+
+  // ---- click: fresh lookup on the READ path, then dispatch (A4/F12) ------
+
+  /** AX clicks are lookup-then-dispatch: the exactly-one lookup runs on the
+   * read path, so zero/multiple matches or missing element tokens are
+   * PRE-DISPATCH failures (not_delivered) — never misclassified as unknown
+   * native delivery, and never poisoning the session. */
+  private async clickViaToken(
+    target: Target,
+    predicate: Predicate,
+    description: string
+  ): Promise<void> {
+    return clickUnique(
+      {
+        snapshot: async () =>
+          (await this.read("click lookup", (b) => b.snapshot(target, false))).elements,
+        click: async (token) => {
+          await this.action("click", target, (b) => b.clickToken(target, token));
+        }
+      },
+      predicate,
+      description
+    );
+  }
+
+  // ---- batch: bounded serial execution (A5) --------------------------------
+
+  private async batch(target: Target, request: BatchRequest, signal?: AbortSignal): Promise<BatchResult> {
+    const validated = validateBatch(request);
+    // The batch's absolute deadline propagates into EVERY native call made
+    // while it runs (reads, actions, waits, final observe) — not just the
+    // checks between steps. The request signal is also checked immediately
+    // before each native dispatch so cancellation stops undispatched actions.
+    const previousDeadline = this.batchDeadlineAt;
+    const previousSignal = this.batchSignal;
+    const deadline = Date.now() + (validated.timeoutMs ?? DEFAULT_BATCH_TIMEOUT_MS);
+    this.batchDeadlineAt = previousDeadline === null ? deadline : Math.min(previousDeadline, deadline);
+    this.batchSignal = signal ?? this.options.signal ?? null;
+    try {
+      return await runBatch(this.computer, target, validated, signal ?? this.options.signal);
+    } finally {
+      this.batchDeadlineAt = previousDeadline;
+      this.batchSignal = previousSignal;
+    }
+  }
+
   // ---- actions: unknown delivery poisons; refusals are not_delivered ------
 
   private async action(
-    kind: "click" | "type" | "key" | "scroll",
+    kind: "click" | "click_point" | "type" | "key" | "scroll",
+    target: Target,
     fn: (backend: Backend) => Promise<void | ToolResultLike>
   ): Promise<void> {
     const deadlineAt = this.beginOp();
-    this.options.onAction?.({ phase: "started", kind });
-    const finish = (outcome: "delivered" | "not_delivered" | "unknown") =>
-      this.options.onAction?.({ phase: "finished", kind, outcome });
+    // Shared target ownership (B3): the FIRST mutation of each app acquires
+    // the app-level lease; a busy target refuses BEFORE any input dispatch
+    // (not_delivered). Read-only paths never acquire.
+    await this.ensureLease(target);
+    this.assertDispatchAllowed(deadlineAt, "not_delivered");
+    // Mutation start invalidates every prior observation immediately.
+    this.revision += 1;
+    const store = this.options.observationStore;
+    if (store) {
+      try {
+        await store.invalidate(target);
+      } catch (error) {
+        throw new ComputerError(
+          "observation_store_failed",
+          `invalidating prior observations failed: ${error instanceof Error ? error.message : String(error)}`,
+          "not_delivered"
+        );
+      }
+    }
+    try {
+      await this.options.onAction?.({ phase: "started", kind });
+    } catch (error) {
+      throw new ComputerError(
+        "event_persist_failed",
+        `could not persist action start before dispatch: ${error instanceof Error ? error.message : String(error)}`,
+        "not_delivered"
+      );
+    }
+    const finish = async (outcome: "delivered" | "not_delivered" | "unknown"): Promise<void> => {
+      try {
+        await this.options.onAction?.({ phase: "finished", kind, outcome });
+      } catch (error) {
+        // The input already crossed the native boundary; an event persistence
+        // failure therefore makes its delivery unknown and poisons the
+        // session instead of reporting a durable success.
+        this.poisoned = true;
+        throw new ComputerError(
+          "event_persist_failed",
+          `could not persist action outcome: ${error instanceof Error ? error.message : String(error)}`,
+          "unknown"
+        );
+      }
+    };
     let backend: Backend;
     try {
       backend = await this.ensureReady(deadlineAt);
+      // Lease acquisition, observation invalidation, and action-event
+      // persistence are all waits. Recheck immediately before crossing the
+      // native input boundary; a late request is not delivered just because
+      // setup began in time.
+      this.assertDispatchAllowed(deadlineAt, "not_delivered");
     } catch (error) {
       const mapped = this.wrapAborted(error);
       if (mapped instanceof ComputerError && mapped.code === "command_timeout") {
-        finish("unknown");
+        await finish("unknown");
       }
       throw mapped;
     }
     try {
-      const result = await withDeadline(kind, fn(backend), Math.max(deadlineAt - Date.now(), 1));
-      if (result && typeof result === "object" && result.isError) {
+      this.assertDispatchAllowed(deadlineAt, "not_delivered");
+      const result = await withDeadline(kind, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));      if (result && typeof result === "object" && result.isError) {
         throw new ComputerError(
           "action_refused",
           `${kind} was refused: ${result.text ?? "no detail"}`,
           "not_delivered"
         );
       }
-      finish("delivered");
+      await finish("delivered");
     } catch (error) {
       if (isTimeoutError(error)) {
         this.poisoned = true;
-        finish("unknown");
+        await finish("unknown");
         throw new ComputerError("command_timeout", String((error as Error).message), "unknown");
       }
-      // Every non-timeout failure here means nothing was delivered.
-      finish("not_delivered");
-      throw this.wrapAborted(error);
+      if (error instanceof ComputerError && error.actionOutcome !== undefined) {
+        await finish(error.actionOutcome);
+        throw error;
+      }
+      const mapped = this.wrapAborted(error);
+      if (mapped instanceof ComputerError) {
+        await finish("not_delivered");
+        throw mapped;
+      }
+      if (isKnownDriverRefusal(error)) {
+        await finish("not_delivered");
+        throw new ComputerError(
+          "action_refused",
+          `${kind} was refused by the driver: ${error instanceof Error ? error.message : String(error)}`,
+          "not_delivered"
+        );
+      }
+      // Unknown native exception mid-flight: delivery state is unknowable.
+      // Conservative unknown + poison — the session refuses further work
+      // instead of risking a replay on an unstable driver.
+      this.poisoned = true;
+      await finish("unknown");
+      throw new ComputerError(
+        "action_failed",
+        `${kind} failed with an unclassified native error: ${error instanceof Error ? error.message : String(error)}`,
+        "unknown"
+      );
     }
+  }
+
+  private async ensureLease(target: Target): Promise<void> {
+    const leases = this.options.leases;
+    if (!leases) return;
+    if (this.leaseHandles.has(target.pid)) return;
+    let handle: LeaseHandle;
+    try {
+      handle = await leases.acquire(target);
+    } catch (error) {
+      if (error instanceof LeaseError) {
+        throw new ComputerError(error.code, error.message, "not_delivered");
+      }
+      throw error;
+    }
+    this.leaseHandles.set(target.pid, handle);
+  }
+
+  private async releaseLeases(): Promise<string[]> {
+    const errors: string[] = [];
+    const pending = [...this.leaseHandles.values()];
+    this.leaseHandles.clear();
+    for (const handle of pending) {
+      try {
+        await handle.release();
+      } catch (error) {
+        errors.push(`target lease release failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return errors;
   }
 
   // ---- waitFor: caller-owned overall budget, per-read op caps -------------
@@ -280,8 +784,8 @@ class SessionImpl implements ComputerSession {
           const perRead = Math.min(sessionDeadline, Date.now() + OP_LIMIT_MS);
           const b = backend;
           try {
-            const snap = await withDeadline("snapshot", b.snapshot(target, false), Math.max(perRead - Date.now(), 1));
-            return snap.elements;
+            this.assertDispatchAllowed(perRead, "not_delivered");
+            const snap = await withDeadline("snapshot", this.trackNative(b.snapshot(target, false)), Math.max(perRead - Date.now(), 1));            return snap.elements;
           } catch (error) {
             if (isTimeoutError(error)) {
               throw new ComputerError("command_timeout", (error as Error).message);
@@ -304,7 +808,7 @@ class SessionImpl implements ComputerSession {
     if (this.runtimeInfo) return this.runtimeInfo;
     const meta = await withDeadline(
       "metadata",
-      backend.metadata(),
+      this.trackNative(backend.metadata()),
       Math.max(deadlineAt - Date.now(), 1)
     );
     if (meta?.driverVersion === undefined || meta?.pid === undefined) {
@@ -318,7 +822,7 @@ class SessionImpl implements ComputerSession {
   async permissions(): Promise<{ accessibility: boolean; screenRecording: boolean }> {
     const deadlineAt = this.beginOp();
     const backend = await this.ensureReady(deadlineAt);
-    return backend.permissions();
+    return this.trackNative(backend.permissions());
   }
 
   close(): Promise<void> {
@@ -326,8 +830,19 @@ class SessionImpl implements ComputerSession {
     this.closed = true;
     const backend = this.backend;
     this.closePromise = (async () => {
-      if (!backend) return;
-      const errors = await this.cleanupBackend(backend);
+      const errors: string[] = [];
+      if (backend) {
+        errors.push(...(await this.cleanupBackend(backend)));
+      }
+      // A cleanup API returning does not itself prove an earlier timed-out
+      // native call ended. Never release the shared target lease while any
+      // backend promise remains unresolved.
+      if (!(await this.waitForNativeIdle(Date.now() + (this.options.cleanupDeadlineMs ?? CLEANUP_BUDGET_MS)))) {
+        errors.push("native work remained in flight after cleanup; target lease retained");
+      }
+      if (errors.length === 0) {
+        errors.push(...(await this.releaseLeases()));
+      }
       if (errors.length > 0) {
         throw new ComputerError("cleanup_failed", errors.join("; "));
       }

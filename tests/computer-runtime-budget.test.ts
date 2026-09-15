@@ -8,12 +8,18 @@ import type { Backend } from "../packages/computer-runtime/src/session.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+const unexpectedBackendCall = async (): Promise<never> => {
+  throw new Error("unexpected backend observe call");
+};
+
 function okBackend(overrides: Partial<Backend> = {}): Backend {
   const base: Backend = {
     apps: async () => [],
     windows: async () => [],
     snapshot: async () => ({ elements: [], title: "" }),
+    observe: unexpectedBackendCall,
     clickToken: async () => ({ isError: false }),
+    clickPoint: async () => ({ isError: false }),
     type: async () => ({ isError: false }),
     key: async () => ({ isError: false }),
     scroll: async () => ({ isError: false }),
@@ -63,6 +69,28 @@ describe("session budget (absolute deadline shared by load/create/work)", () => 
       (e: unknown) => e
     );
     expect((after as ComputerError).code).toBe("session_unusable");
+    await session.close();
+  });
+
+  test("a timed-out read blocks a second native operation until it settles", async () => {
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => (release = resolve));
+    const backend = okBackend({
+      apps: async () => {
+        await pending;
+        return [];
+      }
+    });
+    const session = createSessionWithBackend(
+      { load: async () => ({}), create: async () => backend },
+      { deadlineAt: Date.now() + 25, cleanupDeadlineMs: 25 }
+    );
+    const first = session.computer.apps().then(() => null, (error: unknown) => error);
+    await sleep(40);
+    const second = await session.computer.apps().then(() => null, (error: unknown) => error);
+    expect((second as ComputerError).code).toBe("session_busy");
+    release?.();
+    await first;
     await session.close();
   });
 
@@ -133,6 +161,42 @@ describe("session budget (absolute deadline shared by load/create/work)", () => 
     expect(cleanupLog).toEqual(["endSession", "shutdown", "destroy"]);
     expect(workStarted).toBe(0);
     await session.close().catch(() => undefined);
+  });
+
+  test("close retains a target lease while a timed-out native action is still pending", async () => {
+    let releaseAction: (() => void) | undefined;
+    let leaseReleases = 0;
+    const pending = new Promise<void>((resolve) => {
+      releaseAction = resolve;
+    });
+    const lease = {
+      owner: () => ({ generation: "g", pid: process.pid, kind: "single-step" as const }),
+      refreshOwner: async () => undefined,
+      release: async () => {
+        leaseReleases++;
+      }
+    };
+    const backend = okBackend({
+      type: async () => {
+        await pending;
+        return { isError: false };
+      }
+    });
+    const session = createSessionWithBackend(
+      { load: async () => ({}), create: async () => backend },
+      {
+        leases: { acquire: async () => lease },
+        cleanupDeadlineMs: 30
+      }
+    );
+    const action = session.computer.type(target, "late");
+    await sleep(40);
+    const close = await session.close().then(() => null, (error: unknown) => error);
+    expect(close).toBeInstanceOf(ComputerError);
+    expect((close as ComputerError).code).toBe("cleanup_failed");
+    expect(leaseReleases).toBe(0);
+    releaseAction?.();
+    await action.catch(() => undefined);
   });
 
   test("close is idempotent and ordered endSession -> shutdown -> destroy", async () => {

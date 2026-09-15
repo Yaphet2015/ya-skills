@@ -69,7 +69,7 @@ jobs:
           echo "asset_sha256=${asset_sha256}" >> "${GITHUB_OUTPUT}"
 
       - name: Release closed loop (packaged yk, no desktop)
-        run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts
+        run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts tests/computer-session-release.test.ts
 
       - name: Build node target
         run: bun run build

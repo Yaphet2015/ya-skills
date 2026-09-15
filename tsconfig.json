@@ -29,6 +29,9 @@
       "@ya-skills/computer-runtime": [
         "packages/computer-runtime/src/index.ts"
       ],
+      "@ya-skills/computer-session": [
+        "packages/computer-session/src/index.ts"
+      ],
       "@ya-skills/functions-computer-e2e": [
         "packages/functions-computer-e2e/src/index.ts"
       ]

@@ -25,6 +25,7 @@ export interface AxElement {
   elementToken?: string;
   frame?: { x: number; y: number; w: number; h: number };
   enabled?: boolean;
+  selected?: boolean;
 }
 export interface Snapshot {
   elements: AxElement[];
@@ -43,6 +44,9 @@ export interface Computer {
   apps(): Promise<AppRef[]>;
   windows(pid: number, options?: { onScreenOnly?: boolean }): Promise<WindowRef[]>;
   snapshot(target: Target, options?: { screenshot?: boolean }): Promise<Snapshot>;
+  observe(target: Target, options?: ObserveOptions): Promise<Observation>;
+  clickPoint(target: Target, point: PointClick): Promise<void>;
+  batch(target: Target, request: BatchRequest): Promise<BatchResult>;
   click(target: Target, predicate: Predicate, description: string): Promise<void>;
   type(target: Target, text: string): Promise<void>;
   key(target: Target, key: string, modifiers?: string[]): Promise<void>;
@@ -53,6 +57,99 @@ export interface Computer {
     description: string,
     options?: { timeoutMs?: number; intervalMs?: number }
   ): Promise<AxElement[]>;
+}
+export type ObservationMode = "auto" | "ax" | "image" | "both";
+export type ChannelStatus = "usable" | "empty" | "degraded" | "truncated" | "unavailable";
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+export interface Point {
+  x: number;
+  y: number;
+}
+export interface ImageGeometry {
+  sourceWidth: number;
+  sourceHeight: number;
+  sentWidth: number;
+  sentHeight: number;
+  inputBounds: Rect;
+  windowBounds: Rect;
+}
+export interface Selector {
+  text: string;
+  match: "exact" | "contains";
+  role?: string;
+}
+export interface ObserveOptions {
+  mode?: ObservationMode;
+  maxDimension?: number;
+  selector?: Selector;
+}
+export interface AxChannel {
+  status: ChannelStatus;
+  reason?: string;
+  elements: AxElement[];
+  total: number;
+  returned: number;
+  complete: boolean;
+}
+export interface ImageChannel {
+  status: ChannelStatus;
+  reason?: string;
+  originalPath?: string;
+  path?: string;
+  frameValid?: boolean;
+  geometry?: ImageGeometry;
+}
+export interface Observation {
+  id: string;
+  target: Target;
+  capturedAt: number;
+  /** Changes with every driver lifecycle. */
+  epoch: string;
+  /** Increments on every local mutation start. */
+  revision: number;
+  title: string;
+  ax: AxChannel;
+  image: ImageChannel;
+}
+export interface PointClick {
+  observationId: string;
+  x: number;
+  y: number;
+}
+export type Condition =
+  | { kind: "element_exists"; selector: Selector }
+  | { kind: "element_value"; selector: Selector; value: string }
+  | { kind: "window_exists" }
+  | { kind: "focused_element"; selector: Selector };
+export type BatchAction =
+  | { kind: "click"; selector: Selector }
+  | { kind: "click_point"; point: PointClick }
+  | { kind: "type"; text: string; before?: Condition }
+  | { kind: "key"; key: string; modifiers?: string[]; before?: Condition }
+  | { kind: "scroll"; spec: ScrollSpec }
+  | { kind: "wait"; condition: Condition; timeoutMs: number };
+export interface BatchRequest {
+  actions: BatchAction[];
+  observe?: ObserveOptions;
+  timeoutMs?: number;
+  maxActions?: number;
+}
+export interface ActionReceipt {
+  index: number;
+  kind: BatchAction["kind"];
+  status: "delivered" | "not_delivered" | "unknown" | "satisfied" | "not_run";
+  error?: { code: string; message: string };
+}
+export interface BatchResult {
+  status: "completed" | "interrupted" | "failed";
+  steps: ActionReceipt[];
+  observation?: Observation;
+  observationError?: { code: string; message: string };
 }
 
 // suite contract ---------------------------------------------------------

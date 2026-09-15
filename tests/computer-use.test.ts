@@ -2,12 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { createComputerUseCommands, parseRequest } from "@ya-skills/functions-computer-use";
 
 describe("command registration", () => {
-  test("registers exactly the five desktop operations", () => {
+  test("registers exactly the nine desktop operations", () => {
     expect(createComputerUseCommands().map((command) => `${command.domain} ${command.action}`)).toEqual([
       "computer-use doctor",
       "computer-use apps",
       "computer-use windows",
       "computer-use perceive",
+      "computer-use observe",
+      "computer-use session",
+      "computer-use exec",
+      "computer-use batch",
       "computer-use act"
     ]);
   });
@@ -213,6 +217,9 @@ function makeFakeComputer(overrides: Partial<Computer> = {}): Computer {
     apps: unexpected,
     windows: unexpected,
     snapshot: unexpected,
+    observe: unexpected,
+    clickPoint: unexpected,
+    batch: unexpected,
     click: unexpected,
     type: unexpected,
     key: unexpected,

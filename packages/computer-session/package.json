@@ -1,0 +1,13 @@
+{
+  "name": "@ya-skills/computer-session",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./src/*": "./src/*"
+  },
+  "dependencies": {
+    "@ya-skills/computer-runtime": "workspace:*"
+  }
+}

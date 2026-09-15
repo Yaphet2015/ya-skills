@@ -17,7 +17,33 @@ const outArg = process.argv.indexOf("--out");
 const OUT = outArg !== -1 ? resolve(process.argv[outArg + 1]!) : join(root, "skills/computer-e2e/references/api.d.ts");
 
 // The consumer surface: everything a .e2e.ts file can reference.
-const RUNTIME_SURFACE = ["Target", "WindowRef", "AppRef", "AxElement", "Snapshot", "Predicate", "ScrollDirection", "ScrollSpec", "Computer"];
+const RUNTIME_SURFACE = [
+  "Target",
+  "WindowRef",
+  "AppRef",
+  "AxElement",
+  "Snapshot",
+  "Predicate",
+  "ScrollDirection",
+  "ScrollSpec",
+  "Computer",
+  "ObservationMode",
+  "ChannelStatus",
+  "Rect",
+  "Point",
+  "ImageGeometry",
+  "Selector",
+  "ObserveOptions",
+  "AxChannel",
+  "ImageChannel",
+  "Observation",
+  "PointClick",
+  "Condition",
+  "BatchAction",
+  "BatchRequest",
+  "ActionReceipt",
+  "BatchResult"
+];
 const E2E_SURFACE = ["CaseStatus", "CaseContext", "TestCase", "Suite", "ApplicationInfo"];
 
 function extractDeclarations(source: string): Map<string, string> {
@@ -40,12 +66,14 @@ function extractDeclarations(source: string): Map<string, string> {
       current = line;
       buffer = [line];
       depth = (line.match(/\{/g)?.length ?? 0) - (line.match(/\}/g)?.length ?? 0);
+      // Single-line declarations (`export type A = ...;`) end immediately.
+      // Multiline unions keep buffering until a depth-0 line ends with ';'.
       if (depth <= 0 && /;\s*$/.test(line)) flush();
       continue;
     }
     buffer.push(line);
     depth += (line.match(/\{/g)?.length ?? 0) - (line.match(/\}/g)?.length ?? 0);
-    if (depth <= 0) flush();
+    if (depth <= 0 && (/;\s*$/.test(line) || line.trim() === "}")) flush();
   }
   flush();
   return decls;
@@ -83,7 +111,15 @@ const sections = [
 
 const output = `${header}${sections}\n`;
 
-for (const forbidden of ["@ya-skills/", "@trycua/", "Backend", "BackendFactory", "WorkerEvent"]) {
+for (const forbidden of [
+  "@ya-skills/",
+  "@trycua/",
+  "Backend",
+  "BackendFactory",
+  "WorkerEvent",
+  "NativeObservationLike",
+  "ObservationStore"
+]) {
   if (output.includes(forbidden)) {
     console.error(`generated api.d.ts still references internal '${forbidden}' — extend the strip/allowlist`);
     process.exit(1);

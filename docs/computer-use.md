@@ -9,7 +9,16 @@ yk computer-use doctor
 yk computer-use apps [--name TEXT]
 yk computer-use windows --pid PID
 yk computer-use perceive --pid PID [--window ID] [--shot] [--out-dir DIR]
-yk computer-use act --pid PID [--window ID] ACTION   # --click-text/--click-contains [--click-role] | --type | --key | --scroll
+yk computer-use observe --pid PID [--window ID] [--mode auto|ax|image|both] \
+    [--max-dimension N] [--select-text T [--select-match exact|contains] [--select-role R]]
+yk computer-use act --pid PID [--window ID] ACTION   # --click-text/--click-contains [--click-role] | --click-x/--click-y --observation ID | --type | --key | --scroll
+yk computer-use batch --pid PID [--window ID] --file steps.json --request-id ID
+yk computer-use session open --pid PID [--window ID] [--idle-timeout-ms N (<=120000)]
+yk computer-use session status --session ID
+yk computer-use session cancel --session ID --request-id REQUEST
+yk computer-use session close --session ID
+yk computer-use observe|batch|act --session ID ...   # reuse the session's driver
+yk computer-use exec --session ID --file flow.js --request-id ID [--timeout-ms N] [--max-actions N]
 # common flags for perceive/act: --shot, --out-dir DIR, --activate (explicit user request only)
 ```
 
@@ -20,8 +29,9 @@ The agent-facing usage guide lives in the skill itself
 
 - macOS arm64, macOS 13+ (driver requirement). Other platforms fail fast
   with `unsupported_platform`; no other `yk` command is affected.
-- The Cua Driver SDK (0.27.0) runs inside the `yk` Bun process — there is no
-  Node runtime, daemon, or separate worker to install.
+- The Cua Driver SDK (0.27.0) runs inside the `yk` Bun runtime for one-shot
+  commands. Persistent sessions manage one private driver worker themselves;
+  users install no Node runtime, daemon, or extra dependency.
 - Accessibility + Screen Recording must be granted to the program that runs
   `yk` (usually your terminal app). `doctor` reports the read-only status and
   prints the exact grant steps; it never opens permission dialogs itself.
@@ -36,14 +46,29 @@ directory, the yk install prefix, or your project.
 ## Output contract
 
 - Success: one JSON document on stdout (`apps`, `windows`,
-  `{pid, windowId, title, elements, screenshot?}` for perceive/act).
+  `{pid, windowId, title, elements, screenshot?}` for perceive/act,
+  `{schemaVersion: 1, target, observation}` for observe, and
+  `{schemaVersion: 1, target, result}` for batch with per-step receipts:
+  `delivered` / `not_delivered` / `unknown` / `satisfied` / `not_run`).
 - Failure: non-zero exit; post-driver failures print a JSON body with
   `error.code` / `error.message` (e.g. `degraded_snapshot`,
   `post_action_observe_failed` with `actionDelivered: true`,
-  `action_refused`, `command_timeout` with `actionOutcome: "unknown"`).
+  `action_refused`, `command_timeout` with `actionOutcome: "unknown"`,
+  `batch_failed` / `batch_interrupted`, `stale_observation`,
+  `request_conflict`).
   Input-validation failures print plain text + usage.
 - windowId values are decimal strings (they exceed `Number.MAX_SAFE_INTEGER`);
   pass them back verbatim.
+- Observations are single-use evidence for visual clicks: any delivered
+  input invalidates them (60s TTL, geometry + PNG-hash verification across
+  commands). `observationId` values are UUIDs.
+- Sessions hold an application-level target lease: a second session (or a
+  single-step act) on the same app pid is refused while the lease is alive.
+  Unknown native delivery marks the session `unusable` and KEEPS the lease —
+  the target stays protected until the user closes it explicitly.
+- exec scripts are trusted local JavaScript; state is explicit JSON committed
+  only on clean completion. Generated script API:
+  `skills/computer-use/references/api.d.ts`.
 
 ## Distribution layout (Homebrew)
 
@@ -63,5 +88,8 @@ binary exists).
 - Real read-only checks on this machine (2026-09-13): doctor (same-process
   driver, permissions), apps, windows, perceive with screenshot, ambiguity
   refusal, degraded-snapshot refusal.
-- Real click/type/key/scroll verification against a user-designated window
-  is pending; see the plan's Task 7 before claiming full UI coverage.
+- Real Background coordinate delivery on a never-activated window, session
+  host TCC attribution, and the full non-disruptive UI matrix remain pending;
+  see `docs/verification/2026-09-14-computer-use-agentic-primitives.md` and
+  do not treat synthetic tests or contaminated foreground evidence as native
+  acceptance.

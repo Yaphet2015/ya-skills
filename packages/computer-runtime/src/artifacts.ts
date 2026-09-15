@@ -23,7 +23,20 @@ export function artifactPath(dir: string, name: string): string {
 
 // Screenshots are secrets-by-default: written once, user-only (0600).
 export function saveScreenshot(dir: string, base64: string): string {
+  if (typeof base64 !== "string" || base64.trim() === "") {
+    throw new Error("screenshot data is empty");
+  }
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64.trim())) {
+    throw new Error("screenshot data is not valid base64");
+  }
+  let data: Buffer;
+  try {
+    data = Buffer.from(base64, "base64");
+  } catch (error) {
+    throw new Error(`screenshot data is not valid base64: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (data.length === 0) throw new Error("screenshot data decoded to an empty file");
   const file = artifactPath(dir, "cu.png");
-  writeFileSync(file, Buffer.from(base64, "base64"), { mode: 0o600 });
+  writeFileSync(file, data, { mode: 0o600 });
   return file;
 }

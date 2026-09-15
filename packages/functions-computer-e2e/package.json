@@ -8,6 +8,7 @@
     "./src/*": "./src/*"
   },
   "dependencies": {
-    "@ya-skills/computer-runtime": "workspace:*"
+    "@ya-skills/computer-runtime": "workspace:*",
+    "@ya-skills/computer-session": "workspace:*"
   }
 }

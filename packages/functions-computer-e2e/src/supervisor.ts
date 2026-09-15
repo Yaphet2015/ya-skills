@@ -8,8 +8,8 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
-  closeSync,
   mkdirSync,
+  closeSync,
   openSync,
   readFileSync,
   realpathSync,
@@ -19,9 +19,10 @@ import {
   writeFileSync
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { createInterface } from "node:readline";
 import { isCompiledRuntime } from "@ya-skills/computer-runtime";
+import { FrameReader } from "@ya-skills/computer-session";
 import {
   ARTIFACTS_DIR,
   EVENTS_FILE,
@@ -77,6 +78,72 @@ function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+function processGroupHasRunnableMember(pid: number): boolean {
+  const ps = spawnSync("ps", ["-axo", "pgid=,stat="], { encoding: "utf8" });
+  if (ps.status !== 0) return true; // conservative when process inventory is unavailable
+  for (const line of (ps.stdout ?? "").split("\n")) {
+    const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
+    if (!match || Number(match[1]) !== pid) continue;
+    if (!match[2]!.startsWith("Z")) return true;
+  }
+  // A group made only of zombies has no runnable/native work left. The OS
+  // reaper may keep its pid visible briefly, so do not hold the next run on
+  // kill(-pgid, 0) alone.
+  return false;
+}
+
+async function waitForProcessGroupGone(pid: number | undefined, timeoutMs: number): Promise<boolean> {
+  if (!pid) return true;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      process.kill(-pid, 0);
+      if (!processGroupHasRunnableMember(pid)) return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return true;
+    }
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+async function reapWorkerGroup(pid: number | undefined, graceMs: number): Promise<boolean> {
+  const waitMs = Math.max(graceMs, 2_000);
+  if (!pid || await waitForProcessGroupGone(pid, 0)) return true;
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+  }
+  if (await waitForProcessGroupGone(pid, waitMs)) return true;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+  }
+  return waitForProcessGroupGone(pid, waitMs);
+}
+
+async function spawnWorkerWithRetry(
+  executable: string,
+  args: string[],
+  options: Parameters<typeof spawn>[2]
+): Promise<ChildProcess> {
+  let lastError: unknown;
+  // Bun 1.3.14 can transiently report ENOENT while wiring several pipe
+  // descriptors under concurrent test workers. The spawn has not created a
+  // child in that case, so a bounded retry is safe and does not replay work.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return spawn(executable, args, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 function gitRepoInfo(): { revision: string | null; dirty: boolean | null } {
   const rev = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
   if (rev.status !== 0 || !rev.stdout.trim()) return { revision: null, dirty: null };
@@ -102,7 +169,57 @@ interface WorkerOutcome {
   signal: NodeJS.Signals | null;
 }
 
-export async function supervise(options: SuperviseOptions): Promise<RunSummary> {
+// The supervisor owns process groups and the global desktop target lease. A
+// single yk process serializes run records so Bun 1.3.14 cannot interleave
+// child stdio setup across concurrent callers; separate yk processes still
+// have independent run roots and their workers retain the runtime lease.
+let superviseTail: Promise<void> = Promise.resolve();
+const SUPERVISOR_LOCK = join(tmpdir(), "ya-skills-computer-e2e-supervisor.lock");
+
+async function acquireSupervisorLock(): Promise<() => void> {
+  const token = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  for (;;) {
+    try {
+      mkdirSync(SUPERVISOR_LOCK, { mode: 0o700 });
+      writeFileSync(join(SUPERVISOR_LOCK, "owner.json"), JSON.stringify({ pid: process.pid, token }), { mode: 0o600 });
+      return () => rmSync(SUPERVISOR_LOCK, { recursive: true, force: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      try {
+        const owner = JSON.parse(readFileSync(join(SUPERVISOR_LOCK, "owner.json"), "utf8")) as { pid?: unknown };
+        if (typeof owner.pid === "number") {
+          try {
+            process.kill(owner.pid, 0);
+          } catch (probeError) {
+            if ((probeError as NodeJS.ErrnoException).code === "ESRCH") {
+              rmSync(SUPERVISOR_LOCK, { recursive: true, force: true });
+              continue;
+            }
+          }
+        }
+      } catch {
+        // An unreadable lock is conservatively retained for another pass;
+        // it is never overwritten while its owner is uncertain.
+      }
+      await new Promise((resolveSleep) => setTimeout(resolveSleep, 25));
+    }
+  }
+}
+
+export function supervise(options: SuperviseOptions): Promise<RunSummary> {
+  const run = superviseTail.then(async () => {
+    const release = await acquireSupervisorLock();
+    try {
+      return await superviseOnce(options);
+    } finally {
+      release();
+    }
+  });
+  superviseTail = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
   if (options.requireVersion !== undefined && options.requireVersion !== packageJson.version) {
     throw new Error(
       `yk version mismatch: --require-version ${options.requireVersion} but this yk is ${packageJson.version}`
@@ -182,20 +299,28 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
       ? { executable: realpathSync(process.execPath), args: [WORKER_COMMAND, configPath] }
       : { executable: process.execPath, args: [cliEntryPath(), WORKER_COMMAND, configPath] };
 
-    const stdoutFd = openSync(join(runDir, `worker-${index}.stdout.log`), "a", 0o600);
-    const stderrFd = openSync(join(runDir, `worker-${index}.stderr.log`), "a", 0o600);
+    const stdoutPath = join(runDir, `worker-${index}.stdout.log`);
+    const stderrPath = join(runDir, `worker-${index}.stderr.log`);
+    const eventSpoolPath = join(runDir, `.worker-${index}.events`);
+    // Regular files avoid Bun 1.3.14's mixed numeric-fd/pipe race while
+    // retaining fd3 as a distinct control transport. The parent tails this
+    // private spool; the public events.jsonl remains parent-owned SSOT.
+    const stdoutFd = openSync(stdoutPath, "a", 0o600);
+    const stderrFd = openSync(stderrPath, "a", 0o600);
+    const eventFd = openSync(eventSpoolPath, "a+", 0o600);
     let child: ChildProcess;
     try {
-      child = spawn(invocation.executable, invocation.args, {
+      child = await spawnWorkerWithRetry(invocation.executable, invocation.args, {
         cwd: process.cwd(),
         detached: true,
-        // stdout/stderr go straight into the run record; fd3 is the protocol.
-        stdio: ["ignore", stdoutFd, stderrFd, "pipe"],
+        stdio: ["ignore", stdoutFd, stderrFd, eventFd],
         env: { ...process.env, BUN_CONFIG_NO_CLEAR_TERMINAL: "1" }
       });
     } catch (error) {
       closeSync(stdoutFd);
       closeSync(stderrFd);
+      closeSync(eventFd);
+      rmSync(eventSpoolPath, { force: true });
       append("suite_collected", { file: displayFile, loadError: `spawn failed: ${error instanceof Error ? error.message : String(error)}` });
       stopped = true;
       break;
@@ -237,19 +362,12 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
     const clearTimers = (): void => {
       if (watchdog) clearTimeout(watchdog);
       if (killTimer) clearTimeout(killTimer);
-      if (drainTimer) clearTimeout(drainTimer);
       if (activeStop === requestStop) activeStop = null;
     };
     activeStop = requestStop;
 
-    const fd3 = child.stdio[3] as import("node:stream").Readable | null;
-    const rl = fd3 ? createInterface({ input: fd3 }) : null;
-    const streamClosed = new Promise<void>((resolveStream) => {
-      if (rl) rl.on("close", () => resolveStream());
-      else resolveStream();
-    });
-    rl?.on("line", (line: string) => {
-      if (line.length > MAX_EVENT_LINE) {
+    const processLine = (line: string): void => {
+      if (Buffer.byteLength(line, "utf8") > MAX_EVENT_LINE) {
         append("worker_protocol_error", { file, reason: `event line exceeds ${MAX_EVENT_LINE} bytes` });
         return;
       }
@@ -277,23 +395,52 @@ export async function supervise(options: SuperviseOptions): Promise<RunSummary> 
       }
       if (parsed.type === "case_finished") sawCaseFinished = true;
       append(parsed.type as WorkerEventType, { ...payload, file: displayFile });
-    });
+    };
+    const frameReader = new FrameReader();
+    let spoolOffset = 0;
+    const pollSpool = (): void => {
+      let bytes: Buffer;
+      try {
+        bytes = readFileSync(eventSpoolPath);
+      } catch {
+        return;
+      }
+      if (bytes.length <= spoolOffset) return;
+      const chunk = bytes.subarray(spoolOffset);
+      spoolOffset = bytes.length;
+      try {
+        for (const line of frameReader.push(chunk)) processLine(line);
+      } catch (error) {
+        append("worker_protocol_error", { file: displayFile, reason: error instanceof Error ? error.message : String(error) });
+        requestStop();
+      }
+    };
+    // Polling a regular fd3 spool is intentionally small and bounded. It
+    // avoids Bun 1.3.14's intermittent pipe event loss while preserving live
+    // case/hook watchdog updates.
+    const spoolTimer = setInterval(pollSpool, 20);
+    spoolTimer.unref();
 
     const outcome = await new Promise<WorkerOutcome>((resolveExit) => {
       child.once("error", () => resolveExit({ exitCode: null, signal: null }));
       child.once("exit", (code, signal) => resolveExit({ exitCode: code, signal }));
     });
-    // Do not lose the final events: wait for fd3 to close (bounded).
-    let drainTimer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      streamClosed,
-      new Promise((r) => {
-        drainTimer = setTimeout(r, 500);
-      })
-    ]);
-    clearTimers();
+    // Do not lose the final events: read the completed fd3 spool once more
+    // after the leader exits, then close all inherited descriptors.
+    pollSpool();
+    clearInterval(spoolTimer);
     closeSync(stdoutFd);
     closeSync(stderrFd);
+    closeSync(eventFd);
+    rmSync(eventSpoolPath, { force: true });
+    clearTimers();
+    // A leader exit is not proof that a descendant is gone. Reap the whole
+    // detached worker group before the next run can start; this also avoids
+    // Bun 1.3.14 cold-start/stdio contention after a hard timeout.
+    const groupReaped = await reapWorkerGroup(child.pid, cleanupGraceMs);
+    if (!groupReaped) {
+      append("worker_protocol_error", { file: displayFile, reason: `worker process group ${child.pid ?? "?"} could not be fully reaped` });
+    }
     rmSync(configPath, { force: true });
 
     if (outcome.exitCode !== null) workerExitCodes.push(outcome.exitCode);
