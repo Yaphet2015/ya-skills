@@ -1,6 +1,6 @@
 ---
 name: show-pr
-description: Use only when the user explicitly invokes show-pr to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, per-case test coverage with real results, verification screenshots or video, a decision-point design doc, and suggested manual tests in one HTML page. It never triggers implicitly.
+description: Use only when the user explicitly invokes show-pr to build an offline Chinese PR HTML report; never triggers implicitly.
 disable-model-invocation: true
 ---
 

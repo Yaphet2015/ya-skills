@@ -1,6 +1,6 @@
 {
   "name": "computer-e2e",
-  "description": "Use only when explicitly asked to write, run, or repair deterministic desktop E2E tests. Explore with computer-use, then replay trusted project-local test code through yk without an LLM deciding runtime steps.",
+  "description": "Deterministic macOS desktop E2E via yk. Use only when the user asks for computer-e2e.",
   "dependsOn": ["computer-use"],
   "functions": [
     { "domain": "computer-e2e", "action": "run" },

@@ -1,6 +1,6 @@
 ---
 name: video-transcript
-description: Use when the user provides a video URL or local media/caption file and wants the transcript/text稿, especially YouTube transcript extraction. Captions are used first; audio-only Whisper transcription is the fallback.
+description: Video transcript (captions first, Whisper fallback). Use when the user wants text from a video.
 ---
 
 # Video Transcript Skill

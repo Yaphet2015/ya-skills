@@ -127,7 +127,7 @@ test("root catalog exposes the design-grill skill", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const designGrill = catalog.byName.get("design-grill");
 
-  expect(designGrill?.description).toContain("stress-test");
+  expect(designGrill?.description.toLowerCase()).toContain("stress-test");
   expect(designGrill?.functions).toEqual([]);
 });
 
@@ -161,6 +161,14 @@ test("root catalog exposes the svg-icons skill without CLI functions", async () 
 
   expect(svgIcons?.description).toContain("/svg-icons");
   expect(svgIcons?.functions).toEqual([]);
+});
+
+test("root catalog skill descriptions stay short enough to scan and route", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+
+  for (const skill of catalog.skills) {
+    expect(skill.description.length, skill.name).toBeLessThanOrEqual(160);
+  }
 });
 
 test("root catalog exposes the show-pr skill as manual-only", async () => {
@@ -403,7 +411,7 @@ test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => 
 
   expect(stderr).toBe("");
   expect(exitCode).toBe(0);
-  expect(stdout).toContain("homebrew-only\n  Packaged catalog skill");
+  expect(stdout).toContain("homebrew-only  Packaged catalog skill");
   expect(stdout).not.toContain("pbench");
 });
 

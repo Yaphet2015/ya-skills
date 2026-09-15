@@ -1,6 +1,6 @@
 ---
 name: validator
-description: Use only when the user explicitly invokes /validator after a Plan is complete to establish its Completion Standard.
+description: Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete.
 disable-model-invocation: true
 ---
 

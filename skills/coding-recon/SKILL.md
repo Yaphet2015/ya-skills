@@ -1,6 +1,6 @@
 ---
 name: coding-recon
-description: Use when implementing a non-trivial feature, fixing a non-obvious bug, refactoring unfamiliar code, changing behavior across modules, or when repository evidence could materially change the implementation.
+description: Use when ownership, contracts, callers, or root cause are unclear before a non-local code change.
 ---
 
 # Coding Recon

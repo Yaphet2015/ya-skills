@@ -1,6 +1,6 @@
 ---
 name: a-share-data
-description: Use when the user needs to fetch Chinese A-share market data, K-lines, financial indicators, cash flow, announcements, or news evidence from public data sources for stock/investment research.
+description: Fetch A-share quotes, K-lines, and filings. Use when the user asks for A-share market data.
 ---
 
 # A-share Data Skill

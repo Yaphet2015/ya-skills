@@ -1,4 +1,4 @@
 {
   "name": "a-share-data",
-  "description": "Fetch and document Chinese A-share quotes, K-lines, financial indicators, cash flow, news, and announcements from public data endpoints without fabricating missing data."
+  "description": "Fetch A-share quotes, K-lines, and filings. Use when the user asks for A-share market data."
 }
