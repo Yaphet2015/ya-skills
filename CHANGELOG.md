@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/Yaphet2015/ya-skills/compare/v0.19.0...v0.19.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* require explicit show-pr report paths ([2a100eb](https://github.com/Yaphet2015/ya-skills/commit/2a100ebf75e22d065a6bcdcf732156de3cee4746))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
