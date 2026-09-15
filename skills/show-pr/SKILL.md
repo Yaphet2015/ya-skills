@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Show PR (offline Chinese report)
 
-This skill turns a diff or a codebase into one JSON document (lanes, nodes, edges, ordered flows, evidence sections) and renders it as a **self-contained, offline, dark-theme HTML report with all display text in Chinese**: `.show-pr/report.html`.
+This skill turns a diff or a codebase into one JSON document (lanes, nodes, edges, ordered flows, evidence sections) and renders it as a **self-contained, offline, dark-theme HTML report with all display text in Chinese**: `.show-pr/<project>/<YYYYMMDD>-<branch>/report-<n>.html`.
 
 It runs entirely on local Node — no `npx` package, no network, no canvas, no PR attachment. Deliver the file path; the user opens it in a browser.
 
@@ -35,13 +35,25 @@ Run only when the user explicitly invokes `show-pr` or explicitly asks for this 
 
    If this skill is installed elsewhere (for example `.claude/skills/show-pr`), adjust the tool path accordingly. Fix every failure and re-run until it prints `VALID`. Do not build a report from an invalid document; do not "work around" a failure by deleting the element it names. The validator enforces the full contract offline: enums, limits, referential integrity, evidence files existing under their size caps, and every design `chosen` being a declared option.
 
-5. **Build the report.**
+5. **Build the report** under `.show-pr/` (never `/tmp`, never the Desktop). Resolve every path segment yourself and inline the literals. Never put `$(...)` in a command the user might paste — a line wrap in chat turns `--show-current` into a shell command.
+
+   **Path:** `.show-pr/<project>/<YYYYMMDD>-<branch>/report-<n>.html`
+
+   | Segment | Resolve |
+   | ------- | ------- |
+   | project | `name` from the repo-root `package.json`. If that file or field is missing, the git toplevel directory name. Replace `/` with `-` so a scoped name `@org/pkg` becomes `@org-pkg`. |
+   | YYYYMMDD | local calendar date |
+   | branch | current git branch. Replace `/` and whitespace with `-`. |
+   | n | next integer in that directory (`report-1.html`, then `report-2.html`, …). Start at 1 if the directory is empty. |
+
+   Create the directory, then build (replace each placeholder with the literal you resolved):
 
    ```bash
-   node .agents/skills/show-pr/tools/build-report.cjs .show-pr/graph.zh.json .show-pr/report.html
+   mkdir -p .show-pr/PROJECT/YYYYMMDD-BRANCH
+   node .agents/skills/show-pr/tools/build-report.cjs .show-pr/graph.zh.json .show-pr/PROJECT/YYYYMMDD-BRANCH/report-N.html
    ```
 
-6. **Deliver.** Hand back the path `.show-pr/report.html` and one or two sentences on what it shows. Nothing is pushed, attached or committed: `.show-pr/` is scratch space (keep it in `.gitignore`; the report is rebuilt from the document whenever needed).
+6. **Deliver.** Hand back that path and one or two sentences on what it shows. Do not also give a copy command. Nothing is pushed, attached or committed: `.show-pr/` is scratch space (keep it in `.gitignore`; the report is rebuilt from the document whenever needed).
 
 A follow-up such as "rename that node" or "add the queue" is: edit `.show-pr/graph.zh.json`, validate, build again.
 
@@ -92,6 +104,6 @@ The five evidence sections exist so a reviewer can check the work instead of tak
 | `references/graph-document.md`    | the document, field by field: enums, limits, common failures   |
 | `references/example.graph.json`   | one complete document that validates, to copy the shape of     |
 | `references/evidence/`            | the placeholder screenshot referenced by the example document  |
-| `tools/validate.cjs`              | offline contract validator (run with the graph path as argv)   |
-| `tools/build-report.cjs`          | renders the graph document into the Chinese `report.html`      |
+| `tools/validate.cjs`              | offline contract validator; graph path required                |
+| `tools/build-report.cjs`          | renders the graph document into the Chinese HTML report; graph and output paths required |
 | `tools/vendor/mermaid.min.js`     | mermaid 9.4.3 (MIT), inlined into the report only when the document has mermaid diagrams |

@@ -1,7 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const [, , graphFile = '.show-pr/graph.zh.json', outFile = '.show-pr/report.html'] = process.argv;
+const [, , graphFile, outFile] = process.argv;
+if (!graphFile || !outFile) {
+  console.error('usage: node build-report.cjs <graph.json> <output.html>');
+  process.exit(1);
+}
 const doc = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
 const docJson = JSON.stringify(doc).replace(/</g, '\\u003c');
 

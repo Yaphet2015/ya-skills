@@ -174,6 +174,9 @@ test("root catalog exposes the show-pr skill as manual-only", async () => {
   const skill = await readFile(resolve("skills", "show-pr", "SKILL.md"), "utf8");
   expect(skill).toContain("disable-model-invocation: true");
   expect(skill).toContain("Invocation Gate");
+  expect(skill).toContain("package.json");
+  expect(skill).toContain("report-<n>.html");
+  expect(skill).not.toContain("$(git branch");
   expect(skill).not.toContain(".logoscode");
   expect(skill).not.toContain("pr-lens");
 });
@@ -240,6 +243,38 @@ async function buildExampleClone(mutate?: (doc: Record<string, unknown>) => void
   const html = await readFile(outFile, "utf8");
   return { outDir, outFile, docFile, html, buildErr, buildCode };
 }
+
+test("show-pr tools fail loudly without explicit paths", async () => {
+  const skillDir = resolve("skills", "show-pr");
+  const run = async (script: string, ...args: string[]) => {
+    const proc = Bun.spawn(["node", join(skillDir, "tools", script), ...args], {
+      stdout: "pipe",
+      stderr: "pipe"
+    });
+    const [, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited
+    ]);
+    return { err, code };
+  };
+
+  // Agent always passes argv (SKILL.md); missing args must not fall back to a default path
+  const validate = await run("validate.cjs");
+  expect(validate.code).toBe(1);
+  expect(validate.err).toContain("usage");
+
+  const buildNone = await run("build-report.cjs");
+  expect(buildNone.code).toBe(1);
+  expect(buildNone.err).toContain("usage");
+
+  const buildGraphOnly = await run(
+    "build-report.cjs",
+    join(skillDir, "references", "example.graph.json")
+  );
+  expect(buildGraphOnly.code).toBe(1);
+  expect(buildGraphOnly.err).toContain("usage");
+});
 
 test("show-pr report embeds evidence and renders mermaid from the example document", async () => {
   const { html, buildErr, buildCode, outDir } = await buildExampleClone();
