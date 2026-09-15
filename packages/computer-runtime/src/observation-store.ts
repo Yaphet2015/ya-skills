@@ -7,6 +7,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { ensurePrivateFile } from "./artifacts.js";
 import type { ImageGeometry, Observation, Target } from "./types.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,10 +50,20 @@ function readStored(root: string, id: string): StoredObservation {
   for (const imagePath of [parsed.image?.originalPath, parsed.image?.path]) {
     if (imagePath === undefined) continue;
     try {
+      // Existing paths may have been created by copyFile/sips with a
+      // permissive mode. Repair and verify them before making the observation
+      // usable as a click credential; permission failures are not swallowed.
+      ensurePrivateFile(imagePath);
       const stats = statSync(imagePath);
       if (!stats.isFile() || stats.size <= 0) throw new Error("empty or non-regular image file");
-    } catch {
-      throw new Error(`observation ${id} image file is missing or unusable`);
+    } catch (error) {
+      const code = typeof error === "object" && error !== null ? (error as NodeJS.ErrnoException).code : undefined;
+      if (code === "ENOENT" || code === "ENOTDIR") {
+        throw new Error(`observation ${id} image file is missing or unusable`);
+      }
+      throw new Error(
+        `observation ${id} image file failed privacy validation: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
   return parsed;
@@ -64,6 +75,9 @@ export function createObservationStore(root: string): ObservationStore {
     async save(value: Observation): Promise<void> {
       if (!UUID_RE.test(value.id)) {
         throw new Error(`observation id must be a UUID (got: ${value.id})`);
+      }
+      for (const imagePath of [value.image?.originalPath, value.image?.path]) {
+        if (imagePath !== undefined) ensurePrivateFile(imagePath);
       }
       const stored: StoredObservation = { ...value, valid: true };
       const target = metaPath(root, value.id);
@@ -263,9 +277,14 @@ export async function resizeScreenshot(
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     throw new Error(`sips reported no dimensions for ${originalPath}`);
   }
+  // Treat both the source and any derived screenshot as evidence artifacts.
+  // Existing permissive source paths are repaired before they can be returned
+  // or handed to sips; a chmod/stat error is deliberately fatal.
+  if (existsSync(originalPath)) ensurePrivateFile(originalPath);
   const longest = Math.max(width, height);
   if (longest <= maxDimension) {
-    // Already within the limit: no derived image needed.
+    // Already within the limit: no derived image needed. The source was
+    // repaired/verified above before returning it.
     return { path: originalPath, width, height };
   }
   const outputPath = originalPath.replace(/\.png$/i, "") + `-${maxDimension}.png`;
@@ -293,10 +312,9 @@ export async function resizeScreenshot(
   ) {
     throw new Error(`sips produced invalid dimensions for ${outputPath}: ${outWidth}x${outHeight}`);
   }
-  try {
-    writeFileSync(outputPath, readFileSync(outputPath), { mode: 0o600 });
-  } catch {
-    // chmod-equivalent best effort; sips already created the file
-  }
+  // sips may preserve an existing permissive mode and writeFile({ mode })
+  // would not fix it. Require the derived file to be private; any chmod/stat
+  // failure is evidence-persistence failure, never a best-effort warning.
+  if (existsSync(outputPath)) ensurePrivateFile(outputPath);
   return { path: outputPath, width: outWidth, height: outHeight };
 }

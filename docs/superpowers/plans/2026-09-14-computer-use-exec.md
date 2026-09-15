@@ -19,6 +19,8 @@
 - 不要求安装额外 Node/Bun；SDK继续lazy，help/list/install不启动worker。
 - E2E默认测试desktop-free；发布门禁和真实桌面结果独立记录。
 
+> **Integration status (2026-09-15):** The five lane deltas, generated API references, and exact Bun 1.3.14 desktop-free/release gates are integrated and recorded in `docs/verification/2026-09-15-parallel-integration.md`. Native Background/TCC, real UI/model usage, and performance acceptance remain unchecked; this plan is not wholly complete.
+
 ---
 
 ## 公共脚本接口
@@ -268,7 +270,7 @@ bun run smoke
 
 ## 交付检查
 
-- [x] A/B/C全部任务完成或显式列阻塞（A1 剩余实机项见 verification 待验证清单），不存在“静默留到以后”的代码执行模块。
+- [ ] A/B/C implementation is integrated, but the plan is not wholly complete: A1 native acceptance and C5 real desktop/model-performance tasks remain explicit blockers in the integration verification; no code-execution module is silently deferred.
 - [x] 同一Computer runtime服务CLI和E2E，没有第二套桌面driver。
 - [x] 无模型依赖、审计配置或调用方运行时集成。
 - [x] 新文档与生成API一致，旧命令兼容。

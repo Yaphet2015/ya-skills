@@ -23,7 +23,7 @@ import type {
 } from "./types.js";
 import { clickUnique, waitForElements } from "./actions.js";
 import { normalizeElements, projectObservation } from "./observe.js";
-import { artifactPath, ensureOutDir, saveScreenshot } from "./artifacts.js";
+import { artifactPath, ensureOutDir, ensurePrivateFile, saveScreenshot } from "./artifacts.js";
 import { copyFileSync, statSync } from "node:fs";
 import { mapImagePointToDriverPixels } from "./coordinates.js";
 import { frameMatchesObservation, pngSha256, type ObservationStore } from "./observation-store.js";
@@ -198,6 +198,10 @@ class SessionImpl implements ComputerSession {
    * session-wide signal so one cancelled request does not poison a reused
    * driver session. */
   private batchSignal: AbortSignal | null = null;
+  /** Operations reserve admission before any asynchronous lease/setup work.
+   * close() waits for these reservations to drain so a late lease or driver
+   * creation cannot cross the native seam after cleanup has started. */
+  private pendingAdmissions = 0;
 
   constructor(
     private readonly factory: BackendFactory,
@@ -242,6 +246,7 @@ class SessionImpl implements ComputerSession {
     if (this.options.signal?.aborted || this.batchSignal?.aborted) {
       throw new ComputerError("aborted", "the operation was aborted");
     }
+    this.pendingAdmissions += 1;
     const cap = uncapped ? Infinity : OP_LIMIT_MS;
     return Math.min(
       this.options.deadlineAt ?? Infinity,
@@ -250,11 +255,37 @@ class SessionImpl implements ComputerSession {
     );
   }
 
+  /** Release the reservation made by beginOp(), including when setup failed
+   * before a backend call. The close path polls this count before cleanup. */
+  private endOp(): void {
+    if (this.pendingAdmissions > 0) this.pendingAdmissions -= 1;
+  }
+
+  private async waitForAdmissionsIdle(deadlineAt: number): Promise<boolean> {
+    while (this.pendingAdmissions > 0 && Date.now() < deadlineAt) {
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, Math.max(deadlineAt - Date.now(), 1))));
+    }
+    return this.pendingAdmissions === 0;
+  }
+
   /** Final admission check immediately before invoking a backend method.
    * Awaiting a lease, journal callback, invalidation, or driver setup can
    * consume the entire caller budget; no native request may cross the seam
    * after cancellation or expiration. */
   private assertDispatchAllowed(deadlineAt: number, outcome?: "not_delivered"): void {
+    // close() may race an operation that is still waiting for a lease or
+    // driver setup. These lifecycle guards must be checked at the final
+    // native seam, not only when beginOp() first reserved admission.
+    if (this.closed) {
+      throw new ComputerError("session_closed", "the session is closed", outcome);
+    }
+    if (this.poisoned) {
+      throw new ComputerError(
+        "session_unusable",
+        "the session is unusable and refuses further native work",
+        outcome
+      );
+    }
     if (this.options.signal?.aborted || this.batchSignal?.aborted) {
       throw new ComputerError("aborted", "the operation was aborted", outcome);
     }
@@ -291,6 +322,10 @@ class SessionImpl implements ComputerSession {
   }
 
   private async ensureReady(deadlineAt: number): Promise<Backend> {
+    // Setup itself must not begin after close/cancellation/deadline. Callers
+    // still perform the final check after this await because lifecycle state
+    // can change while initialization is in flight.
+    this.assertDispatchAllowed(deadlineAt);
     if (this.backend) return this.backend;
     this.initPromise ??= this.initialize(deadlineAt);
     await this.initPromise;
@@ -358,15 +393,19 @@ class SessionImpl implements ComputerSession {
 
   private async read<T>(label: string, fn: (backend: Backend) => Promise<T>): Promise<T> {
     const deadlineAt = this.beginOp();
-    const backend = await this.ensureReady(deadlineAt);
-    this.assertDispatchAllowed(deadlineAt);
     try {
-      return await withDeadline(label, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
-    } catch (error) {
-      if (isTimeoutError(error)) {
-        throw new ComputerError("command_timeout", (error as Error).message);
+      const backend = await this.ensureReady(deadlineAt);
+      this.assertDispatchAllowed(deadlineAt);
+      try {
+        return await withDeadline(label, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
+      } catch (error) {
+        if (isTimeoutError(error)) {
+          throw new ComputerError("command_timeout", (error as Error).message);
+        }
+        throw this.wrapAborted(error);
       }
-      throw this.wrapAborted(error);
+    } finally {
+      this.endOp();
     }
   }
 
@@ -394,6 +433,10 @@ class SessionImpl implements ComputerSession {
         if (!stats.isFile() || stats.size <= 0) throw new Error(`screenshot file is empty or not a regular file: ${source}`);
         const destination = artifactPath(ensureOutDir(this.options.artifactsDir), "cu.png");
         copyFileSync(source, destination);
+        // copyFileSync does not honor a mode argument and may inherit a
+        // permissive source mode. Enforce the artifact contract on the actual
+        // destination and let chmod/stat failures escape loudly.
+        ensurePrivateFile(destination);
         return destination;
       }
       return undefined;
@@ -633,107 +676,124 @@ class SessionImpl implements ComputerSession {
     fn: (backend: Backend) => Promise<void | ToolResultLike>
   ): Promise<void> {
     const deadlineAt = this.beginOp();
-    // Shared target ownership (B3): the FIRST mutation of each app acquires
-    // the app-level lease; a busy target refuses BEFORE any input dispatch
-    // (not_delivered). Read-only paths never acquire.
-    await this.ensureLease(target);
-    this.assertDispatchAllowed(deadlineAt, "not_delivered");
-    // Mutation start invalidates every prior observation immediately.
-    this.revision += 1;
-    const store = this.options.observationStore;
-    if (store) {
+    try {
+      // Shared target ownership (B3): the FIRST mutation of each app acquires
+      // the app-level lease; a busy target refuses BEFORE any input dispatch
+      // (not_delivered). Read-only paths never acquire.
+      await this.ensureLease(target);
+      this.assertDispatchAllowed(deadlineAt, "not_delivered");
+      // Mutation start invalidates every prior observation immediately.
+      this.revision += 1;
+      const store = this.options.observationStore;
+      if (store) {
+        try {
+          await store.invalidate(target);
+        } catch (error) {
+          throw new ComputerError(
+            "observation_store_failed",
+            `invalidating prior observations failed: ${error instanceof Error ? error.message : String(error)}`,
+            "not_delivered"
+          );
+        }
+      }
+      let actionStarted = false;
       try {
-        await store.invalidate(target);
+        await this.options.onAction?.({ phase: "started", kind });
+        actionStarted = true;
       } catch (error) {
         throw new ComputerError(
-          "observation_store_failed",
-          `invalidating prior observations failed: ${error instanceof Error ? error.message : String(error)}`,
+          "event_persist_failed",
+          `could not persist action start before dispatch: ${error instanceof Error ? error.message : String(error)}`,
           "not_delivered"
         );
       }
-    }
-    try {
-      await this.options.onAction?.({ phase: "started", kind });
-    } catch (error) {
-      throw new ComputerError(
-        "event_persist_failed",
-        `could not persist action start before dispatch: ${error instanceof Error ? error.message : String(error)}`,
-        "not_delivered"
-      );
-    }
-    const finish = async (outcome: "delivered" | "not_delivered" | "unknown"): Promise<void> => {
+      const finish = async (outcome: "delivered" | "not_delivered" | "unknown"): Promise<void> => {
+        try {
+          await this.options.onAction?.({ phase: "finished", kind, outcome });
+        } catch (error) {
+          // The input already crossed the native boundary; an event persistence
+          // failure therefore makes its delivery unknown and poisons the
+          // session instead of reporting a durable success.
+          this.poisoned = true;
+          throw new ComputerError(
+            "event_persist_failed",
+            `could not persist action outcome: ${error instanceof Error ? error.message : String(error)}`,
+            "unknown"
+          );
+        }
+      };
+      let backend: Backend;
       try {
-        await this.options.onAction?.({ phase: "finished", kind, outcome });
+        backend = await this.ensureReady(deadlineAt);
+        // Lease acquisition, observation invalidation, and action-event
+        // persistence are all waits. Recheck immediately before crossing the
+        // native input boundary; a late request is not delivered just because
+        // setup began in time.
+        this.assertDispatchAllowed(deadlineAt, "not_delivered");
       } catch (error) {
-        // The input already crossed the native boundary; an event persistence
-        // failure therefore makes its delivery unknown and poisons the
-        // session instead of reporting a durable success.
+        const mapped = this.wrapAborted(error);
+        if (actionStarted) {
+          // Setup failures occur before the action input crosses the native
+          // seam. A timed-out driver setup remains unknown conservatively;
+          // lifecycle/refusal failures are not_delivered, but every durable
+          // action_started event receives a matching finished event.
+          const outcome =
+            mapped instanceof ComputerError && mapped.code === "command_timeout"
+              ? "unknown"
+              : mapped instanceof ComputerError && mapped.actionOutcome !== undefined
+                ? mapped.actionOutcome
+                : "not_delivered";
+          await finish(outcome);
+        }
+        throw mapped;
+      }
+      try {
+        this.assertDispatchAllowed(deadlineAt, "not_delivered");
+        const result = await withDeadline(kind, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
+        if (result && typeof result === "object" && result.isError) {
+          throw new ComputerError(
+            "action_refused",
+            `${kind} was refused: ${result.text ?? "no detail"}`,
+            "not_delivered"
+          );
+        }
+        await finish("delivered");
+      } catch (error) {
+        if (isTimeoutError(error)) {
+          this.poisoned = true;
+          await finish("unknown");
+          throw new ComputerError("command_timeout", String((error as Error).message), "unknown");
+        }
+        if (error instanceof ComputerError && error.actionOutcome !== undefined) {
+          await finish(error.actionOutcome);
+          throw error;
+        }
+        const mapped = this.wrapAborted(error);
+        if (mapped instanceof ComputerError) {
+          await finish("not_delivered");
+          throw mapped;
+        }
+        if (isKnownDriverRefusal(error)) {
+          await finish("not_delivered");
+          throw new ComputerError(
+            "action_refused",
+            `${kind} was refused by the driver: ${error instanceof Error ? error.message : String(error)}`,
+            "not_delivered"
+          );
+        }
+        // Unknown native exception mid-flight: delivery state is unknowable.
+        // Conservative unknown + poison — the session refuses further work
+        // instead of risking a replay on an unstable driver.
         this.poisoned = true;
+        await finish("unknown");
         throw new ComputerError(
-          "event_persist_failed",
-          `could not persist action outcome: ${error instanceof Error ? error.message : String(error)}`,
+          "action_failed",
+          `${kind} failed with an unclassified native error: ${error instanceof Error ? error.message : String(error)}`,
           "unknown"
         );
       }
-    };
-    let backend: Backend;
-    try {
-      backend = await this.ensureReady(deadlineAt);
-      // Lease acquisition, observation invalidation, and action-event
-      // persistence are all waits. Recheck immediately before crossing the
-      // native input boundary; a late request is not delivered just because
-      // setup began in time.
-      this.assertDispatchAllowed(deadlineAt, "not_delivered");
-    } catch (error) {
-      const mapped = this.wrapAborted(error);
-      if (mapped instanceof ComputerError && mapped.code === "command_timeout") {
-        await finish("unknown");
-      }
-      throw mapped;
-    }
-    try {
-      this.assertDispatchAllowed(deadlineAt, "not_delivered");
-      const result = await withDeadline(kind, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));      if (result && typeof result === "object" && result.isError) {
-        throw new ComputerError(
-          "action_refused",
-          `${kind} was refused: ${result.text ?? "no detail"}`,
-          "not_delivered"
-        );
-      }
-      await finish("delivered");
-    } catch (error) {
-      if (isTimeoutError(error)) {
-        this.poisoned = true;
-        await finish("unknown");
-        throw new ComputerError("command_timeout", String((error as Error).message), "unknown");
-      }
-      if (error instanceof ComputerError && error.actionOutcome !== undefined) {
-        await finish(error.actionOutcome);
-        throw error;
-      }
-      const mapped = this.wrapAborted(error);
-      if (mapped instanceof ComputerError) {
-        await finish("not_delivered");
-        throw mapped;
-      }
-      if (isKnownDriverRefusal(error)) {
-        await finish("not_delivered");
-        throw new ComputerError(
-          "action_refused",
-          `${kind} was refused by the driver: ${error instanceof Error ? error.message : String(error)}`,
-          "not_delivered"
-        );
-      }
-      // Unknown native exception mid-flight: delivery state is unknowable.
-      // Conservative unknown + poison — the session refuses further work
-      // instead of risking a replay on an unstable driver.
-      this.poisoned = true;
-      await finish("unknown");
-      throw new ComputerError(
-        "action_failed",
-        `${kind} failed with an unclassified native error: ${error instanceof Error ? error.message : String(error)}`,
-        "unknown"
-      );
+    } finally {
+      this.endOp();
     }
   }
 
@@ -775,62 +835,94 @@ class SessionImpl implements ComputerSession {
     description: string,
     opts?: { timeoutMs?: number; intervalMs?: number }
   ): Promise<AxElement[]> {
-    this.beginOp(true); // guards only — the overall budget is the caller's
-    const backend = await this.ensureReady(this.beginOp());
-    const sessionDeadline = this.options.deadlineAt ?? Infinity;
-    return waitForElements(
-      {
-        snapshot: async () => {
-          const perRead = Math.min(sessionDeadline, Date.now() + OP_LIMIT_MS);
-          const b = backend;
-          try {
-            this.assertDispatchAllowed(perRead, "not_delivered");
-            const snap = await withDeadline("snapshot", this.trackNative(b.snapshot(target, false)), Math.max(perRead - Date.now(), 1));            return snap.elements;
-          } catch (error) {
-            if (isTimeoutError(error)) {
-              throw new ComputerError("command_timeout", (error as Error).message);
+    const admissionDeadline = this.beginOp(true);
+    try {
+      // Keep driver setup bounded by one operation even though the polling
+      // portion is caller-owned. Once setup has completed, each poll still
+      // receives the caller/session absolute cap below.
+      const setupDeadline = Math.min(admissionDeadline, Date.now() + OP_LIMIT_MS);
+      const backend = await this.ensureReady(setupDeadline);
+      const sessionDeadline = Math.min(this.options.deadlineAt ?? Infinity, this.batchDeadlineAt ?? Infinity);
+      return await waitForElements(
+        {
+          snapshot: async () => {
+            const perRead = Math.min(sessionDeadline, Date.now() + OP_LIMIT_MS);
+            const b = backend;
+            try {
+              this.assertDispatchAllowed(perRead, "not_delivered");
+              const snap = await withDeadline("snapshot", this.trackNative(b.snapshot(target, false)), Math.max(perRead - Date.now(), 1));
+              return snap.elements;
+            } catch (error) {
+              if (isTimeoutError(error)) {
+                throw new ComputerError("command_timeout", (error as Error).message);
+              }
+              throw this.wrapAborted(error);
             }
-            throw this.wrapAborted(error);
           }
-        }
-      },
-      predicate,
-      description,
-      opts
-    );
+        },
+        predicate,
+        description,
+        opts
+      );
+    } finally {
+      this.endOp();
+    }
   }
 
   // ---- public surface ------------------------------------------------------
 
   async metadata(): Promise<{ driverVersion: string; pid: number }> {
     const deadlineAt = this.beginOp();
-    const backend = await this.ensureReady(deadlineAt);
-    if (this.runtimeInfo) return this.runtimeInfo;
-    const meta = await withDeadline(
-      "metadata",
-      this.trackNative(backend.metadata()),
-      Math.max(deadlineAt - Date.now(), 1)
-    );
-    if (meta?.driverVersion === undefined || meta?.pid === undefined) {
-      throw new ComputerError("metadata_unavailable", "the driver did not report version/pid");
+    try {
+      const backend = await this.ensureReady(deadlineAt);
+      this.assertDispatchAllowed(deadlineAt);
+      if (this.runtimeInfo) return this.runtimeInfo;
+      const meta = await withDeadline(
+        "metadata",
+        this.trackNative(backend.metadata()),
+        Math.max(deadlineAt - Date.now(), 1)
+      );
+      if (meta?.driverVersion === undefined || meta?.pid === undefined) {
+        throw new ComputerError("metadata_unavailable", "the driver did not report version/pid");
+      }
+      this.runtimeInfo = { driverVersion: meta.driverVersion, pid: meta.pid };
+      this.notifyRuntime();
+      return this.runtimeInfo;
+    } finally {
+      this.endOp();
     }
-    this.runtimeInfo = { driverVersion: meta.driverVersion, pid: meta.pid };
-    this.notifyRuntime();
-    return this.runtimeInfo;
   }
 
   async permissions(): Promise<{ accessibility: boolean; screenRecording: boolean }> {
     const deadlineAt = this.beginOp();
-    const backend = await this.ensureReady(deadlineAt);
-    return this.trackNative(backend.permissions());
+    try {
+      const backend = await this.ensureReady(deadlineAt);
+      this.assertDispatchAllowed(deadlineAt);
+      return this.trackNative(backend.permissions());
+    } finally {
+      this.endOp();
+    }
   }
 
   close(): Promise<void> {
     if (this.closePromise) return this.closePromise;
+    // Closing synchronously rejects new admissions. Existing operations are
+    // allowed to finish setup, then fail their final guard; cleanup starts
+    // only after those reservations have drained.
     this.closed = true;
-    const backend = this.backend;
     this.closePromise = (async () => {
       const errors: string[] = [];
+      const cleanupDeadline = Date.now() + (this.options.cleanupDeadlineMs ?? CLEANUP_BUDGET_MS);
+      if (!(await this.waitForAdmissionsIdle(cleanupDeadline))) {
+        // A pending lease/setup may still create native state. Do not clean or
+        // release ownership underneath it; retaining the lease is safer than
+        // allowing another session to race an unresolved operation.
+        throw new ComputerError(
+          "cleanup_failed",
+          "operation admission remained pending after close; target lease retained"
+        );
+      }
+      const backend = this.backend;
       if (backend) {
         errors.push(...(await this.cleanupBackend(backend)));
       }

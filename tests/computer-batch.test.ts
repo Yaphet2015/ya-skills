@@ -165,6 +165,36 @@ describe("runBatch (serial execution with partial receipts)", () => {
     expect(result.observationError?.code).toBe("degraded_snapshot");
   });
 
+  test("cancellation during final observation interrupts without claiming completion", async () => {
+    let startedResolve!: () => void;
+    const started = new Promise<void>((resolve) => (startedResolve = resolve));
+    let releaseResolve!: () => void;
+    const pending = new Promise<void>((resolve) => (releaseResolve = resolve));
+    const computer = fakeComputer({
+      type: async () => undefined,
+      observe: async () => {
+        startedResolve();
+        await pending;
+        const raw = makeNativeObservation();
+        return projectObservation(raw, { mode: "ax" }, { accessibility: true, screenshot: false });
+      }
+    });
+    const controller = new AbortController();
+    const running = runBatch(
+      computer,
+      target,
+      { actions: [{ kind: "type", text: "abc" }], observe: { mode: "auto" } },
+      controller.signal
+    );
+    await started;
+    controller.abort();
+    releaseResolve();
+    const result = await running;
+    expect(result.status).toBe("interrupted");
+    expect(result.steps[0]?.status).toBe("delivered");
+    expect(result.observationError?.code).toBe("request_cancelled");
+  });
+
   test("wait polls local AX until the condition is met, without LLM turns", async () => {
     let polls = 0;
     const computer = fakeComputer({

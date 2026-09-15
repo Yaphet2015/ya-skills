@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createInterface } from "node:readline";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { stopProcessGroup } from "../packages/computer-session/src/process.js";
 
 // Packaged agentic closed loop, desktop-free (C5): the REAL compiled yk runs
 // its internal exec worker; THIS test process is the RPC peer that answers
@@ -12,9 +15,11 @@ import { join, resolve } from "node:path";
 
 const outDir = resolve("dist/release/ya-skills");
 const yk = join(outDir, "yk");
-const ready = existsSync(yk) && process.platform === "darwin" && process.arch === "arm64";
+// Release tests are never an implicit artifact probe. The release workflow
+// opts in explicitly after package:release; when enabled, missing artifacts
+// fail loudly instead of becoming a false pass.
 const required = process.env.YK_RELEASE_TESTS === "1";
-const maybe = ready ? test : required ? test : test.skip;
+const maybe = required ? test : test.skip;
 
 function consumerDir(label: string): string {
   return mkdtempSync(join(tmpdir(), `yk-rel-session-${label}-`));
@@ -180,7 +185,7 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
     rmSync(dir, { recursive: true, force: true });
   }, 120_000);
 
-  maybe("the internal exec worker reclaims an infinite loop within its budget", async () => {
+  maybe("the compiled exec loop starts on fd3 before TERM/KILL cleanup", async () => {
     const dir = consumerDir("exec-loop");
     const configPath = join(dir, "exec.json");
     writeFileSync(
@@ -191,7 +196,15 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
         requestId: "rel-2",
         generation: "g",
         target: { pid: 4242, windowId: "12345" },
-        code: "while (true) {}",
+        // The child ignores TERM so the production group cleanup must
+        // escalate to KILL. It is deliberately a child of the compiled
+        // worker, not a process found by a global-name sweep.
+        code: `
+          Bun.spawn(["/bin/sh", "-c", "trap '' TERM; while :; do sleep 1; done"], {
+            stdin: "ignore", stdout: "ignore", stderr: "ignore"
+          });
+          while (true) {}
+        `,
         sourceName: "loop.js",
         timeoutMs: 300,
         maxActions: 5,
@@ -199,33 +212,67 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
         cwd: dir
       })
     );
-    const started = Date.now();
-    const proc = Bun.spawn([yk, "__computer-exec-worker", configPath], {
+    const proc = spawn(yk, ["__computer-exec-worker", configPath], {
       cwd: dir,
-      env: { PATH: "/usr/bin:/bin", NODE_PATH: "", HOME: process.env.HOME ?? "/tmp" },
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe"
+      env: { ...process.env, PATH: "/usr/bin:/bin", NODE_PATH: "", BUN_OPTIONS: "", HOME: process.env.HOME ?? "/tmp" },
+      detached: true,
+      stdio: ["pipe", "pipe", "pipe", "pipe"]
     });
-    // The test plays the host watchdog: budget elapses, TERM the worker. (A
-    // plain child, not a group leader, so the signal targets the pid; the
-    // production host kills the whole group via stopProcessGroup.)
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    proc.stdout?.resume();
+    proc.stderr?.resume();
+    const control = proc.stdio[3];
+    if (control === null) throw new Error("compiled loop worker did not allocate fd3");
+    const lines: string[] = [];
+    const reader = createInterface({ input: control as import("node:stream").Readable });
+    let startedResolve!: () => void;
+    let startedReject!: (error: Error) => void;
+    let sawStarted = false;
+    const started = new Promise<void>((resolveStarted, rejectStarted) => {
+      startedResolve = resolveStarted;
+      startedReject = rejectStarted;
+    });
+    reader.on("line", (line) => {
+      lines.push(line);
+      try {
+        const frame = JSON.parse(line) as { type?: string };
+        if (frame.type === "exec_started" && !sawStarted) {
+          sawStarted = true;
+          startedResolve();
+        }
+      } catch {
+        // The worker's control channel is JSON; malformed output cannot prove
+        // that execution started and is intentionally ignored here.
+      }
+    });
+    proc.once("exit", (code, signal) => {
+      if (!sawStarted) startedReject(new Error(`compiled loop exited before exec_started (code=${code}, signal=${signal})`));
+    });
+    const bootTimer = setTimeout(() => startedReject(new Error("compiled loop did not acknowledge exec_started on fd3")), 10_000);
+    let stop: Awaited<ReturnType<typeof stopProcessGroup>> | null = null;
     try {
-      process.kill(proc.pid!, "SIGTERM");
-    } catch {
-      // already gone — fine, the assertion below covers the outcome
+      // A nonzero startup exit is not a timeout pass: this must resolve only
+      // from the worker's fd3 execution-start acknowledgement.
+      await started;
+      stop = await stopProcessGroup(proc, 2_000);
+    } finally {
+      clearTimeout(bootTimer);
+      // Startup failures must not strand a detached worker or its descendants.
+      if (stop === null) stop = await stopProcessGroup(proc, 2_000).catch(() => null);
+      reader.close();
+      rmSync(dir, { recursive: true, force: true });
     }
-    const [text, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      proc.exited
-    ]);
-    const elapsed = Date.now() - started;
-    expect(exitCode).not.toBe(0);
-    expect(elapsed).toBeLessThan(10_000);
-    // No completion claim escaped the reclaimed worker.
-    expect(text.includes("exec_done")).toBe(false);
-    rmSync(dir, { recursive: true, force: true });
+    if (stop === null) throw new Error("compiled loop cleanup did not produce a stop result");
+    expect(sawStarted).toBe(true);
+    expect(stop.exited).toBe(true);
+    expect(stop.groupSurvivors).toBeNull();
+    // No terminal success frame can escape a worker reclaimed while executing.
+    expect(lines.some((line) => {
+      try {
+        return (JSON.parse(line) as { type?: string }).type === "exec_done";
+      } catch {
+        return false;
+      }
+    })).toBe(false);
   }, 60_000);
 
   maybe("same exec request-id replays nothing through a re-invoked CLI", () => {

@@ -12,6 +12,7 @@ import {
   closeSync,
   openSync,
   readFileSync,
+  readSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -40,9 +41,11 @@ import packageJson from "../../../package.json" with { type: "json" };
 export const WORKER_COMMAND = "__computer-e2e-worker";
 export const DEFAULT_RUN_TIMEOUT_MS = 900_000;
 export const DEFAULT_CLEANUP_GRACE_MS = 15_000;
+export const DEFAULT_SUPERVISOR_LOCK_TIMEOUT_MS = 30_000;
 export const LOAD_BUDGET_MS = 30_000;
 const WATCHDOG_GRACE_MS = 5_000;
 const MAX_EVENT_LINE = 1024 * 1024;
+const SPOOL_READ_CHUNK_BYTES = 64 * 1024;
 
 const WORKER_EVENT_TYPES = new Set<string>([
   "runtime",
@@ -59,6 +62,105 @@ const WORKER_EVENT_TYPES = new Set<string>([
   "artifact"
 ]);
 
+export class SupervisorLockError extends Error {
+  constructor(
+    public readonly code: "owner_identity_unknown" | "supervisor_lock_timeout" | "supervisor_lock_aborted",
+    message: string
+  ) {
+    super(`${code}: ${message}`);
+    this.name = "SupervisorLockError";
+  }
+}
+
+export interface SpoolPoll {
+  lines: string[];
+  /** Bytes read from the spool during this poll, never more than the reader chunk cap. */
+  bytesRead: number;
+}
+
+export interface SpoolTail {
+  complete: boolean;
+  pendingBytes: number;
+}
+
+/**
+ * Read the worker's fd3 regular-file spool incrementally. The parent must not
+ * reread a growing spool from byte zero on every watchdog tick: that both
+ * makes work proportional to the complete history and obscures a partial
+ * frame at a truncation/rotation boundary. FrameReader remains the byte/UTF-8
+ * authority; this reader only supplies bounded chunks and tracks the tail so
+ * the supervisor can fail closed when a worker exits mid-frame.
+ */
+export class IncrementalE2ESpoolReader {
+  private fd: number | null = null;
+  private offset = 0;
+  private identity: string | null = null;
+  private frameReader = new FrameReader();
+  private pendingFrameBytes = 0;
+
+  constructor(
+    private readonly path: string,
+    private readonly chunkBytes = SPOOL_READ_CHUNK_BYTES
+  ) {
+    if (!Number.isSafeInteger(chunkBytes) || chunkBytes <= 0) {
+      throw new Error("spool chunk size must be a positive safe integer");
+    }
+  }
+
+  poll(): SpoolPoll {
+    const stats = statSync(this.path);
+    const identity = `${String(stats.dev)}:${String(stats.ino)}`;
+    if (this.identity === null) {
+      this.identity = identity;
+    } else if (identity !== this.identity) {
+      this.resetAfterDiscontinuity();
+      this.identity = identity;
+      throw new Error("event spool was rotated before the current frame completed");
+    }
+    if (stats.size < this.offset) {
+      this.resetAfterDiscontinuity();
+      throw new Error("event spool was truncated before the current frame completed");
+    }
+    this.fd ??= openSync(this.path, "r");
+
+    const lines: string[] = [];
+    const remaining = stats.size - this.offset;
+    if (remaining <= 0) return { lines, bytesRead: 0 };
+    // One bounded read per watchdog tick. A large frame therefore makes
+    // progress over successive polls instead of turning one 20ms callback
+    // into an unbounded read proportional to the complete spool.
+    const requested = Math.min(this.chunkBytes, remaining);
+    const buffer = Buffer.allocUnsafe(requested);
+    const count = readSync(this.fd, buffer, 0, requested, this.offset);
+    if (count <= 0) return { lines: [], bytesRead: 0 }; // writer may append later
+    const chunk = buffer.subarray(0, count);
+    this.offset += count;
+    for (const byte of chunk) {
+      if (byte === 0x0a) this.pendingFrameBytes = 0;
+      else this.pendingFrameBytes += 1;
+    }
+    lines.push(...this.frameReader.push(chunk));
+    return { lines, bytesRead: count };
+  }
+
+  finalize(): SpoolTail {
+    return { complete: this.pendingFrameBytes === 0, pendingBytes: this.pendingFrameBytes };
+  }
+
+  close(): void {
+    if (this.fd === null) return;
+    closeSync(this.fd);
+    this.fd = null;
+  }
+
+  private resetAfterDiscontinuity(): void {
+    this.offset = 0;
+    this.pendingFrameBytes = 0;
+    this.frameReader = new FrameReader();
+    this.close();
+  }
+}
+
 export interface RunOptions {
   files: string[];
   params: Record<string, string>;
@@ -72,6 +174,10 @@ export type SuperviseOptions = RunOptions & {
   cleanupGraceMs?: number;
   /** @internal abort the run from outside (CLI signal wiring) */
   stopSignal?: AbortSignal;
+  /** @internal private lock path for desktop-free ownership tests */
+  supervisorLockPath?: string;
+  /** @internal bounded lock wait for ownership/recovery tests */
+  supervisorLockTimeoutMs?: number;
 };
 
 function sha256File(path: string): string {
@@ -176,39 +282,156 @@ interface WorkerOutcome {
 let superviseTail: Promise<void> = Promise.resolve();
 const SUPERVISOR_LOCK = join(tmpdir(), "ya-skills-computer-e2e-supervisor.lock");
 
-async function acquireSupervisorLock(): Promise<() => void> {
-  const token = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  for (;;) {
-    try {
-      mkdirSync(SUPERVISOR_LOCK, { mode: 0o700 });
-      writeFileSync(join(SUPERVISOR_LOCK, "owner.json"), JSON.stringify({ pid: process.pid, token }), { mode: 0o600 });
-      return () => rmSync(SUPERVISOR_LOCK, { recursive: true, force: true });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+interface SupervisorOwner {
+  pid: number;
+  token: string;
+}
+
+function isSupervisorOwner(value: unknown): value is SupervisorOwner {
+  if (typeof value !== "object" || value === null) return false;
+  const owner = value as { pid?: unknown; token?: unknown };
+  return typeof owner.pid === "number" && Number.isSafeInteger(owner.pid) && owner.pid > 0 &&
+    typeof owner.token === "string" && owner.token.length > 0;
+}
+
+function sleepForLock(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(new SupervisorLockError("supervisor_lock_aborted", "lock acquisition was aborted"));
+  }
+  return new Promise<void>((resolveSleep, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolveSleep();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(new SupervisorLockError("supervisor_lock_aborted", "lock acquisition was aborted"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function removeDeadSupervisorLock(lockPath: string, expected: SupervisorOwner): boolean {
+  // Reclaimers serialize through a marker inside the old lock directory. This
+  // prevents two waiters that both observed one dead owner from one removing
+  // the other's newly acquired lock. A stale marker is uncertainty, never a
+  // reason to recursively delete the directory.
+  const reclaimPath = join(lockPath, ".reclaim");
+  try {
+    mkdirSync(reclaimPath, { mode: 0o700 });
+  } catch {
+    return false;
+  }
+  let removed = false;
+  try {
+    // Re-read the owner before reclaiming. If another supervisor replaced the
+    // directory, leave its lock untouched; an uncertain read is never a reason
+    // to recursively delete a lock owned by somebody else.
+    const current = JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8")) as unknown;
+    if (!isSupervisorOwner(current) || current.pid !== expected.pid || current.token !== expected.token) return false;
+    rmSync(lockPath, { recursive: true, force: false });
+    removed = true;
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      removed = true;
+      return true;
+    }
+    return false;
+  } finally {
+    if (!removed) {
+      // Only remove our marker while the same owner is still present. If the
+      // directory changed, leave all ownership evidence intact.
       try {
-        const owner = JSON.parse(readFileSync(join(SUPERVISOR_LOCK, "owner.json"), "utf8")) as { pid?: unknown };
-        if (typeof owner.pid === "number") {
-          try {
-            process.kill(owner.pid, 0);
-          } catch (probeError) {
-            if ((probeError as NodeJS.ErrnoException).code === "ESRCH") {
-              rmSync(SUPERVISOR_LOCK, { recursive: true, force: true });
-              continue;
-            }
-          }
+        const current = JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8")) as unknown;
+        if (isSupervisorOwner(current) && current.pid === expected.pid && current.token === expected.token) {
+          rmSync(reclaimPath, { recursive: true, force: false });
         }
       } catch {
-        // An unreadable lock is conservatively retained for another pass;
-        // it is never overwritten while its owner is uncertain.
+        // Preserve an uncertain marker for explicit owner-side cleanup.
       }
-      await new Promise((resolveSleep) => setTimeout(resolveSleep, 25));
     }
   }
 }
 
+async function acquireSupervisorLock(
+  lockPath: string,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<() => void> {
+  if (!isAbsolute(lockPath)) throw new Error("supervisor lock path must be absolute");
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("supervisor lock timeout must be a positive safe integer");
+  }
+  const deadline = Date.now() + timeoutMs;
+  const token = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  let uncertainOwner: string | undefined;
+  for (;;) {
+    if (signal?.aborted) {
+      throw new SupervisorLockError("supervisor_lock_aborted", "lock acquisition was aborted");
+    }
+    try {
+      mkdirSync(lockPath, { mode: 0o700 });
+      const owner: SupervisorOwner = { pid: process.pid, token };
+      writeFileSync(join(lockPath, "owner.json"), JSON.stringify(owner), { mode: 0o600 });
+      return () => {
+        // Never release a lock that no longer names this acquisition. This is
+        // deliberately fail-closed if the owner record was damaged/replaced.
+        try {
+          const current = JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8")) as unknown;
+          if (!isSupervisorOwner(current) || current.pid !== process.pid || current.token !== token) return;
+          rmSync(lockPath, { recursive: true, force: false });
+        } catch {
+          // Preserve an uncertain lock for an explicit owner-side cleanup.
+        }
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      let owner: unknown;
+      try {
+        owner = JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8"));
+      } catch {
+        uncertainOwner = "owner.json is missing or corrupt";
+      }
+      if (isSupervisorOwner(owner)) {
+        try {
+          process.kill(owner.pid, 0);
+          uncertainOwner = undefined;
+        } catch (probeError) {
+          const code = (probeError as NodeJS.ErrnoException).code;
+          if (code === "ESRCH") {
+            if (removeDeadSupervisorLock(lockPath, owner)) continue;
+            uncertainOwner = "the recorded owner changed while reclamation was attempted";
+          } else {
+            uncertainOwner = `the recorded owner could not be verified (${code ?? "unknown error"})`;
+          }
+        }
+      } else {
+        uncertainOwner = "owner.json is missing or corrupt";
+      }
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      if (uncertainOwner !== undefined) {
+        throw new SupervisorLockError("owner_identity_unknown", `${uncertainOwner}; lock was preserved`);
+      }
+      throw new SupervisorLockError("supervisor_lock_timeout", "the existing supervisor lock did not become available");
+    }
+    await sleepForLock(Math.min(25, remaining), signal);
+  }
+}
+
 export function supervise(options: SuperviseOptions): Promise<RunSummary> {
+  const lockPath = resolve(options.supervisorLockPath ?? SUPERVISOR_LOCK);
+  const lockTimeoutMs = options.supervisorLockTimeoutMs ??
+    Math.max(1, Math.min(DEFAULT_SUPERVISOR_LOCK_TIMEOUT_MS, options.timeoutMs));
   const run = superviseTail.then(async () => {
-    const release = await acquireSupervisorLock();
+    // This admission is intentionally complete before superviseOnce creates a
+    // run deadline. A missing/corrupt owner cannot consume an unbounded run or
+    // silently hand ownership to a different process.
+    const release = await acquireSupervisorLock(lockPath, lockTimeoutMs, options.stopSignal);
     try {
       return await superviseOnce(options);
     } finally {
@@ -396,28 +619,22 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       if (parsed.type === "case_finished") sawCaseFinished = true;
       append(parsed.type as WorkerEventType, { ...payload, file: displayFile });
     };
-    const frameReader = new FrameReader();
-    let spoolOffset = 0;
+    const spoolReader = new IncrementalE2ESpoolReader(eventSpoolPath);
+    let spoolFailed = false;
     const pollSpool = (): void => {
-      let bytes: Buffer;
+      if (spoolFailed) return;
       try {
-        bytes = readFileSync(eventSpoolPath);
-      } catch {
-        return;
-      }
-      if (bytes.length <= spoolOffset) return;
-      const chunk = bytes.subarray(spoolOffset);
-      spoolOffset = bytes.length;
-      try {
-        for (const line of frameReader.push(chunk)) processLine(line);
+        const poll = spoolReader.poll();
+        for (const line of poll.lines) processLine(line);
       } catch (error) {
+        spoolFailed = true;
         append("worker_protocol_error", { file: displayFile, reason: error instanceof Error ? error.message : String(error) });
         requestStop();
       }
     };
-    // Polling a regular fd3 spool is intentionally small and bounded. It
-    // avoids Bun 1.3.14's intermittent pipe event loss while preserving live
-    // case/hook watchdog updates.
+    // Polling a regular fd3 spool is incremental and bounded. It avoids Bun
+    // 1.3.14's intermittent pipe event loss while preserving live
+    // case/hook watchdog updates without rereading the complete history.
     const spoolTimer = setInterval(pollSpool, 20);
     spoolTimer.unref();
 
@@ -426,9 +643,21 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       child.once("exit", (code, signal) => resolveExit({ exitCode: code, signal }));
     });
     // Do not lose the final events: read the completed fd3 spool once more
-    // after the leader exits, then close all inherited descriptors.
+    // after the leader exits. A non-newline tail is an unconfirmed/truncated
+    // frame, never a silently accepted final event.
     pollSpool();
     clearInterval(spoolTimer);
+    if (!spoolFailed) {
+      const tail = spoolReader.finalize();
+      if (!tail.complete) {
+        spoolFailed = true;
+        append("worker_protocol_error", {
+          file: displayFile,
+          reason: `event spool ended with a truncated UTF-8 frame (${tail.pendingBytes} bytes without newline)`
+        });
+      }
+    }
+    spoolReader.close();
     closeSync(stdoutFd);
     closeSync(stderrFd);
     closeSync(eventFd);

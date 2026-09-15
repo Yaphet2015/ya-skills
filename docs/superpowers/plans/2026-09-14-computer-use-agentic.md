@@ -20,7 +20,9 @@
 - batch 串行执行；delivered 不等于业务成功，unknown 不能自动重放。
 - 默认不缩图，不自动抢前台；图像有效性和 AX 有效性分别报告。
 - 跨包用 workspace import；领域实现不放进 packages/cli。
-- 当前阶段只写计划。实施与真实桌面验证分别需要进入执行阶段、明确测试窗口；不要把计划中的命令当作已运行。
+- 规划阶段约束（历史）：实施与真实桌面验证必须分开进入执行阶段并明确测试窗口；本次集成的实际命令与结果只以 `docs/verification/2026-09-15-parallel-integration.md` 为准，不把未运行的计划命令当作证据。
+
+> **Integration status (2026-09-15):** The five lane deltas have been applied to checkpoint `e7c172f57b2bdb846ad388ba4961757d969bd59a` and the desktop-free/release gates are recorded in `docs/verification/2026-09-15-parallel-integration.md`. This is an uncommitted integration delta, not whole-plan completion: native Background/TCC/session acceptance and real model/performance evidence remain blocked by the no-disruption rule. Unchecked native and performance tasks below remain open.
 
 ---
 

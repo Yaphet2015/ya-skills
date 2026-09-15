@@ -1,6 +1,19 @@
-# Computer-Use Agentic Implementation Verification
+# Computer-Use Agentic Implementation Verification (historical filename)
 
-Date: 2026-09-15. Recovery worktree: this allocated managed clone, base/ref `49890437c2632b746eca07ab9a35904da71facc4`. This document records independently rerun evidence after the review-fix pass. It does not claim native desktop acceptance where the no-disruption rule prevented it.
+> **Current authoritative record:** `docs/verification/2026-09-15-parallel-integration.md`.
+> The checkpoint evidence retained below is historical and is not evidence for
+> the current unstaged integration delta.
+
+## Current integration pointer (2026-09-15)
+
+- Current checkout: checkpoint `e7c172f57b2bdb846ad388ba4961757d969bd59a` plus five applied lane deltas and narrow integration fixes; no commit, merge, push, or publication.
+- Exact final gates used `/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun` (Bun **1.3.14**): typecheck PASS; default tests PASS **584/594 with 10 explicit skips**; `package:release --version 0.19.0` PASS; required release tests PASS **10/10**; build PASS; smoke PASS.
+- Additional desktop-free packaged live lane PASS **3/3** (including deduplication and symlink worker spawn) and benchmark PASS with synthetic-only/null model usage.
+- Native Background Coordinates success on a never-activated fixture, host TCC attribution, real UI matrix, and real model/performance usage remain unverified; this is not a whole-plan completion claim.
+
+## Historical checkpoint record (superseded)
+
+Date: 2026-09-15. Recovery worktree: this allocated managed clone, base/ref `49890437c2632b746eca07ab9a35904da71facc4`. This section records the earlier review-fix pass and its evidence; it does not describe the current integrated worktree.
 
 ## Runtime and evidence policy
 

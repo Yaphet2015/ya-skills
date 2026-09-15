@@ -5,7 +5,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import {
   findSession,
@@ -13,7 +12,8 @@ import {
   sendControl,
   sendRequest,
   validateSessionId,
-  type OpenedSession
+  type OpenedSession,
+  type SessionInfo
 } from "@ya-skills/computer-session";
 import { createComputerSession, selectWindow, type ComputerSession, type Target } from "@ya-skills/computer-runtime";
 
@@ -28,6 +28,90 @@ function jsonError(code: string, message: string, extra: Record<string, unknown>
 }
 
 const replacer = (_key: string, value: unknown) => (typeof value === "bigint" ? value.toString() : value);
+const SESSION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type SessionLookup = (sessionId: string) => Promise<{ socketPath: string; info: SessionInfo } | null>;
+type ControlSender = typeof sendControl;
+type RequestSender = typeof sendRequest;
+
+export interface SessionTransportDeps {
+  /** Test seam for a real socket peer; production defaults to findSession. */
+  findSession?: SessionLookup;
+  /** Test seam for the real Unix-socket control plane. */
+  sendControl?: ControlSender;
+  /** Test seam for the real Unix-socket business plane. */
+  sendRequest?: RequestSender;
+  /** Process identity check used only for dead-listener fallback. */
+  isHostAlive?: (pid: number) => boolean;
+}
+
+function defaultHostAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM still means a process with this identity exists. Only ESRCH
+    // proves the recorded host is gone; never reclaim from a name/global scan.
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+function validateSessionMetadata(sessionId: string, found: { socketPath: string; info: SessionInfo }): SessionInfo {
+  const info = found.info as unknown as Record<string, unknown>;
+  const target = info.target as Record<string, unknown> | undefined;
+  const state = info.state;
+  const validState = ["starting", "idle", "running", "stopping", "closed", "unusable"].includes(String(state));
+  const validPid = typeof target?.pid === "number" && Number.isSafeInteger(target.pid) && target.pid > 0;
+  const validWindow = typeof target?.windowId === "string" && /^\d+$/.test(target.windowId);
+  const validHostPid = typeof info.hostPid === "number" && Number.isSafeInteger(info.hostPid) && info.hostPid > 0;
+  const validIdle = typeof info.idleTimeoutMs === "number" && Number.isSafeInteger(info.idleTimeoutMs) && info.idleTimeoutMs > 0 && info.idleTimeoutMs <= 120_000;
+  if (
+    info.id !== sessionId ||
+    !SESSION_UUID_RE.test(sessionId) ||
+    !SESSION_UUID_RE.test(String(info.generation ?? "")) ||
+    typeof found.socketPath !== "string" || !found.socketPath.startsWith("/") ||
+    !validState || !validPid || !validWindow || !validHostPid || !validIdle
+  ) {
+    throw jsonError("session_metadata_invalid", `session ${sessionId} has invalid identity or metadata; refusing control-plane recovery`);
+  }
+  return found.info;
+}
+
+function isDeadListenerError(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null ? (error as NodeJS.ErrnoException).code : undefined;
+  return (
+    code === "ENOENT" ||
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "EPIPE" ||
+    code === "ETIMEDOUT" ||
+    code === "client_timeout" ||
+    code === "connection_closed"
+  );
+}
+
+function deadListenerFallback(
+  sessionId: string,
+  found: { socketPath: string; info: SessionInfo },
+  isHostAlive: (pid: number) => boolean
+): string | undefined {
+  const info = validateSessionMetadata(sessionId, found);
+  // A recorded unusable host is already fail-closed. For other states, only a
+  // dead recorded host proves that a missing listener is not a transient boot
+  // race. No CLI-side state recovery or lease release is attempted.
+  if (info.state !== "unusable" && isHostAlive(info.hostPid)) return undefined;
+  return JSON.stringify(
+    {
+      schemaVersion: 1,
+      session: info,
+      cleanup:
+        info.state === "closed"
+          ? { alreadyClosed: true, hostUnavailable: true }
+          : { leaseRetained: true, hostUnavailable: true }
+    },
+    replacer
+  );
+}
 
 export interface SessionSubcommand {
   sub: "open" | "status" | "cancel" | "close";
@@ -92,7 +176,7 @@ export function parseSessionArgs(argv: string[]): SessionSubcommand {
 }
 
 export function sessionCommand(
-  deps: {
+  deps: SessionTransportDeps & {
     open?: (options: {
       target: { pid: number; windowId: bigint };
       idleTimeoutMs: number;
@@ -101,6 +185,9 @@ export function sessionCommand(
     resolveWindow?: (pid: number) => Promise<{ pid: number; windowId: bigint }>;
   } = {}
 ): (sub: SessionSubcommand) => Promise<string> {
+  const lookup = deps.findSession ?? findSession;
+  const control = deps.sendControl ?? sendControl;
+  const alive = deps.isHostAlive ?? defaultHostAlive;
   const doOpen =
     deps.open ??
     (async (options: { target: { pid: number; windowId: bigint }; idleTimeoutMs: number }) =>
@@ -128,25 +215,35 @@ export function sessionCommand(
         return JSON.stringify({ schemaVersion: 1, session: opened.info }, replacer);
       }
       case "status": {
-        const found = await findSession(sub.sessionId!);
+        const found = await lookup(sub.sessionId!);
         if (!found) throw jsonError("unknown_session", `no session ${sub.sessionId} — open one first`);
+        const metadata = validateSessionMetadata(sub.sessionId!, found);
         // A confirmed closed session removes its socket but retains metadata;
         // status remains useful and does not turn idempotent cleanup into an
         // ENOENT error.
-        if (found.info.state === "closed") {
-          return JSON.stringify({ schemaVersion: 1, session: found.info }, replacer);
+        if (metadata.state === "closed") {
+          return JSON.stringify({ schemaVersion: 1, session: metadata }, replacer);
         }
-        if (found.info.state === "unusable" && !existsSync(found.socketPath)) {
-          return JSON.stringify({ schemaVersion: 1, session: found.info, cleanup: { leaseRetained: true, hostUnavailable: true } }, replacer);
+        try {
+          const reply = await control(found.socketPath, { kind: "status", schemaVersion: 1, sessionId: sub.sessionId! }, 5_000);
+          if (reply.error) throw jsonError(reply.error.code, reply.error.message);
+          return JSON.stringify({ schemaVersion: 1, session: reply.info }, replacer);
+        } catch (error) {
+          const fallback = isDeadListenerError(error)
+            ? deadListenerFallback(sub.sessionId!, { ...found, info: metadata }, alive)
+            : undefined;
+          if (fallback !== undefined) return fallback;
+          throw jsonError(
+            "session_connection_failed",
+            `could not reach session ${sub.sessionId}: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
-        const reply = await sendControl(found.socketPath, { kind: "status", schemaVersion: 1, sessionId: sub.sessionId! }, 5_000);
-        if (reply.error) throw jsonError(reply.error.code, reply.error.message);
-        return JSON.stringify({ schemaVersion: 1, session: reply.info }, replacer);
       }
       case "cancel": {
-        const found = await findSession(sub.sessionId!);
+        const found = await lookup(sub.sessionId!);
         if (!found) throw jsonError("unknown_session", `no session ${sub.sessionId}`);
-        const reply = await sendControl(
+        validateSessionMetadata(sub.sessionId!, found);
+        const reply = await control(
           found.socketPath,
           { kind: "cancel", schemaVersion: 1, sessionId: sub.sessionId!, requestId: sub.requestId! },
           5_000
@@ -162,33 +259,47 @@ export function sessionCommand(
         );
       }
       case "close": {
-        const found = await findSession(sub.sessionId!);
+        const found = await lookup(sub.sessionId!);
         if (!found) throw jsonError("unknown_session", `no session ${sub.sessionId}`);
-        if (found.info.state === "closed") {
-          return JSON.stringify({ schemaVersion: 1, session: found.info, cleanup: { alreadyClosed: true } }, replacer);
+        const metadata = validateSessionMetadata(sub.sessionId!, found);
+        if (metadata.state === "closed") {
+          return JSON.stringify({ schemaVersion: 1, session: metadata, cleanup: { alreadyClosed: true } }, replacer);
         }
-        if (found.info.state === "unusable" && !existsSync(found.socketPath)) {
-          return JSON.stringify({ schemaVersion: 1, session: found.info, cleanup: { leaseRetained: true, hostUnavailable: true } }, replacer);
+        try {
+          const reply = await control(found.socketPath, { kind: "close", schemaVersion: 1, sessionId: sub.sessionId! }, 15_000);
+          if (reply.error) throw jsonError(reply.error.code, reply.error.message);
+          return JSON.stringify({ schemaVersion: 1, session: reply.info, ...("cleanup" in reply ? { cleanup: (reply as unknown as { cleanup: unknown }).cleanup } : {}) }, replacer);
+        } catch (error) {
+          const fallback = isDeadListenerError(error)
+            ? deadListenerFallback(sub.sessionId!, { ...found, info: metadata }, alive)
+            : undefined;
+          if (fallback !== undefined) return fallback;
+          throw jsonError(
+            "session_connection_failed",
+            `could not reach session ${sub.sessionId}: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
-        const reply = await sendControl(found.socketPath, { kind: "close", schemaVersion: 1, sessionId: sub.sessionId! }, 15_000);
-        if (reply.error) throw jsonError(reply.error.code, reply.error.message);
-        return JSON.stringify({ schemaVersion: 1, session: reply.info, ...("cleanup" in reply ? { cleanup: (reply as unknown as { cleanup: unknown }).cleanup } : {}) }, replacer);
       }
     }
   };
 }
 
 /** Resolve the socket + generation for a `--session ID` business command. */
-export async function resolveSessionTarget(sessionId: string): Promise<{
+export async function resolveSessionTarget(
+  sessionId: string,
+  transport: Pick<SessionTransportDeps, "findSession"> = {}
+): Promise<{
   socketPath: string;
   generation: string;
   info: { target: { pid: number; windowId: string } };
 }> {
-  const found = await findSession(sessionId);
+  const lookup = transport.findSession ?? findSession;
+  const found = await lookup(sessionId);
   if (!found) {
     throw jsonError("unknown_session", `no session ${sessionId} — open one with: yk computer-use session open --pid P [--window W]`);
   }
-  return { socketPath: found.socketPath, generation: found.info.generation, info: { target: found.info.target } };
+  const info = validateSessionMetadata(sessionId, found);
+  return { socketPath: found.socketPath, generation: info.generation, info: { target: info.target } };
 }
 
 /** Run a business operation through a session host. */
@@ -197,14 +308,16 @@ export async function runOnSession(
   operation:
     | { kind: "observe"; options?: unknown }
     | { kind: "batch"; request: unknown; file?: string; requestId?: string },
-  timeoutMs = 30_000
+  timeoutMs = 30_000,
+  transport: Pick<SessionTransportDeps, "findSession" | "sendRequest"> = {}
 ): Promise<string> {
-  const session = await resolveSessionTarget(sessionId);
+  const session = await resolveSessionTarget(sessionId, transport);
   const requestId =
     operation.kind === "batch"
       ? (operation.requestId ?? throwMissingRequestId())
       : `observe-${randomUUID()}`;
-  const reply = await sendRequest(
+  const request = transport.sendRequest ?? sendRequest;
+  const reply = await request(
     session.socketPath,
     {
       schemaVersion: 1,

@@ -101,13 +101,25 @@ function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): 
       signal.throwIfAborted();
       return fn(...a);
     };
+  // Batch is the one facade method whose runtime contract accepts the
+  // owning request signal. Passing it through the case guard is essential:
+  // checking only before the call leaves an already admitted multi-action
+  // batch free to dispatch later actions after a case timeout (including
+  // while afterAll is running).
+  const batch = (
+    target: Parameters<CaseContext["computer"]["batch"]>[0],
+    request: Parameters<CaseContext["computer"]["batch"]>[1]
+  ) => {
+    signal.throwIfAborted();
+    return computer.batch(target, request, signal);
+  };
   return {
     apps: signal.aborted ? refused : check(computer.apps),
     windows: check(computer.windows),
     snapshot: check(computer.snapshot),
     observe: check(computer.observe),
     clickPoint: check(computer.clickPoint),
-    batch: check(computer.batch),
+    batch,
     click: check(computer.click),
     type: check(computer.type),
     key: check(computer.key),

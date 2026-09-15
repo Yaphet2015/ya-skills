@@ -21,6 +21,13 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Target } from "./types.js";
 
+export interface WorkerGroupLease {
+  /** Process-group identity retained when group cleanup was not proven. */
+  pgid: number;
+  /** The group leader, when the owner still knows it. */
+  leaderPid?: number;
+}
+
 export interface LeaseOwner {
   /** Random per-run identity. */
   generation: string;
@@ -32,6 +39,11 @@ export interface LeaseOwner {
   * exec workers). A dead holder whose workers may still be mutating is NOT
   * reclaimable: the reclaimer refuses instead of starting a second driver. */
   workerPids?: number[];
+  /** Durable process groups whose cleanup was not proven. A dead leader is
+   * not enough to reclaim a target while one of these groups is observable. */
+  workerGroups?: WorkerGroupLease[];
+  /** Durable poison for cleanup failures without a verifiable group id. */
+  cleanupUnproven?: boolean;
   kind: "session" | "single-step" | "e2e";
 }
 
@@ -96,7 +108,18 @@ function readOwner(path: string): LeaseOwner | null {
       (parsed.kind !== "session" && parsed.kind !== "single-step" && parsed.kind !== "e2e") ||
       (parsed.processStart !== undefined && typeof parsed.processStart !== "string") ||
       (parsed.sessionId !== undefined && typeof parsed.sessionId !== "string") ||
-      (parsed.workerPids !== undefined && (!Array.isArray(parsed.workerPids) || parsed.workerPids.some((pid) => typeof pid !== "number" || !Number.isSafeInteger(pid) || pid <= 0)))
+      (parsed.workerPids !== undefined && (!Array.isArray(parsed.workerPids) || parsed.workerPids.some((pid) => typeof pid !== "number" || !Number.isSafeInteger(pid) || pid <= 0))) ||
+      (parsed.workerGroups !== undefined && (!Array.isArray(parsed.workerGroups) || parsed.workerGroups.some((group) =>
+        typeof group !== "object" || group === null ||
+        typeof (group as { pgid?: unknown }).pgid !== "number" ||
+        !Number.isSafeInteger((group as { pgid: number }).pgid) ||
+        (group as { pgid: number }).pgid <= 0 ||
+        ((group as { leaderPid?: unknown }).leaderPid !== undefined &&
+          (typeof (group as { leaderPid?: unknown }).leaderPid !== "number" ||
+            !Number.isSafeInteger((group as { leaderPid: number }).leaderPid) ||
+            (group as { leaderPid: number }).leaderPid <= 0))
+      ))) ||
+      (parsed.cleanupUnproven !== undefined && typeof parsed.cleanupUnproven !== "boolean")
     ) return null;
     return parsed as LeaseOwner;
   } catch {
@@ -104,10 +127,31 @@ function readOwner(path: string): LeaseOwner | null {
   }
 }
 
+function processGroupAlive(pgid: number): boolean {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // EPERM means the group exists but is not signalable by this process. Any
+    // other unexpected error is treated as live: ownership is never reclaimed
+    // on an unverifiable cleanup result.
+    if (code === "ESRCH") return false;
+    return true;
+  }
+}
+
 function ownerIsDead(owner: LeaseOwner): boolean {
+  if (owner.cleanupUnproven === true) return false;
   if (processAlive(owner.pid)) return false;
   for (const workerPid of owner.workerPids ?? []) {
     if (processAlive(workerPid)) return false;
+  }
+  // A failed cleanup survives the death of both the host and the group leader.
+  // Only a fresh process-group probe can prove that it is gone; the recorded
+  // leader PID is deliberately not used as a proxy for the whole group.
+  for (const group of owner.workerGroups ?? []) {
+    if (processGroupAlive(group.pgid)) return false;
   }
   return true;
 }
@@ -232,7 +276,7 @@ export function acquireTargetLease(root: string, target: Target, owner: LeaseOwn
           "target_busy",
           `the previous lease holder (pid ${holder.pid}) is gone but its worker process(es) ${JSON.stringify(
             holder.workerPids ?? []
-          )} are still alive; refusing to start a second driver against app pid ${target.pid}`,
+          )} or unresolved groups ${JSON.stringify(holder.workerGroups ?? [])} are still alive; refusing to start a second driver against app pid ${target.pid}`,
           holder
         );
       }

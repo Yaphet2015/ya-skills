@@ -19,6 +19,8 @@
 - 任何未验证 SDK 能力必须作为 A1 阻塞项报告。
 - 默认测试 desktop-free；计划中的真实操作只对明确指定的测试窗口进行。
 
+> **Integration status (2026-09-15):** Implementation lanes and the exact desktop-free/release gates are applied and evidenced in `docs/verification/2026-09-15-parallel-integration.md`. A1 is still not complete: the strict never-activated Background `Coordinates` success/frontmost-invariance check and session-host TCC attribution were not run. Do not treat the checked implementation bullets as native acceptance.
+
 ---
 
 ## 公共数据契约
@@ -120,7 +122,7 @@ const input = sdk.ClickInput.new({
 ```
 
 - [x] 为探针增加显式 `--pid`、`--window`、`--allow-input`。无 allow-input 只读；无目标不启动 driver。输出 windowBounds、screenshotScale、截图像素尺寸、screenshotFrameValid，不输出密码或完整应用内容。（守卫与隐私投影 desktop-free 已测；真实窗口下的字段取值见下一条，未验证）
-- [x] 在指定测试窗口测 1x/2x 截图、非零窗口原点、window-target 坐标、背景输入。任何不支持都记录 driver 原始错误，不用 foreground 重试。（已验证：像素单位窗口局部坐标、Retina 2x、全局点 frames、后台 AX-token 点击与后台 typeText 送达；含前台污染披露，见 verification §4.5；像素坐标后台点击对未激活窗口待严格协议复测）
+- [ ] 在指定测试窗口测 1x/2x 截图、非零窗口原点、window-target 坐标、背景输入。任何不支持都记录 driver 原始错误，不用 foreground 重试。（历史探针含前台污染且仅证明后台 AX-token/typeText；未激活窗口的像素坐标 Background 成功与前台不变性仍未验证，见 verification §4.5）
 - [x] 验证 AX 不完整但 image 有效能否取到；验证 `focused_element` 是否有真正可用的 SDK 状态，不把 selected 当焦点。（maxElements 截断时截图与 windowBounds 有效；契约无 focused 字段 → unsupported_condition）
 - [x] 编译探针验证捕获 JS 字符串、await 和 IPC，无需桌面：
 

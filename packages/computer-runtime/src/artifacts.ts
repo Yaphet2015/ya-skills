@@ -1,7 +1,7 @@
 // Evidence artifacts: user cache by default, explicit override, unique names,
 // private permissions. Never the install dir or the project.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -21,6 +21,25 @@ export function artifactPath(dir: string, name: string): string {
   return join(dir, `${Date.now()}-${randomBytes(4).toString("hex")}-${name}`);
 }
 
+/** Enforce the screenshot privacy contract even when a path already exists.
+ * writeFile({ mode }) only applies at creation time, and copy/sips preserve
+ * or choose their own mode; chmod followed by stat is therefore required. */
+export function ensurePrivateFile(file: string): void {
+  const before = statSync(file);
+  if (!before.isFile()) {
+    throw new Error(`screenshot artifact is not a regular file: ${file}`);
+  }
+  chmodSync(file, 0o600);
+  const after = statSync(file);
+  if (!after.isFile()) {
+    throw new Error(`screenshot artifact is not a regular file: ${file}`);
+  }
+  const mode = after.mode & 0o777;
+  if (mode !== 0o600) {
+    throw new Error(`screenshot artifact is not private: ${file} has mode ${mode.toString(8)}`);
+  }
+}
+
 // Screenshots are secrets-by-default: written once, user-only (0600).
 export function saveScreenshot(dir: string, base64: string): string {
   if (typeof base64 !== "string" || base64.trim() === "") {
@@ -38,5 +57,6 @@ export function saveScreenshot(dir: string, base64: string): string {
   if (data.length === 0) throw new Error("screenshot data decoded to an empty file");
   const file = artifactPath(dir, "cu.png");
   writeFileSync(file, data, { mode: 0o600 });
+  ensurePrivateFile(file);
   return file;
 }

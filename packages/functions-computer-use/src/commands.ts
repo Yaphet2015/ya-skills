@@ -24,7 +24,7 @@ import { COMMAND_DEADLINE_MS } from "./consts.js";
 import { runDoctor } from "./runtime.js";
 import { observeCommand, type ObserveCommandRequest } from "./observe-command.js";
 import { batchCommand, type BatchCommandRequest } from "./batch-command.js";
-import { parseSessionArgs, runOnSession, sessionCommand } from "./session-command.js";
+import { parseSessionArgs, runOnSession, sessionCommand, type SessionTransportDeps } from "./session-command.js";
 import { execCommand } from "./exec-command.js";
 import { sessionRoot } from "@ya-skills/computer-session";
 import { createAutoLeases } from "@ya-skills/computer-runtime";
@@ -150,9 +150,13 @@ function mapError(request: ParsedRequest, error: unknown): unknown {
   return error;
 }
 
-async function runReal(request: ParsedRequest, createSession: CreateSession): Promise<string> {
+async function runReal(
+  request: ParsedRequest,
+  createSession: CreateSession,
+  sessionTransport: SessionTransportDeps = {}
+): Promise<string> {
   if (request.kind === "session") {
-    const run = sessionCommand();
+    const run = sessionCommand(sessionTransport);
     return run(parseSessionArgs(request.argv));
   }
   if (request.kind === "exec") {
@@ -173,7 +177,7 @@ async function runReal(request: ParsedRequest, createSession: CreateSession): Pr
           ...(request.maxDimension !== undefined ? { maxDimension: request.maxDimension } : {}),
           ...(request.selector !== undefined ? { selector: request.selector } : {})
         }
-      });
+      }, 30_000, sessionTransport);
     }
     if (request.kind === "batch") {
       const { readFile } = await import("node:fs/promises");
@@ -190,8 +194,12 @@ async function runReal(request: ParsedRequest, createSession: CreateSession): Pr
         ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
         ...(request.maxActions !== undefined ? { maxActions: request.maxActions } : {})
       };
-      return runOnSession(request.session, { kind: "batch", request: parsed, file: request.file, requestId: request.requestId },
-        Math.min(150_000, (request.timeoutMs ?? 120_000) + 30_000));
+      return runOnSession(
+        request.session,
+        { kind: "batch", request: parsed, file: request.file, requestId: request.requestId },
+        Math.min(150_000, (request.timeoutMs ?? 120_000) + 30_000),
+        sessionTransport
+      );
     }
     // act on a session: single action through the host's batch operation
     const single = actSpecToSingleAction(request as ParsedRequest & { kind: "act" });
@@ -305,6 +313,7 @@ export function createComputerUseCommands(
   deps: {
     runReal?: (request: ParsedRequest, createSession: CreateSession) => Promise<string>;
     createSession?: CreateSession;
+    sessionTransport?: SessionTransportDeps;
   } = {}
 ): FunctionCommand[] {
   const createSession: CreateSession =
@@ -323,7 +332,7 @@ export function createComputerUseCommands(
       });
     });
   const doRun =
-    deps.runReal ?? ((request: ParsedRequest, cs: CreateSession) => runReal(request, cs));
+    deps.runReal ?? ((request: ParsedRequest, cs: CreateSession) => runReal(request, cs, deps.sessionTransport));
   const domain = "computer-use";
   const run = (action: string) => async (args: string[]): Promise<string> => {
     const request = parseRequest(action, args);

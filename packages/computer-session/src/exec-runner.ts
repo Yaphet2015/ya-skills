@@ -56,30 +56,53 @@ function jsonBytes(value: unknown): number {
 function boundedResult(result: ExecResult, requestId: string): ExecResult {
   const envelope = { schemaVersion: 1, requestId, status: result.status, result };
   if (jsonBytes(envelope) <= EXEC_RESULT_MAX_BYTES) return result;
-  const dropped = result.observations.length;
+  const dropped = result.observations.length + (result.observationsDropped ?? 0);
+  const { workerOutput: _workerOutput, ...wireResult } = result as ExecResult & { workerOutput?: unknown };
+  // Receipt status is lifecycle evidence, not optional presentation data. Keep
+  // one compact receipt for every planned/dispatched action and never turn an
+  // unknown or interrupted request into an ordinary failed request merely
+  // because its observations exceeded the wire budget.
+  const boundedReceipts: ActionReceipt[] = result.actions.map((receipt) => ({
+    index: receipt.index,
+    kind: receipt.kind,
+    status: receipt.status,
+    ...(receipt.error !== undefined
+      ? {
+          error: {
+            code: receipt.error.code.slice(0, 128),
+            message: receipt.error.message.slice(0, 512)
+          }
+        }
+      : {})
+  }));
+  const lifecycleStatus: ExecResult["status"] =
+    result.status === "unknown" ? "unknown" : result.status === "interrupted" ? "interrupted" : "failed";
   const bounded: ExecResult = {
-    ...result,
-    status: "failed",
+    ...wireResult,
+    status: lifecycleStatus,
     stateCommitted: false,
+    value: null,
+    actions: boundedReceipts,
     observations: [],
+    logs: [],
     ...(dropped > 0 ? { observationsDropped: dropped } : {}),
     error: {
-      code: "result_limit",
-      message: `the aggregate exec result exceeds the ${EXEC_RESULT_MAX_BYTES}-byte wire budget; bounded receipts were retained and ${dropped} observation(s) omitted`
+      code: lifecycleStatus === "unknown" ? result.error?.code ?? "unknown_delivery" : "result_limit",
+      message: `the aggregate exec result exceeds the ${EXEC_RESULT_MAX_BYTES}-byte wire budget; ${boundedReceipts.length} receipt(s) were retained and ${dropped} observation(s) omitted`
     }
   };
   if (jsonBytes({ schemaVersion: 1, requestId, status: bounded.status, result: bounded }) <= EXEC_RESULT_MAX_BYTES) {
     return bounded;
   }
-  // Values/logs are user-controlled too. Keep action receipts as the minimum
-  // recovery evidence if a pathological return value still fills the frame.
+  // Action receipts are already bounded by the action budget, but keep the
+  // final fallback explicit so user-controlled diagnostic fields can never
+  // crowd the recovery evidence off the wire.
   return {
     ...bounded,
-    value: null,
-    logs: [],
+    actions: boundedReceipts,
     observationsDropped: dropped,
     error: {
-      code: "result_limit",
+      code: lifecycleStatus === "unknown" ? result.error?.code ?? "unknown_delivery" : "result_limit",
       message: "the aggregate exec result exceeded the wire budget; only bounded action receipts were retained"
     }
   };
@@ -110,14 +133,17 @@ export interface ExecDeps {
   generation: string;
   target: { pid: number; windowId: bigint };
   stateDir: string;
-  /** Serial driver call dispatcher (host-owned). */
-  driverCall(method: "observe" | "batch", args: Record<string, unknown>): Promise<unknown>;
+  /** Serial driver call dispatcher (host-owned). The runner supplies its
+   * request-local signal so timeout/cancel closes native admission too. */
+  driverCall(method: "observe" | "batch", args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   /** One auto-observation at the end when the script made none. Errors
    * PROPAGATE (F14): the runner records final_observe_failed. */
-  finalObserve(): Promise<Observation | null>;
+  finalObserve(signal?: AbortSignal): Promise<Observation | null>;
   /** Live-worker tracking for lease ownership + diagnostics (F2/F23). */
   onExecWorkerSpawn?(pid: number | null): Promise<void> | void;
   onExecWorkerExit?(pid: number | null): Promise<void> | void;
+  /** Persist an unresolved process-group identity before the host can die. */
+  onExecWorkerCleanupFailed?(pid: number | null, pgid: number | null): Promise<void> | void;
   /** Durable journal hooks. The started hook is awaited before native
    * dispatch; the finished hook is awaited before the request can finish. */
   onActionStarted?(index: number, kind: ActionReceipt["kind"]): Promise<void> | void;
@@ -129,6 +155,8 @@ export interface ExecDeps {
   ): Promise<void> | void;
   /** Durable journal intent written before the host commits state. */
   onStateCommitIntent?(intent: { expectedVersion: number; version: number; hash: string }): Promise<void> | void;
+  /** Absolute request deadline, including setup and journal callbacks. */
+  deadlineAt?: number;
 }
 
 export function normalizeExecOptions(operation: { code: unknown; sourceName: unknown; timeoutMs: unknown; maxActions: unknown }): ExecOptions {
@@ -160,7 +188,13 @@ export async function runExec(
   options: ExecOptions,
   signal?: AbortSignal
 ): Promise<ExecResult> {
+  const runStartedAt = Date.now();
   const stateBefore = loadExecState(deps.stateDir);
+  const runDeadlineAt = deps.deadlineAt ?? runStartedAt + options.timeoutMs;
+  const dispatchAbort = new AbortController();
+  const onParentAbort = () => dispatchAbort.abort();
+  if (signal?.aborted) dispatchAbort.abort();
+  else signal?.addEventListener("abort", onParentAbort, { once: true });
   const receipts: ActionReceipt[] = [];
   const observations: Observation[] = [];
   let logs: string[] = [];
@@ -169,7 +203,6 @@ export async function runExec(
   let admissionClosed = false;
   let stateVersion = stateBefore.version;
   let scriptObserved = false;
-  let runDeadlineAt = Date.now() + options.timeoutMs;
   /** Run-level unknown delivery (F6): no state commit, terminal unknown. */
   let runUnknownDelivery = false;
   /** Hard resource boundaries are terminal even if user code catches the
@@ -178,7 +211,26 @@ export async function runExec(
   const markUnknownDelivery = (): void => {
     runUnknownDelivery = true;
     admissionClosed = true;
+    dispatchAbort.abort();
   };
+  const cancellationRequested = (): boolean => signal?.aborted === true || (runLimitError !== null && runLimitError.code === "request_cancelled");
+  const executionTimedOut = (): boolean => runLimitError !== null && runLimitError.code === "execution_timeout";
+
+  if (runDeadlineAt <= Date.now() || signal?.aborted) {
+    signal?.removeEventListener("abort", onParentAbort);
+    return {
+      status: signal?.aborted ? "interrupted" : "failed",
+      stateVersion: stateBefore.version,
+      stateCommitted: false,
+      actions: receipts,
+      observations,
+      logs,
+      error: {
+        code: signal?.aborted ? "request_cancelled" : "execution_timeout",
+        message: signal?.aborted ? "the exec request was cancelled before worker start" : "the execution budget expired before worker start"
+      }
+    };
+  }
 
   // The script's working directory is its source file's directory (C1/P2.1);
   // the worker boots in a private dir and chdirs after reading the config.
@@ -240,6 +292,7 @@ export async function runExec(
   const finish = (result: ExecResult) => {
     if (settled) return;
     settled = true;
+    admissionClosed = true;
     terminal.result = result;
     for (const waiter of rpcWaiters.values()) {
       waiter.reject(new ComputerError("exec_finished", "the exec request has finished"));
@@ -247,14 +300,75 @@ export async function runExec(
     rpcWaiters.clear();
   };
 
+  const admissionError = (): ComputerError | null => {
+    if (runUnknownDelivery) {
+      return new ComputerError("unknown_delivery", "the request has unknown native delivery", "unknown");
+    }
+    if (signal?.aborted) {
+      return new ComputerError("request_cancelled", "the exec request was cancelled", "not_delivered");
+    }
+    if (Date.now() >= runDeadlineAt) {
+      const error = new ComputerError("execution_timeout", "the execution budget expired before the next dispatch", "not_delivered");
+      runLimitError ??= { code: error.code, message: error.message };
+      admissionClosed = true;
+      dispatchAbort.abort();
+      return error;
+    }
+    if (settled || admissionClosed) {
+      return new ComputerError("exec_finished", "the exec request is no longer accepting RPCs");
+    }
+    return null;
+  };
+
+  const registerObservation = (observation: Observation): Observation => {
+    if (observations.length >= EXEC_MAX_OBSERVATIONS) {
+      runLimitError = {
+        code: "observation_limit",
+        message: `the script exceeded the limit of ${EXEC_MAX_OBSERVATIONS} returned observations — observe less or rely on state`
+      };
+      admissionClosed = true;
+      throw new ComputerError("observation_limit", runLimitError.message);
+    }
+    observations.push(observation);
+    scriptObserved = true;
+    mutationsSinceObservation = 0;
+    return observation;
+  };
+
+  const addReceipt = async (
+    receipt: ActionReceipt,
+    batchSteps?: ActionReceipt[]
+  ): Promise<void> => {
+    receipts.push(receipt);
+    batchSteps?.push(receipt);
+    await deps.onActionFinished?.(receipt.index, receipt.kind, receipt.status, receipt.error);
+  };
+
+  const fillNotRun = async (
+    actions: readonly { kind: ActionReceipt["kind"] }[],
+    from: number,
+    batchSteps?: ActionReceipt[],
+    error?: { code: string; message: string },
+    indexOffset = 0
+  ): Promise<void> => {
+    for (let index = from; index < actions.length; index++) {
+      const receipt: ActionReceipt = {
+        index: indexOffset + index,
+        kind: actions[index]!.kind,
+        status: "not_run",
+        ...(error !== undefined ? { error } : {})
+      };
+      await addReceipt(receipt, batchSteps);
+    }
+  };
+
   // Driver-side dispatch: one RPC at a time, host-generated receipts. The
   // chain SERIALIZES the actual driver calls — two facade actions can never
   // be in the driver at once (F3).
   let dispatchChain: Promise<unknown> = Promise.resolve();
   const dispatchRpc = (method: ScriptRpcMethod, rpcArgs: Record<string, JsonValue>): Promise<JsonValue> => {
-    if (admissionClosed || settled) {
-      return Promise.reject(new ComputerError("exec_finished", "the exec request is no longer accepting RPCs"));
-    }
+    const earlyError = admissionError();
+    if (earlyError !== null) return Promise.reject(earlyError);
     if (queuedDispatches >= EXEC_RPC_QUEUE_LIMIT) {
       return Promise.reject(new ComputerError("rpc_queue_overflow", `more than ${EXEC_RPC_QUEUE_LIMIT} facade calls are queued — await them or reduce fan-out`));
     }
@@ -279,46 +393,74 @@ export async function runExec(
     actionCount += requestedCost;
     queuedDispatches++;
     const run = async (): Promise<JsonValue> => {
-      if (admissionClosed || settled) {
-        throw new ComputerError("exec_finished", "the exec request is no longer accepting RPCs");
+      const beforeRunError = admissionError();
+      if (beforeRunError !== null) {
+        // The worker may emit exec_unawaited immediately after an RPC frame;
+        // the host can therefore reject a queued batch before its first step
+        // starts. Preserve a complete not_run receipt set rather than
+        // returning an empty action history.
+        if (method === "batch" && !receipts.some((receipt) => receipt.index === index)) {
+          try {
+            const request = validateBatch(rpcArgs.request);
+            await fillNotRun(request.actions, 0, undefined, { code: beforeRunError.code, message: beforeRunError.message }, index);
+          } catch {
+            // Structural validation errors are already represented by the
+            // worker/host terminal failure; no desktop input crossed here.
+          }
+        }
+        throw beforeRunError;
       }
       let nativeCall: Promise<unknown> = Promise.resolve();
       try {
         nativeCall = (async () => {
           if (method === "observe") {
+            const beforeObserve = admissionError();
+            if (beforeObserve !== null) throw beforeObserve;
             const observation = (await deps.driverCall("observe", {
               options: (rpcArgs.options as ObserveOptions | undefined) ?? { mode: "auto" }
-            })) as Observation;
-            if (observations.length >= EXEC_MAX_OBSERVATIONS) {
-              // Observation overflow FAILS the call loudly (F16): the limit
-              // is a cancellation boundary, not a silent truncation.
-              runLimitError = {
-                code: "observation_limit",
-                message: `the script exceeded the limit of ${EXEC_MAX_OBSERVATIONS} returned observations — observe less or rely on state`
-              };
-              admissionClosed = true;
-              throw new ComputerError("observation_limit", runLimitError.message);
-            }
-            observations.push(observation);
-            scriptObserved = true;
-            mutationsSinceObservation = 0;
-            return observation;
+            }, dispatchAbort.signal)) as Observation;
+            const afterObserve = admissionError();
+            if (afterObserve !== null) throw afterObserve;
+            return registerObservation(observation);
           }
           if (method === "batch") {
             const request = validateBatch(rpcArgs.request);
             const batchSteps: ActionReceipt[] = [];
             let batchStatus: "completed" | "interrupted" | "failed" = "completed";
+            const batchDeadlineAt = Math.min(
+              runDeadlineAt,
+              Date.now() + (request.timeoutMs ?? 30_000)
+            );
             for (const [stepIndex, action] of request.actions.entries()) {
               const eventIndex = index + stepIndex;
+              const boundary = admissionError();
+              if (boundary !== null || Date.now() >= batchDeadlineAt) {
+                const error = boundary === null
+                  ? { code: "batch_deadline", message: "the batch timeout budget expired before this action was dispatched" }
+                  : { code: boundary.code, message: boundary.message };
+                await fillNotRun(request.actions, stepIndex, batchSteps, error, index);
+                batchStatus = "interrupted";
+                break;
+              }
               await deps.onActionStarted?.(eventIndex, action.kind);
+              const afterJournal = admissionError();
+              if (afterJournal !== null || Date.now() >= batchDeadlineAt) {
+                const error = afterJournal === null
+                  ? { code: "batch_deadline", message: "the batch timeout budget expired before this action was dispatched" }
+                  : { code: afterJournal.code, message: afterJournal.message };
+                await fillNotRun(request.actions, stepIndex, batchSteps, error, index);
+                batchStatus = "interrupted";
+                break;
+              }
+              const remaining = batchDeadlineAt - Date.now();
               const oneRequest: BatchRequest = {
                 actions: [action],
-                timeoutMs: Math.max(1, Math.min(request.timeoutMs ?? 30_000, 120_000)),
+                timeoutMs: Math.max(1, Math.min(remaining, 120_000)),
                 maxActions: 1
               };
               let result: { status: string; steps?: ActionReceipt[] };
               try {
-                result = (await deps.driverCall("batch", { request: oneRequest })) as {
+                result = (await deps.driverCall("batch", { request: oneRequest }, dispatchAbort.signal)) as {
                   status: string;
                   steps?: ActionReceipt[];
                 };
@@ -331,9 +473,11 @@ export async function runExec(
                   message: error instanceof Error ? error.message : String(error)
                 };
                 const receipt: ActionReceipt = { index: eventIndex, kind: action.kind, status: "unknown", error: failure };
-                batchSteps.push(receipt);
-                receipts.push(receipt);
-                await deps.onActionFinished?.(eventIndex, action.kind, "unknown", failure);
+                await addReceipt(receipt, batchSteps);
+                await fillNotRun(request.actions, stepIndex + 1, batchSteps, {
+                  code: "not_run_after_unknown",
+                  message: "the preceding action had unknown delivery; remaining actions were not dispatched"
+                }, index);
                 batchStatus = "interrupted";
                 break;
               }
@@ -345,26 +489,49 @@ export async function runExec(
                 kind: action.kind,
                 status: outcome
               } as ActionReceipt;
-              batchSteps.push(receipt);
-              receipts.push(receipt);
-              await deps.onActionFinished?.(eventIndex, action.kind, outcome, receipt.error);
+              await addReceipt(receipt, batchSteps);
               if (outcome === "delivered" || outcome === "satisfied") {
                 // A local wait may have observed an externally changed frame;
                 // treat the facade call as observation-dirty so the final
                 // result does not reuse a pre-wait snapshot.
                 mutationsSinceObservation++;
+                const afterAction = admissionError();
+                if (afterAction !== null || Date.now() >= batchDeadlineAt) {
+                  const error = afterAction === null
+                    ? { code: "batch_deadline", message: "the batch timeout budget expired after this action" }
+                    : { code: afterAction.code, message: afterAction.message };
+                  await fillNotRun(request.actions, stepIndex + 1, batchSteps, error, index);
+                  batchStatus = "interrupted";
+                  break;
+                }
                 continue;
               }
               if (outcome === "unknown") markUnknownDelivery();
+              await fillNotRun(request.actions, stepIndex + 1, batchSteps, {
+                code: receipt.error?.code ?? (outcome === "unknown" ? "unknown_delivery" : "action_failed"),
+                message: receipt.error?.message ?? `the action ended with ${outcome}`
+              }, index);
               batchStatus = outcome === "unknown" || result.status === "interrupted" ? "interrupted" : "failed";
               break;
             }
             if (batchStatus === "completed" && request.observe !== undefined) {
+              const beforeObservation = admissionError();
+              if (beforeObservation !== null || Date.now() >= batchDeadlineAt) {
+                const error = beforeObservation === null
+                  ? { code: "batch_deadline", message: "the batch timeout budget expired before final observation" }
+                  : { code: beforeObservation.code, message: beforeObservation.message };
+                return { status: "interrupted", steps: batchSteps, observationError: error };
+              }
               try {
-                const observation = (await deps.driverCall("observe", { options: request.observe })) as Observation;
-                observations.push(observation);
-                scriptObserved = true;
-                mutationsSinceObservation = 0;
+                const observation = (await deps.driverCall("observe", { options: request.observe }, dispatchAbort.signal)) as Observation;
+                if (Date.now() >= batchDeadlineAt || signal?.aborted) {
+                  return {
+                    status: "interrupted",
+                    steps: batchSteps,
+                    observationError: { code: signal?.aborted ? "request_cancelled" : "batch_deadline", message: signal?.aborted ? "the batch was cancelled during final observation" : "the batch timeout budget expired during final observation" }
+                  };
+                }
+                registerObservation(observation);
                 return { status: batchStatus, steps: batchSteps, observation };
               } catch (error) {
                 return {
@@ -382,6 +549,12 @@ export async function runExec(
           // Single actions ride a one-step batch so receipts and selector/
           // condition validation stay in ONE implementation.
           const kind = method as ActionReceipt["kind"];
+          const beforeSingle = admissionError();
+          if (beforeSingle !== null) {
+            const receipt: ActionReceipt = { index, kind, status: "not_run", error: { code: beforeSingle.code, message: beforeSingle.message } };
+            await addReceipt(receipt);
+            throw beforeSingle;
+          }
           await deps.onActionStarted?.(index, kind);
           let single: BatchRequest;
           try {
@@ -391,13 +564,18 @@ export async function runExec(
               code: "batch_request_invalid",
               message: error instanceof Error ? error.message : String(error)
             };
-            receipts.push({ index, kind, status: "not_delivered", error: validationError });
-            await deps.onActionFinished?.(index, kind, "not_delivered", validationError);
+            await addReceipt({ index, kind, status: "not_delivered", error: validationError });
             throw new ComputerError(validationError.code, validationError.message, "not_delivered");
+          }
+          const afterValidation = admissionError();
+          if (afterValidation !== null) {
+            const receipt: ActionReceipt = { index, kind, status: "not_run", error: { code: afterValidation.code, message: afterValidation.message } };
+            await addReceipt(receipt);
+            throw afterValidation;
           }
           let result: { status: string; steps?: ActionReceipt[] };
           try {
-            result = (await deps.driverCall("batch", { request: single })) as {
+            result = (await deps.driverCall("batch", { request: single }, dispatchAbort.signal)) as {
               status: string;
               steps?: ActionReceipt[];
             };
@@ -405,10 +583,11 @@ export async function runExec(
             // The native mutation crossed the host boundary. A missing or
             // unclassified response is never an ordinary script failure.
             markUnknownDelivery();
-            await deps.onActionFinished?.(index, kind, "unknown", {
+            const failure = {
               code: error instanceof ComputerError ? error.code : "action_failed",
               message: error instanceof Error ? error.message : String(error)
-            });
+            };
+            await addReceipt({ index, kind, status: "unknown", error: failure });
             throw error;
           }
           const step = result.steps?.[0];
@@ -419,8 +598,7 @@ export async function runExec(
             kind,
             status
           } as ActionReceipt;
-          await deps.onActionFinished?.(index, kind, status, receipt.error);
-          receipts.push(receipt);
+          await addReceipt(receipt);
           if (status === "delivered" || status === "satisfied") {
             mutationsSinceObservation++;
             return null;
@@ -441,7 +619,7 @@ export async function runExec(
         inFlightNative = nativeCall;
         return (await nativeCall) as JsonValue;
       } catch (error) {
-        if (!(error instanceof ComputerError)) {
+        if (!(error instanceof ComputerError) && !receipts.some((receipt) => receipt.index === index)) {
           receipts.push({
             index,
             kind: method as ActionReceipt["kind"],
@@ -525,9 +703,9 @@ export async function runExec(
           });
           return;
         }
-        if (runLimitError) {
+        if (runLimitError && runLimitError.code !== "execution_timeout") {
           finish({
-            status: "failed",
+            status: runLimitError.code === "request_cancelled" ? "interrupted" : "failed",
             stateVersion: stateBefore.version,
             stateCommitted: false,
             actions: receipts,
@@ -579,7 +757,7 @@ export async function runExec(
         const error = message.error as { code: string; message: string };
         logs = (message.logs as string[]) ?? [];
         finish({
-          status: runUnknownDelivery ? "unknown" : "failed",
+          status: runUnknownDelivery ? "unknown" : runLimitError?.code === "request_cancelled" || signal?.aborted ? "interrupted" : "failed",
           stateVersion: stateBefore.version,
           stateCommitted: false,
           actions: receipts,
@@ -592,7 +770,7 @@ export async function runExec(
       case "exec_unawaited": {
         logs = (message.logs as string[]) ?? [];
         finish({
-          status: runUnknownDelivery ? "unknown" : "failed",
+          status: runUnknownDelivery ? "unknown" : runLimitError?.code === "request_cancelled" || signal?.aborted ? "interrupted" : "failed",
           stateVersion: stateBefore.version,
           stateCommitted: false,
           actions: receipts,
@@ -731,6 +909,10 @@ export async function runExec(
   // (bounded) BEFORE publishing the terminal state.
   const stopWorker = (reason: string, code: string): void => {
     admissionClosed = true;
+    dispatchAbort.abort();
+    if (!settled && (code === "execution_timeout" || code === "request_cancelled")) {
+      runLimitError ??= { code, message: reason };
+    }
     void (async () => {
       const stop = await stopProcessGroup(child, TERM_GRACE_MS);
       if (!settled) {
@@ -760,7 +942,7 @@ export async function runExec(
   );
 
   try {
-    const deadline = Date.now() + options.timeoutMs + TERM_GRACE_MS + 5_000;
+    const deadline = runDeadlineAt + TERM_GRACE_MS + NATIVE_SETTLE_MS;
     while (!settled && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -776,8 +958,6 @@ export async function runExec(
       });
     }
   } finally {
-    clearTimeout(watchdog);
-    signal?.removeEventListener("abort", onAbort);
     admissionClosed = true;
     // ALWAYS reclaim the group, including after successful completion (F4):
     // a script's surviving descendants are ordinary cleanup, not success.
@@ -800,6 +980,18 @@ export async function runExec(
       }
     } else {
       workerCleanupFailed = true;
+      try {
+        await deps.onExecWorkerCleanupFailed?.(child.pid ?? null, stop.groupSurvivors);
+      } catch (error) {
+        // A failed lease refresh is itself an unresolved cleanup proof; keep
+        // the host unusable rather than dropping the survivor identity.
+        if (terminal.result) {
+          terminal.result.error = {
+            code: "worker_cleanup_failed",
+            message: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
       if (terminal.result) {
         terminal.result.status = "unknown";
         terminal.result.error = {
@@ -839,7 +1031,19 @@ export async function runExec(
   // observed, OR when mutations happened after its last observation. A prior
   // observation is reused ONLY when nothing mutated since (no stale reuse).
   if (result.status === "completed" && (!scriptObserved || mutationsSinceObservation > 0 || observations.length === 0)) {
-    if (observations.length >= EXEC_MAX_OBSERVATIONS) {
+    if (cancellationRequested()) {
+      result.status = "interrupted";
+      result.stateCommitted = false;
+      result.error = { code: "request_cancelled", message: "the exec request was cancelled before final observation/commit" };
+      pendingCommit = null;
+    } else if (executionTimedOut()) {
+      result.status = "failed";
+      result.stateCommitted = false;
+      // The script state is a factual local result even when the final read
+      // could not begin before the wall-clock budget. Preserve it for the
+      // post-timeout commit path; no further desktop input is attempted.
+      result.error = { code: "final_observe_failed", message: "the execution budget expired before the final observation" };
+    } else if (observations.length >= EXEC_MAX_OBSERVATIONS) {
       result.status = "failed";
       result.error = {
         code: "observation_limit",
@@ -854,7 +1058,7 @@ export async function runExec(
       } else {
         // Track the final read just like every other native dispatch. A timed
         // out final read cannot be left behind an apparently idle session.
-        const finalNative = Promise.resolve().then(() => deps.finalObserve());
+        const finalNative = Promise.resolve().then(() => deps.finalObserve(dispatchAbort.signal));
         let finalSettled = false;
         void finalNative.then(
           () => { finalSettled = true; },
@@ -870,15 +1074,37 @@ export async function runExec(
           if (!final) {
             throw new ComputerError("final_observe_failed", "the driver returned no final observation");
           }
-          result.observations.push(final);
-          scriptObserved = true;
-          mutationsSinceObservation = 0;
+          if (cancellationRequested() || dispatchAbort.signal.aborted || Date.now() >= runDeadlineAt) {
+            if (cancellationRequested()) {
+              result.status = "interrupted";
+              result.error = { code: "request_cancelled", message: "the exec request was cancelled during final observation" };
+            } else {
+              result.status = "failed";
+              result.error = { code: "final_observe_failed", message: "the execution budget expired during final observation" };
+            }
+            result.stateCommitted = false;
+            pendingCommit = null;
+          } else {
+            registerObservation(final);
+          }
         } catch (error) {
-          result.status = "failed";
-          result.error = {
-            code: "final_observe_failed",
-            message: error instanceof Error ? error.message : String(error)
-          };
+          if (cancellationRequested()) {
+            result.status = "interrupted";
+            result.error = { code: "request_cancelled", message: "the exec request was cancelled during final observation" };
+            result.stateCommitted = false;
+            pendingCommit = null;
+          } else if (error instanceof ComputerError && error.code === "observation_limit") {
+            result.status = "failed";
+            result.error = { code: error.code, message: error.message };
+            result.stateCommitted = false;
+            pendingCommit = null;
+          } else {
+            result.status = "failed";
+            result.error = {
+              code: "final_observe_failed",
+              message: error instanceof Error ? error.message : String(error)
+            };
+          }
         } finally {
           if (finalTimer !== undefined) clearTimeout(finalTimer);
           if (!finalSettled) {
@@ -889,10 +1115,12 @@ export async function runExec(
             if (!finalSettled) {
               nativeDispatchUnresolved = true;
               result.status = "unknown";
+              result.stateCommitted = false;
               result.error = {
                 code: "native_in_flight",
                 message: "the final observation was still executing when the request ended — delivery state is unknown"
               };
+              pendingCommit = null;
             }
           }
           if (finalSettled && inFlightNative === finalNative) inFlightNative = null;
@@ -912,6 +1140,16 @@ export async function runExec(
       message: "native delivery or worker cleanup was not proven; state was not committed"
     };
     pendingCommit = null;
+  } else if (cancellationRequested()) {
+    result.status = "interrupted";
+    result.stateCommitted = false;
+    result.error = { code: "request_cancelled", message: "the exec request was cancelled; state was not committed" };
+    pendingCommit = null;
+  } else if (result.status === "completed" && Date.now() >= runDeadlineAt) {
+    result.status = "failed";
+    result.stateCommitted = false;
+    result.error = { code: "execution_timeout", message: "the execution budget expired before state commit" };
+    pendingCommit = null;
   }
 
   // Enforce the aggregate terminal-result budget BEFORE committing state. On
@@ -928,25 +1166,49 @@ export async function runExec(
   // script was valid and its state can still be recovered independently.
   if (pendingCommit !== null && !runUnknownDelivery && !nativeDispatchUnresolved && !workerCleanupFailed) {
     const hash = execStateHash(pendingCommit.state);
-    try {
-      await deps.onStateCommitIntent?.({
-        expectedVersion: stateBefore.version,
-        version: stateBefore.version + 1,
-        hash
-      });
-      stateVersion = commitExecState(deps.stateDir, stateBefore.version, pendingCommit.state);
-      result.stateVersion = stateVersion;
-      result.stateCommitted = true;
-      result.stateHash = hash;
-    } catch (error) {
-      result.status = "failed";
+    const deadlineBlocksCommit = Date.now() >= runDeadlineAt && result.error?.code !== "final_observe_failed";
+    const abortBlocksCommit = dispatchAbort.signal.aborted && result.error?.code !== "final_observe_failed";
+    if (signal?.aborted || abortBlocksCommit || deadlineBlocksCommit) {
+      result.status = signal?.aborted ? "interrupted" : "failed";
       result.stateCommitted = false;
-      result.error = {
-        code: "state_commit_failed",
-        message: error instanceof Error ? error.message : String(error)
-      };
+      result.error = signal?.aborted
+        ? { code: "request_cancelled", message: "the exec request was cancelled before state commit" }
+        : { code: "execution_timeout", message: "the execution budget expired before state commit" };
+      pendingCommit = null;
+    } else {
+      try {
+        await deps.onStateCommitIntent?.({
+          expectedVersion: stateBefore.version,
+          version: stateBefore.version + 1,
+          hash
+        });
+        const finalReadFailed = result.error?.code === "final_observe_failed";
+        if (signal?.aborted || (dispatchAbort.signal.aborted && !finalReadFailed) || (Date.now() >= runDeadlineAt && !finalReadFailed)) {
+          result.status = signal?.aborted ? "interrupted" : "failed";
+          result.stateCommitted = false;
+          result.error = signal?.aborted
+            ? { code: "request_cancelled", message: "the exec request was cancelled during state commit" }
+            : { code: "execution_timeout", message: "the execution budget expired during state commit" };
+          pendingCommit = null;
+        } else {
+          stateVersion = commitExecState(deps.stateDir, stateBefore.version, pendingCommit.state);
+          result.stateVersion = stateVersion;
+          result.stateCommitted = true;
+          result.stateHash = hash;
+        }
+      } catch (error) {
+        result.status = "failed";
+        result.stateCommitted = false;
+        result.error = {
+          code: "state_commit_failed",
+          message: error instanceof Error ? error.message : String(error)
+        };
+      }
     }
   }
+  clearTimeout(watchdog);
+  signal?.removeEventListener("abort", onAbort);
+  signal?.removeEventListener("abort", onParentAbort);
   terminal.result = result;
   void exitInfo;
   return result;

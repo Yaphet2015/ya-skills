@@ -57,7 +57,10 @@ export async function openSession(options: OpenSessionOptions): Promise<OpenedSe
     }),
     { mode: 0o600 }
   );
-  const { child } = spawnInternalWorker("__computer-session-host", configPath);
+  // The opener only needs the Unix socket for the boot handshake. Ignore
+  // stdio and unref the detached child before returning so a normal CLI
+  // process exits while the persistent host remains usable.
+  const { child } = spawnInternalWorker("__computer-session-host", configPath, { stdio: "ignore" });
   const deadline = Date.now() + BOOT_TIMEOUT_MS;
   let lastError: unknown = null;
   for (;;) {
@@ -68,6 +71,7 @@ export async function openSession(options: OpenSessionOptions): Promise<OpenedSe
     try {
       const reply = await sendControl(paths.socket, { kind: "status", schemaVersion: 1, sessionId }, 1_000);
       if (reply.info) {
+        child.unref();
         return { info: reply.info, socketPath: paths.socket, configPath, hostPid: child.pid! };
       }
       lastError = reply.error;

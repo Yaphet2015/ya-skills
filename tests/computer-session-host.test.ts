@@ -173,6 +173,59 @@ describe("session host (B2)", () => {
     }
   });
 
+  test("cancellation during final observation reports an interrupted batch", async () => {
+    let observeStartedResolve!: () => void;
+    const observeStarted = new Promise<void>((resolve) => (observeStartedResolve = resolve));
+    let releaseObserve!: () => void;
+    const pendingObserve = new Promise<void>((resolve) => (releaseObserve = resolve));
+    const target = { pid: 4242, windowId: 12345n };
+    const host = await startTestHost({
+      driver: "fake",
+      target,
+      idleTimeoutMs: 60_000,
+      observeResult: async (signal) => {
+        observeStartedResolve();
+        await pendingObserve;
+        if (signal?.aborted) {
+          throw new Error("observe aborted");
+        }
+        return {
+          id: randomUUID(),
+          target,
+          capturedAt: Date.now(),
+          epoch: "final-observe",
+          revision: 0,
+          title: "fixture",
+          ax: { status: "usable" as const, elements: [], total: 0, returned: 0, complete: true },
+          image: { status: "unavailable" as const }
+        };
+      }
+    });
+    try {
+      const request = host.batchRequest([{ kind: "key", key: "Return" }]);
+      request.operation = {
+        kind: "batch",
+        request: { actions: [{ kind: "key", key: "Return" }], observe: { mode: "ax" } }
+      };
+      const running = host.send(request);
+      await observeStarted;
+      await sendControl(host.socketPath, {
+        kind: "cancel",
+        schemaVersion: 1,
+        sessionId: host.sessionId,
+        requestId: request.requestId
+      }, 5_000);
+      releaseObserve();
+      const reply = await running;
+      expect(reply.status).toBe("interrupted");
+      expect((reply.result as { observationError?: { code?: string } }).observationError?.code).toBe("request_cancelled");
+    } finally {
+      releaseObserve();
+      await host.close().catch(() => undefined);
+      await host.cleanup();
+    }
+  });
+
   test("close is idempotent and reports the final state", async () => {
     const host = await startTestHost({ driver: "fake" });
     const first = await host.control("close");

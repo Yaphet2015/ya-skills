@@ -20,6 +20,8 @@
 - 原生未知投递不可自动重放；原生 worker 未确认终止不得释放目标。
 - 不增加模型调用、脚本审计、调用方权限配置或运行时适配。
 
+> **Integration status (2026-09-15):** Session implementation and desktop-free packaged checks are integrated at checkpoint `e7c172f57b2bdb846ad388ba4961757d969bd59a` plus the current unstaged delta. The current evidence proves local protocol/process behavior only; native session TCC attribution and real driver lifecycle remain open. See `docs/verification/2026-09-15-parallel-integration.md`; this note is not a completion claim.
+
 ---
 
 ## 文件与接口总表

@@ -23,6 +23,7 @@ import {
   ComputerError,
   createRequestJournal,
   validateBatch,
+  DEFAULT_BATCH_TIMEOUT_MS,
   processStartTime,
   type LeaseHandle,
   type RequestJournal
@@ -50,7 +51,7 @@ import {
   type StopResult
 } from "./process.js";
 import { buildDriverSession, type DriverMethod, type DriverSessionLike } from "./driver-worker.js";
-import { execStateHash, loadExecState } from "./exec-state.js";
+import { execStateHash, loadExecState, loadExecStateVersion } from "./exec-state.js";
 
 export const MAX_IDLE_TIMEOUT_MS = 120_000;
 export const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
@@ -307,6 +308,10 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   const requestOutcomes = new Map<string, { status: SessionReply["status"]; result?: unknown; error?: { code: string; message: string } }>();
   const unresolvedRequests = new Set<string>();
   const liveExecWorkers = new Set<number>();
+  /** Process groups retained after failed worker cleanup. This survives host
+   * death through the lease record and blocks unsafe target reclamation. */
+  const unresolvedWorkerGroups = new Map<number, { pgid: number; leaderPid: number }>();
+  let cleanupUnproven = false;
   let idleTimer: NodeJS.Timeout | null = null;
   let server: Server | null = null;
   /** Admission closes as soon as shutdown starts; `finalized` is separate so
@@ -379,30 +384,61 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
 
   const refreshLease = async (pids: number[]): Promise<void> => {
     try {
-      await lease.refreshOwner({ workerPids: pids });
+      await lease.refreshOwner({
+        workerPids: pids,
+        workerGroups: [...unresolvedWorkerGroups.values()].map((group) => ({ pgid: group.pgid, leaderPid: group.leaderPid })),
+        cleanupUnproven
+      });
     } catch (error) {
       leaseHealthy = false;
       state.value = "unusable";
       throw error;
     }
   };
+  const leasePatch = () => ({
+    workerPids: [...(driverPid !== null ? [driverPid] : []), ...liveExecWorkers],
+    workerGroups: [...unresolvedWorkerGroups.values()].map((group) => ({ pgid: group.pgid, leaderPid: group.leaderPid }))
+  });
   const registerExecWorker = async (pid: number | null): Promise<void> => {
     if (pid === null) return;
     liveExecWorkers.add(pid);
-    const pids = [...(driverPid !== null ? [driverPid] : []), ...liveExecWorkers];
-    await refreshLease(pids);
+    await refreshLease(leasePatch().workerPids);
   };
   const unregisterExecWorker = async (pid: number | null): Promise<void> => {
     if (pid === null) return;
     liveExecWorkers.delete(pid);
-    const pids = [...(driverPid !== null ? [driverPid] : []), ...liveExecWorkers];
     try {
-      await refreshLease(pids);
+      await lease.refreshOwner(leasePatch());
     } catch {
       // The worker is already gone; keep the lease and let the host report an
       // unusable cleanup state rather than losing the worker identity.
       state.value = "unusable";
     }
+  };
+  const recordExecWorkerCleanupFailure = async (pid: number | null, pgid: number | null): Promise<void> => {
+    if (pid === null || pgid === null) {
+      cleanupUnproven = true;
+      state.value = "unusable";
+      await refreshLease(driverPid !== null ? [driverPid, ...liveExecWorkers] : [...liveExecWorkers]);
+      throw new Error("worker cleanup failed without a verifiable process-group identity");
+    }
+    unresolvedWorkerGroups.set(pid, { pgid, leaderPid: pid });
+    liveExecWorkers.add(pid);
+    try {
+      await refreshLease(leasePatch().workerPids);
+    } catch (error) {
+      cleanupUnproven = true;
+      // Retry with an explicit durable poison bit. If the lease file is
+      // unreadable or held by an unknown updater, the host remains unusable
+      // and the existing owner is never released.
+      await lease.refreshOwner({
+        workerPids: leasePatch().workerPids,
+        workerGroups: leasePatch().workerGroups,
+        cleanupUnproven: true
+      }).catch(() => undefined);
+      throw error;
+    }
+    state.value = "unusable";
   };
 
   const terminateBeforeUnknownReply = async (): Promise<void> => {
@@ -486,11 +522,34 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         };
         console.error(`[host] driver cleanup failed (${reason}):`, error instanceof Error ? error.message : error);
       }
+      if (!stopResult.exited) {
+        if (driverPid !== null && stopResult.groupSurvivors !== null) {
+          unresolvedWorkerGroups.set(driverPid, { pgid: stopResult.groupSurvivors, leaderPid: driverPid });
+          liveExecWorkers.add(driverPid);
+          try {
+            await refreshLease([...liveExecWorkers]);
+          } catch {
+            cleanupUnproven = true;
+            await lease.refreshOwner({
+              workerPids: [...liveExecWorkers],
+              workerGroups: [...unresolvedWorkerGroups.values()].map((group) => ({ pgid: group.pgid, leaderPid: group.leaderPid })),
+              cleanupUnproven: true
+            }).catch(() => undefined);
+          }
+        } else {
+          cleanupUnproven = true;
+          try {
+            await lease.refreshOwner({ cleanupUnproven: true });
+          } catch {
+            leaseHealthy = false;
+          }
+        }
+      }
       // Un-reclaimable driver, unresolved request, or unknown delivery: the
       // session is unusable and the LEASE IS KEPT — reclamation requires proof
       // that no native work survives (F2). The lease owner keeps the worker
-      // pids recorded, so even a dead host with a surviving driver blocks.
-      if (markedUnusable || !leaseHealthy || !stopResult.exited || inFlight !== null) {
+      // pids/groups recorded, so even a dead host with a surviving driver blocks.
+      if (markedUnusable || !leaseHealthy || !stopResult.exited || inFlight !== null || cleanupUnproven) {
         state.value = "unusable";
       } else {
         state.value = "closed";
@@ -519,20 +578,26 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           state.value = "unusable";
         }
       }
+      // A closed host removes its listener/path. An unusable host remains a
+      // live, queryable listener until the owning process explicitly exits;
+      // this lets callers retrieve the recorded unknown result. `hostMain`
+      // and the public close path perform the final listener removal, so no
+      // dead socket path survives process exit.
       if (state.value === "closed") {
         try {
           rmSync(config.socketPath, { force: true });
         } catch {
           // best effort
         }
+        if (server !== null) {
+          server.close();
+          server = null;
+        }
       }
-      // An unusable session KEEPS its socket and lease: callers must be able
-      // to observe "blocked" instead of guessing at a vanished session.
       writeMetadata();
       finalized = true;
       const final = info();
       for (const waiter of closeWaiters.splice(0)) waiter(final);
-      if (server !== null && state.value === "closed") server.close();
       return final;
     })();
     return shutdownPromise;
@@ -547,33 +612,51 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     requestId: string,
     request: ReturnType<typeof validateBatch>,
     signal: AbortSignal,
+    absoluteDeadlineAt: number,
     finishedActions?: Set<number>
   ): Promise<{ status: "completed" | "interrupted" | "failed"; steps: Array<Record<string, unknown>>; observation?: unknown; observationError?: { code: string; message: string } }> => {
     const steps: Array<Record<string, unknown>> = [];
-    const deadlineAt = Date.now() + (request.timeoutMs ?? 30_000);
-    const fillNotRun = (from: number, error?: { code: string; message: string }) => {
+    const fillNotRun = async (from: number, error: { code: string; message: string }): Promise<void> => {
       for (let index = from; index < request.actions.length; index++) {
         steps[index] = {
           index,
           kind: request.actions[index]!.kind,
           status: "not_run",
-          ...(error !== undefined ? { error } : {})
+          error
         };
+        await appendJournalEvent(requestId, "action_finished", {
+          index,
+          kind: request.actions[index]!.kind,
+          outcome: "not_run",
+          error
+        });
+        finishedActions?.add(index);
       }
     };
+    const deadlineAt = Math.min(absoluteDeadlineAt, Date.now() + (request.timeoutMs ?? DEFAULT_BATCH_TIMEOUT_MS));
     for (const [index, action] of request.actions.entries()) {
-      if (signal.aborted) {
-        fillNotRun(index, { code: "request_cancelled", message: "the batch was cancelled before this action was dispatched" });
-        return { status: "interrupted", steps };
-      }
-      const remaining = deadlineAt - Date.now();
-      if (remaining <= 0) {
-        const error = { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" };
-        steps[index] = { index, kind: action.kind, status: "not_run", error };
-        fillNotRun(index + 1);
+      const boundary = signal.aborted
+        ? { code: "request_cancelled", message: "the batch was cancelled before this action was dispatched" }
+        : Date.now() >= deadlineAt
+          ? { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" }
+          : null;
+      if (boundary !== null) {
+        await fillNotRun(index, boundary);
         return { status: "interrupted", steps };
       }
       await appendJournalEvent(requestId, "action_started", { index, kind: action.kind });
+      const afterJournal = signal.aborted
+        ? { code: "request_cancelled", message: "the batch was cancelled before this action was dispatched" }
+        : Date.now() >= deadlineAt
+          ? { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" }
+          : null;
+      if (afterJournal !== null) {
+        await fillNotRun(index, afterJournal);
+        return { status: "interrupted", steps };
+      }
+      // Recompute the remaining budget after every journal await. Never pass
+      // a stale relative timeout to a fresh driver call.
+      const remaining = deadlineAt - Date.now();
       let raw: unknown;
       try {
         raw = await driver.call(
@@ -596,7 +679,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         steps[index] = receipt;
         await appendJournalEvent(requestId, "action_finished", { index, kind: action.kind, outcome: "unknown", error: failure });
         finishedActions?.add(index);
-        fillNotRun(index + 1);
+        await fillNotRun(index + 1, { code: "not_run_after_unknown", message: "the preceding action had unknown delivery; remaining actions were not dispatched" });
         return { status: "interrupted", steps };
       }
       const result = raw as { status?: unknown; steps?: Array<Record<string, unknown>> } | null;
@@ -617,27 +700,61 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       });
       finishedActions?.add(index);
       if (localStatus !== "delivered" && localStatus !== "satisfied") {
-        fillNotRun(index + 1);
+        await fillNotRun(index + 1, {
+          code: typeof (local?.error as { code?: unknown } | undefined)?.code === "string"
+            ? (local?.error as { code: string }).code
+            : localStatus === "unknown" ? "unknown_delivery" : "action_failed",
+          message: typeof (local?.error as { message?: unknown } | undefined)?.message === "string"
+            ? (local?.error as { message: string }).message
+            : `the action ended with ${localStatus}`
+        });
         return {
           status: localStatus === "unknown" || result?.status === "interrupted" ? "interrupted" : "failed",
           steps
         };
       }
-    }
-    if (request.observe !== undefined) {
-      if (signal.aborted) {
+      const afterAction = signal.aborted
+        ? { code: "request_cancelled", message: "the batch was cancelled after this action" }
+        : Date.now() >= deadlineAt
+          ? { code: "batch_deadline", message: "batch timeout budget exhausted after this action" }
+          : null;
+      if (afterAction !== null) {
+        await fillNotRun(index + 1, afterAction);
         return { status: "interrupted", steps };
       }
+    }
+    if (request.observe !== undefined) {
+      const beforeObservation = signal.aborted
+        ? { code: "request_cancelled", message: "the batch was cancelled before final observation" }
+        : Date.now() >= deadlineAt
+          ? { code: "batch_deadline", message: "batch timeout budget exhausted before final observation" }
+          : null;
+      if (beforeObservation !== null) return { status: "interrupted", steps, observationError: beforeObservation };
       try {
         const observation = await driver.call("observe", { options: request.observe }, signal);
+        if (signal.aborted || Date.now() >= deadlineAt) {
+          return {
+            status: "interrupted",
+            steps,
+            observationError: signal.aborted
+              ? { code: "request_cancelled", message: "the batch was cancelled during final observation" }
+              : { code: "batch_deadline", message: "batch timeout budget exhausted during final observation" }
+          };
+        }
         return { status: "completed", steps, observation };
       } catch (error) {
+        const cancelled = signal.aborted || error instanceof ComputerError && (error.code === "aborted" || error.code === "request_cancelled");
+        const expired = Date.now() >= deadlineAt;
         return {
-          status: "completed",
+          status: cancelled || expired ? "interrupted" : "completed",
           steps,
           observationError: {
-            code: error instanceof ComputerError ? error.code : "final_observe_failed",
-            message: error instanceof Error ? error.message : String(error)
+            code: cancelled ? "request_cancelled" : expired ? "batch_deadline" : error instanceof ComputerError ? error.code : "final_observe_failed",
+            message: cancelled
+              ? "the batch was cancelled during final observation"
+              : expired
+                ? "batch timeout budget exhausted during final observation"
+                : error instanceof Error ? error.message : String(error)
           }
         };
       }
@@ -674,31 +791,72 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   };
 
   const validateRecoveredExecState = (record: Awaited<ReturnType<RequestJournal["read"]>>): boolean => {
-    const finished = [...record.events].reverse().find((event) => event.type === "request_finished");
     const value = record.result as { stateCommitted?: unknown; stateVersion?: unknown; stateHash?: unknown } | undefined;
-    if (value?.stateCommitted !== true) return true;
     const intent = record.events.find((event) => event.type === "state_commit_intent");
-    const payload = intent?.payload;
+    if (intent === undefined) return value?.stateCommitted !== true;
+    const payload = intent.payload;
     if (
-      intent === undefined ||
-      typeof payload?.expectedVersion !== "number" ||
+      typeof payload.expectedVersion !== "number" ||
+      !Number.isSafeInteger(payload.expectedVersion) ||
       typeof payload.version !== "number" ||
-      typeof payload.stateHash !== "string" ||
-      typeof value.stateVersion !== "number" ||
-      typeof value.stateHash !== "string" ||
-      payload.version !== value.stateVersion ||
-      payload.stateHash !== value.stateHash ||
-      finished === undefined
+      !Number.isSafeInteger(payload.version) ||
+      payload.version !== payload.expectedVersion + 1 ||
+      typeof payload.stateHash !== "string"
     ) return false;
     try {
-      const state = loadExecState(stateDir);
-      return state.version === value.stateVersion && execStateHash(state.value) === value.stateHash;
+      // Validate the historical snapshot named by the intent. The current
+      // state head may have advanced through later successful execs, but it
+      // must not still be behind an intent whose history rename was only
+      // partially applied.
+      const current = loadExecState(stateDir);
+      if (current.version < payload.version) return false;
+      const snapshot = loadExecStateVersion(stateDir, payload.version);
+      if (snapshot.hash !== payload.stateHash) return false;
+      if (value?.stateCommitted === true) {
+        const finished = [...record.events].reverse().find((event) => event.type === "request_finished");
+        return finished !== undefined &&
+          typeof value.stateVersion === "number" &&
+          value.stateVersion === payload.version &&
+          typeof value.stateHash === "string" &&
+          value.stateHash === payload.stateHash;
+      }
+      // A crash after the atomic state rename but before request_finished is
+      // recoverable as an UNKNOWN request once its commit intent is proven.
+      return true;
     } catch {
       return false;
     }
   };
 
+  const validateStateBeforeAdmission = async (): Promise<void> => {
+    // Load the current head first so a corrupt state file blocks every new
+    // mutation. Then validate every historical commit intent, including an
+    // intent whose terminal event was lost in a host crash.
+    loadExecState(stateDir);
+    for (const requestId of await journal.list()) {
+      const record = await journal.read(requestId);
+      if (record.status === "running" && requestId !== activeRequestId) {
+        throw new Error(`request ${requestId} is still running; recovery ownership is not proven`);
+      }
+      if (record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record)) {
+        throw new Error(`request ${requestId} has an unverifiable state commit history`);
+      }
+    }
+  };
+
   const runBusiness = async (request: SessionRequest): Promise<SessionReply> => {
+    // One request deadline starts before claim/journal work. Native calls and
+    // final evidence receive only the remaining portion of this budget.
+    const requestStartedAt = Date.now();
+    const rawTimeout = request.operation.kind === "batch"
+      ? request.operation.request.timeoutMs
+      : request.operation.kind === "exec"
+        ? request.operation.timeoutMs
+        : undefined;
+    const requestTimeoutMs = typeof rawTimeout === "number" && Number.isSafeInteger(rawTimeout) && rawTimeout > 0
+      ? rawTimeout
+      : request.operation.kind === "exec" ? 60_000 : DEFAULT_BATCH_TIMEOUT_MS;
+    const requestDeadlineAt = request.operation.kind === "observe" ? Number.POSITIVE_INFINITY : requestStartedAt + requestTimeoutMs;
     // 1. dedup FIRST (before busy): same id returns the recorded outcome.
     const hash = canonicalRequestHash({
       kind: request.operation.kind,
@@ -730,6 +888,15 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         // duplicate is a status query, never a second dispatch.
         return { schemaVersion: 1, requestId: request.requestId, status: "running" };
       }
+      if (request.operation.kind === "exec" && record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record)) {
+        state.value = "unusable";
+        return {
+          schemaVersion: 1,
+          requestId: request.requestId,
+          status: "unknown",
+          error: { code: "state_recovery_mismatch", message: "the recorded exec state commit history is not verifiable; refusing to replay" }
+        };
+      }
       if (record.result !== undefined) {
         // Durable recovery of any terminal result (F8): the events file is
         // the SSOT — a recorded outcome is returned, never rerun. A committed
@@ -749,7 +916,8 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     }
     // 2. A NEW request is durably classified before it can be rejected. This
     // avoids leaving a claimed id in a forever-running state when admission is
-    // busy, closed, or the generation is stale.
+    // busy, closed, or the generation is stale. State/journal recovery is
+    // checked before an idle session accepts another desktop mutation.
     const admissionError =
       inFlight !== null
         ? { code: "session_busy", message: "another request is running on this session" }
@@ -784,6 +952,31 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     unresolvedRequests.add(request.requestId);
     state.value = "running";
     clearIdle();
+    let stateAdmissionError: { code: string; message: string } | null = null;
+    try {
+      await validateStateBeforeAdmission();
+    } catch (error) {
+      stateAdmissionError = {
+        code: "state_recovery_mismatch",
+        message: error instanceof Error ? error.message : String(error)
+      };
+      state.value = "unusable";
+    }
+    if (stateAdmissionError !== null) {
+      try {
+        await appendJournalEvent(request.requestId, "request_started", { kind: request.operation.kind });
+        await recordOutcome(request.requestId, { status: "failed", error: stateAdmissionError });
+      } catch (error) {
+        state.value = "unusable";
+        requestOutcomes.set(request.requestId, {
+          status: "unknown",
+          error: { code: "journal_error", message: error instanceof Error ? error.message : String(error) }
+        });
+      }
+      inFlight = null;
+      activeRequestId = undefined;
+      return errorReply(request, stateAdmissionError.code, stateAdmissionError.message);
+    }
     try {
       // 4. persist the start BEFORE dispatch (F8): a persistence failure
       // fails the request closed — desktop input never outruns its journal.
@@ -810,7 +1003,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
             "not_delivered"
           );
         }
-        const batch = await executeHostedBatch(request.requestId, validatedBatchRequest, requestAbort.signal, finishedBatchActions);
+        const batch = await executeHostedBatch(request.requestId, validatedBatchRequest, requestAbort.signal, requestDeadlineAt, finishedBatchActions);
         const batchSteps = batch.steps as Array<{ status?: unknown }>;
         const sawUnknownStep = batchSteps.some((step) => step.status === "unknown");
         const status: SessionReply["status"] = sawUnknownStep
@@ -869,16 +1062,17 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
             generation: config.generation,
             target: { pid: config.target.pid, windowId: BigInt(config.target.windowId) },
             stateDir,
-            driverCall: (method, args) => driver.call(method, args, requestAbort.signal),
-            finalObserve: async () => {
+            driverCall: (method, args, signal) => driver.call(method, args, signal ?? requestAbort.signal),
+            finalObserve: async (signal) => {
               if (!driver.alive()) return null;
               // Errors propagate: the runner must be able to report
               // final_observe_failed instead of silently omitting the
               // observation (F14).
-              return (await driver.call("observe", { options: { mode: "auto" } }, requestAbort.signal)) as never;
+              return (await driver.call("observe", { options: { mode: "auto" } }, signal ?? requestAbort.signal)) as never;
             },
             onExecWorkerSpawn: registerExecWorker,
             onExecWorkerExit: unregisterExecWorker,
+            onExecWorkerCleanupFailed: recordExecWorkerCleanupFailure,
             onActionStarted: async (index, kind) => {
               try {
                 await appendJournalEvent(request.requestId, "action_started", { index, kind });
@@ -915,7 +1109,8 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
                 version: intent.version,
                 stateHash: intent.hash
               });
-            }
+            },
+            deadlineAt: requestDeadlineAt
           },
           request.requestId,
           options,
@@ -1201,10 +1396,25 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   writeMetadata();
   scheduleIdle();
 
+  const closeSocket = (): void => {
+    if (server !== null) {
+      server.close();
+      server = null;
+    }
+    try {
+      rmSync(config.socketPath, { force: true });
+    } catch {
+      // best effort
+    }
+  };
   return {
     info,
     socketPath: () => config.socketPath,
-    close: () => shutdown("close"),
+    close: async () => {
+      const final = await shutdown("close");
+      if (final.state === "unusable") closeSocket();
+      return final;
+    },
     waitUntilClosed: () =>
       new Promise((resolve) => (finalized ? resolve(info()) : closeWaiters.push(resolve)))
   };
@@ -1221,6 +1431,10 @@ export async function hostMain(configPath: string): Promise<number> {
   const config = JSON.parse(await readFile(configPath, "utf8")) as HostConfig;
   const host = await startHost(config);
   const info = await host.waitUntilClosed();
+  // Close the final listener/path after the process-level owner has observed
+  // the terminal state. During the short live-host window an unusable session
+  // remains queryable; after this point no dead socket is left behind.
+  await host.close();
   // `cli.ts` uses process.exit for internal entrypoints. Give any control
   // handler that triggered the final shutdown one event-loop turn to write
   // its terminal reply before the host process exits.

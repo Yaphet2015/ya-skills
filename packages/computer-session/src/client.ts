@@ -2,8 +2,8 @@
 // A wait timeout never resends a mutation — it returns the requestId so the
 // caller can ask `status` instead.
 
-import { connect } from "node:net";
-import { FrameReader, decodeReply, decodeSessionReply, encodeControl, encodeRequest } from "./protocol.js";
+import { Socket } from "node:net";
+import { FrameReader, decodeControlReply, decodeSessionReply, encodeControl, encodeRequest } from "./protocol.js";
 import type { SessionControl, SessionControlReply, SessionReply, SessionRequest } from "./types.js";
 
 export interface SendResult {
@@ -13,7 +13,11 @@ export interface SendResult {
 
 function roundtrip(socketPath: string, line: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const socket = connect(socketPath);
+    // Construct the socket before connecting so even an immediately failed
+    // Unix-socket lookup has its error listener installed. Bun can emit an
+    // ENOENT connect error in the same turn; calling connect() first would
+    // surface that error as an unhandled event before the promise catches it.
+    const socket = new Socket();
     const reader = new FrameReader();
     let settled = false;
     const finish = (fn: () => void): void => {
@@ -56,6 +60,9 @@ function roundtrip(socketPath: string, line: string, timeoutMs: number): Promise
       // timeout; the journal/status control plane remains available.
       finish(() => reject(Object.assign(new Error("connection closed before a reply"), { code: "connection_closed" })));
     });
+    // Connect only after every terminal event listener is installed. Bun may
+    // emit a missing-socket error in the same turn as connect().
+    socket.connect(socketPath);
   });
 }
 
@@ -74,5 +81,5 @@ export async function sendControl(
   timeoutMs: number
 ): Promise<SessionControlReply> {
   const line = await roundtrip(socketPath, encodeControl(control), timeoutMs);
-  return decodeReply(line) as unknown as SessionControlReply;
+  return decodeControlReply(line);
 }

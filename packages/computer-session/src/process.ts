@@ -83,7 +83,7 @@ export interface SpawnedWorker {
 export function spawnInternalWorker(
   entrypoint: InternalEntrypoint,
   configPath: string,
-  options: { env?: Record<string, string> } = {}
+  options: { env?: Record<string, string>; stdio?: "pipe" | "ignore" } = {}
 ): SpawnedWorker {
   const { command, args } = internalSpawnCommand(entrypoint, configPath);
   if (
@@ -97,7 +97,10 @@ export function spawnInternalWorker(
   const cwd = mkdtempSync(join(tmpdir(), "yk-cu-worker-"));
   const child = spawn(command, args, {
     detached: true, // own process group — kill(-pid) reaps descendants
-    stdio: ["pipe", "pipe", "pipe"],
+    // Persistent host openers do not need parent-held pipes. Keeping those
+    // descriptors referenced would keep a normal CLI invocation attached to
+    // the long-lived host after it has returned a session id.
+    stdio: options.stdio === "ignore" ? "ignore" : ["pipe", "pipe", "pipe"],
     cwd,
     env: { ...process.env, ...options.env }
   });

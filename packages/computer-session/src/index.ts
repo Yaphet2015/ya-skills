@@ -45,6 +45,6 @@ export {
   type ScriptRpcMethod
 } from "./exec-types.js";
 export { createScriptComputer } from "./script-computer.js";
-export { commitExecState, execStateHash, loadExecState, validateJsonValue } from "./exec-state.js";
+export { commitExecState, execStateHash, loadExecState, loadExecStateVersion, validateJsonValue } from "./exec-state.js";
 export { execWorkerMain, type ExecWorkerConfig } from "./exec-worker.js";
 export { normalizeExecOptions, runExec } from "./exec-runner.js";

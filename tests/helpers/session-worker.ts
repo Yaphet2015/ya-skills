@@ -7,7 +7,7 @@ import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startHost, type Host, type HostConfig } from "../../packages/computer-session/src/host.js";
-import type { DriverSessionLike } from "../../packages/computer-session/src/driver-worker.js";
+import type { DriverConfig, DriverSessionLike } from "../../packages/computer-session/src/driver-worker.js";
 import type { ExecResult } from "../../packages/computer-session/src/exec-types.js";
 import { sendControl, sendRequest } from "../../packages/computer-session/src/client.js";
 import type {
@@ -24,6 +24,32 @@ import type {
 import { ComputerError, projectObservation } from "@ya-skills/computer-runtime";
 import { makeNativeObservation } from "./computer-fixtures.js";
 
+/** Factory used by the standalone opener lifecycle regression. The spawned
+ * production host still owns a real socket/process boundary; only its driver
+ * is replaced with this desktop-free fixture. */
+export function createLaneFakeDriver(config: DriverConfig): DriverSessionLike {
+  return {
+    async call(method, args) {
+      if (method === "observe") {
+        return projectObservation(
+          makeNativeObservation({ target: { pid: config.target.pid, windowId: BigInt(config.target.windowId) } }),
+          { mode: ((args.options as { mode?: "auto" | "ax" | "image" | "both" } | undefined)?.mode ?? "ax") },
+          { accessibility: true, screenshot: false }
+        );
+      }
+      if (method === "batch") {
+        const request = args.request as BatchRequest;
+        return {
+          status: "completed",
+          steps: request.actions.map((action, index) => ({ index, kind: action.kind, status: "delivered" }))
+        };
+      }
+      return null;
+    },
+    async close() {}
+  };
+}
+
 export interface FakeDriverOptions {
   /** Runtime override of what the fake batch returns. */
   batchResult?: (request: BatchRequest, signal?: AbortSignal) => BatchResult | Promise<BatchResult>;
@@ -32,6 +58,7 @@ export interface FakeDriverOptions {
   /** Optional action outcome used to exercise transport classification. */
   batchErrorOutcome?: "delivered" | "not_delivered" | "unknown";
   observeDelayMs?: number;
+  observeResult?: (signal?: AbortSignal) => Observation | Promise<Observation>;
   observeElementLabelBytes?: number;
 }
 
@@ -62,12 +89,15 @@ export type TestHostOptions = {
   execTimeoutMs?: number;
   /** Share a production-style session root to test isolation/ownership. */
   root?: string;
+  /** Reopen the same session directory to exercise durable recovery. */
+  sessionId?: string;
+  generation?: string;
 } & FakeDriverOptions;
 
 export async function startTestHost(options: TestHostOptions = {}): Promise<TestHostHandle> {
   const root = options.root ?? (await mkdtemp(join(tmpdir(), "cu-host-")));
-  const sessionId = randomUUID();
-  const generation = randomUUID();
+  const sessionId = options.sessionId ?? randomUUID();
+  const generation = options.generation ?? randomUUID();
   const target = { pid: options.target?.pid ?? 4242, windowId: String(options.target?.windowId ?? 12345n) };
   const fakeCalls: string[] = [];
   const session: DriverSessionLike = {
@@ -75,6 +105,8 @@ export async function startTestHost(options: TestHostOptions = {}): Promise<Test
       fakeCalls.push(method);
       if (method === "observe") {
         if (options.driver !== "fake") throw new Error("fake driver only");
+        const observeResult = (options as FakeDriverOptions).observeResult;
+        if (observeResult !== undefined) return observeResult(signal);
         const delay = (options as FakeDriverOptions).observeDelayMs ?? 0;
         if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
         const raw = makeNativeObservation({

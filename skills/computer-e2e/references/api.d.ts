@@ -46,7 +46,9 @@ export interface Computer {
   snapshot(target: Target, options?: { screenshot?: boolean }): Promise<Snapshot>;
   observe(target: Target, options?: ObserveOptions): Promise<Observation>;
   clickPoint(target: Target, point: PointClick): Promise<void>;
-  batch(target: Target, request: BatchRequest): Promise<BatchResult>;
+  /** Execute one serial batch; an optional signal closes admission between
+   * actions without pretending an in-flight native input was undone. */
+  batch(target: Target, request: BatchRequest, signal?: AbortSignal): Promise<BatchResult>;
   click(target: Target, predicate: Predicate, description: string): Promise<void>;
   type(target: Target, text: string): Promise<void>;
   key(target: Target, key: string, modifiers?: string[]): Promise<void>;

@@ -74,17 +74,50 @@ describe("request codec", () => {
     expect(() => decodeRequest("not json")).toThrow(/JSON/);
   });
 
-  test("business reply decoding restores typed observation targets and rejects bad result shapes", () => {
+  test("business reply decoding restores a complete observation and rejects an incomplete one", () => {
+    const observation = {
+      id: "obs-1",
+      target: { pid: 7, windowId: "9007199254740993" },
+      capturedAt: 1_700_000_000_000,
+      epoch: "epoch-1",
+      revision: 0,
+      title: "你好",
+      ax: {
+        status: "usable",
+        elements: [{ role: "AXButton", label: "保存", frame: { x: 1, y: 2, w: 50, h: 20 }, enabled: true }],
+        total: 1,
+        returned: 1,
+        complete: true
+      },
+      image: {
+        status: "usable",
+        frameValid: true,
+        geometry: {
+          sourceWidth: 1280,
+          sourceHeight: 800,
+          sentWidth: 1280,
+          sentHeight: 800,
+          inputBounds: { x: 0, y: 0, width: 640, height: 400 },
+          windowBounds: { x: 80, y: 40, width: 640, height: 400 }
+        }
+      }
+    };
     const wire = JSON.stringify({
       schemaVersion: 1,
       requestId: request.requestId,
       status: "completed",
-      result: { target: { pid: 7, windowId: "9007199254740993" }, title: "你好" }
+      result: observation
     });
     const decoded = decodeSessionReply(wire, request.operation);
     expect((decoded.result as { target: { windowId: bigint } }).target.windowId).toBe(9007199254740993n);
     expect((decoded.result as { title: string }).title).toBe("你好");
-    expect(() => decodeSessionReply(JSON.stringify({ schemaVersion: 1, requestId: "r", status: "completed", result: { nope: true } }), request.operation)).toThrow(/protocol_result/);
+    const { ax: _ax, ...incomplete } = observation;
+    expect(() => decodeSessionReply(JSON.stringify({
+      schemaVersion: 1,
+      requestId: "r",
+      status: "completed",
+      result: incomplete
+    }), request.operation)).toThrow(/protocol_result/);
   });
 
   test("replies round-trip and reject bad versions", () => {
@@ -96,6 +129,13 @@ describe("request codec", () => {
     };
     const encoded = JSON.stringify(reply, (k, v) => (typeof v === "bigint" ? v.toString() : v));
     expect(decodeReply(encoded)).toEqual({ ...reply, result: { note: "ok", windowId: "123" } });
+    const failed = decodeSessionReply(JSON.stringify({
+      schemaVersion: 1,
+      requestId: request.requestId,
+      status: "failed",
+      error: { code: "session_busy", message: "another request is running" }
+    }), request.operation);
+    expect(failed.error).toEqual({ code: "session_busy", message: "another request is running" });
     expect(() => decodeReply(JSON.stringify({ schemaVersion: 9 }))).toThrow(/protocol_version/);
   });
 });
@@ -201,6 +241,13 @@ describe("client/server roundtrip over a real socket", () => {
       const deadServer = createServer(() => undefined);
       const deadPath = join(dir, "dead.sock");
       await new Promise<void>((resolve) => deadServer.listen(deadPath, resolve));
+      const missingPath = join(dir, "missing.sock");
+      const missingError = await sendRequest(missingPath, { ...request, requestId: "missing" }, 1_000).then(
+        () => null,
+        (e: unknown) => e
+      );
+      expect(missingError).toBeInstanceOf(Error);
+      expect((missingError as NodeJS.ErrnoException).code).toBe("ENOENT");
       const started = Date.now();
       const error = await sendRequest(deadPath, { ...request, requestId: "r2" }, 300).then(
         () => null,

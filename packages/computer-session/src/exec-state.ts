@@ -89,17 +89,17 @@ export interface ExecStateFile {
   hash?: string;
 }
 
-export function execStateHash(value: Record<string, JsonValue>): string {
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined) throw new Error("state is not JSON-serializable");
-  return createHash("sha256").update(encoded, "utf8").digest("hex");
+const HISTORY_DIR = "history";
+
+function statePath(directory: string): string {
+  return join(directory, "state.json");
 }
 
-export function loadExecState(directory: string): { version: number; value: Record<string, JsonValue> } {
-  const file = join(directory, "state.json");
-  if (!existsSync(file)) {
-    return { version: 0, value: {} };
-  }
+function historyPath(directory: string, version: number): string {
+  return join(directory, HISTORY_DIR, `state-${version}.json`);
+}
+
+function readStateFile(file: string): ExecStateFile {
   const parsed = JSON.parse(readFileSync(file, "utf8")) as ExecStateFile;
   if (
     typeof parsed !== "object" ||
@@ -121,7 +121,47 @@ export function loadExecState(directory: string): { version: number; value: Reco
   } catch (error) {
     throw new Error(`corrupt state file ${file} — ${error instanceof Error ? error.message : String(error)}`);
   }
+  return { ...parsed, hash: execStateHash(parsed.value) };
+}
+
+export function execStateHash(value: Record<string, JsonValue>): string {
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined) throw new Error("state is not JSON-serializable");
+  return createHash("sha256").update(encoded, "utf8").digest("hex");
+}
+
+export function loadExecState(directory: string): { version: number; value: Record<string, JsonValue> } {
+  const file = statePath(directory);
+  if (!existsSync(file)) {
+    return { version: 0, value: {} };
+  }
+  const parsed = readStateFile(file);
   return { version: parsed.version, value: parsed.value };
+}
+
+/** Read a committed historical snapshot, not just the current state head.
+ * Duplicate request replies remain verifiable after later execs advance the
+ * session state. Version zero is the implicit empty initial snapshot. */
+export function loadExecStateVersion(
+  directory: string,
+  version: number
+): { version: number; value: Record<string, JsonValue>; hash: string } {
+  if (!Number.isSafeInteger(version) || version < 0) {
+    throw new Error(`invalid state version ${version}`);
+  }
+  if (version === 0 && !existsSync(statePath(directory))) {
+    return { version: 0, value: {}, hash: execStateHash({}) };
+  }
+  const current = loadExecState(directory);
+  const file = version === current.version ? statePath(directory) : historyPath(directory, version);
+  if (!existsSync(file)) {
+    throw new Error(`missing committed state history version ${version}`);
+  }
+  const parsed = readStateFile(file);
+  if (parsed.version !== version) {
+    throw new Error(`state history version mismatch: requested ${version}, found ${parsed.version}`);
+  }
+  return { version, value: parsed.value, hash: execStateHash(parsed.value) };
 }
 
 /** Commit with optimistic version check: only the expected writer wins. */
@@ -139,7 +179,23 @@ export function commitExecState(
   }
   validateJsonValue(value, EXEC_MAX_STATE_BYTES);
   const next: ExecStateFile = { version: expectedVersion + 1, value, hash: execStateHash(value) };
-  const file = join(directory, "state.json");
+  const file = statePath(directory);
+  const history = join(directory, HISTORY_DIR);
+  mkdirSync(history, { recursive: true, mode: 0o700 });
+  const historyFile = historyPath(directory, next.version);
+  // The history snapshot is written before the current head. If a process
+  // dies between these renames, recovery sees an unreferenced history entry
+  // and refuses new admission instead of guessing whether the commit landed.
+  if (existsSync(historyFile)) {
+    const existing = readStateFile(historyFile);
+    if (existing.version !== next.version || execStateHash(existing.value) !== next.hash) {
+      throw new Error(`state history version ${next.version} already contains a different commit`);
+    }
+  } else {
+    const historyTmp = `${historyFile}.tmp-${process.pid}-${Date.now()}`;
+    writeFileSync(historyTmp, JSON.stringify(next), { mode: 0o600 });
+    renameSync(historyTmp, historyFile);
+  }
   const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(tmp, JSON.stringify(next), { mode: 0o600 });
   renameSync(tmp, file);

@@ -134,8 +134,12 @@ export interface ExecResult {
   value?: JsonValue;
   stateVersion: number;
   stateCommitted: boolean;
+  /** SHA-256 of the committed JSON state, when a commit occurred. */
+  stateHash?: string;
   actions: ActionReceipt[];
   observations: Observation[];
+  /** Number of observations omitted from a bounded terminal receipt. */
+  observationsDropped?: number;
   logs: string[];
   error?: { code: string; message: string };
 }

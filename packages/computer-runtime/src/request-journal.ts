@@ -6,6 +6,7 @@
 // started-without-finished record is never re-claimed.
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { processStartTime } from "./target-lease.js";
@@ -43,6 +44,8 @@ export interface RequestJournal {
   claim(id: string, hash: string): Promise<"new" | "existing" | "conflict">;
   append(id: string, event: RequestEvent): Promise<void>;
   read(id: string): Promise<RequestRecord>;
+  /** Return request ids in this journal without interpreting their results. */
+  list(): Promise<string[]>;
 }
 
 const ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
@@ -268,6 +271,13 @@ export function createRequestJournal(root: string): RequestJournal {
         record.result = finished.payload.result;
       }
       return record;
+    },
+    async list() {
+      const entries = await readdir(root, { withFileTypes: true });
+      return entries
+        .filter((entry) => entry.isDirectory() && ID_RE.test(entry.name))
+        .map((entry) => entry.name)
+        .sort();
     }
   };
 }

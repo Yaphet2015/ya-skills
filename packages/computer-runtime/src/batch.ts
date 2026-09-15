@@ -381,17 +381,63 @@ export async function runBatch(
       fillNotRun(i + 1);
       // An unknown delivery (or a session-level abort/timeout) interrupts the
       // run; a known refusal fails it. Neither ever replays.
-      return { status: outcome === "unknown" ? "interrupted" : "failed", steps };
+      const interrupted = signal?.aborted === true ||
+        (error instanceof ComputerError && (error.code === "aborted" || error.code === "request_cancelled" || error.code === "command_timeout"));
+      return { status: interrupted || outcome === "unknown" ? "interrupted" : "failed", steps };
     }
   }
 
   // Final observation: one read at the end, only if the driver is still
-  // usable. Its failure keeps the receipts — it never rolls anything back.
+  // usable and the single absolute batch budget still has time. Its failure
+  // keeps the receipts — it never rolls anything back; importantly, an
+  // expired budget must not start a fresh per-observation timeout.
   if (request.observe !== undefined) {
+    if (now() >= deadline) {
+      return {
+        status: "interrupted",
+        steps,
+        observationError: {
+          code: "batch_deadline",
+          message: "batch timeout budget exhausted before final observation"
+        }
+      };
+    }
     try {
       const observation: Observation = await computer.observe(target, request.observe);
+      if (signal?.aborted) {
+        return {
+          status: "interrupted",
+          steps,
+          observationError: {
+            code: "request_cancelled",
+            message: "the batch was cancelled during final observation"
+          }
+        };
+      }
+      if (now() >= deadline) {
+        return {
+          status: "interrupted",
+          steps,
+          observationError: {
+            code: "batch_deadline",
+            message: "batch timeout budget exhausted during final observation"
+          }
+        };
+      }
       return { status: "completed", steps, observation };
     } catch (error) {
+      if (signal?.aborted || now() >= deadline ||
+        (error instanceof ComputerError && (error.code === "aborted" || error.code === "request_cancelled"))) {
+        return {
+          status: "interrupted",
+          steps,
+          observationError: signal?.aborted
+            ? { code: "request_cancelled", message: "the batch was cancelled during final observation" }
+            : now() >= deadline
+              ? { code: "batch_deadline", message: "batch timeout budget exhausted during final observation" }
+              : receiptError(error)
+        };
+      }
       return {
         status: "completed",
         steps,

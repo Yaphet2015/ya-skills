@@ -11,6 +11,8 @@ import {
   bigintSafeReplacer,
   canonicalRequestHash,
   ComputerError,
+  DEFAULT_BATCH_TIMEOUT_MS,
+  MAX_BATCH_TIMEOUT_MS,
   createComputerSession,
   createRequestJournal,
   createAutoLeases,
@@ -21,10 +23,10 @@ import {
   type ActionReceipt,
   type BatchRequest,
   type ComputerSession,
+  type RequestJournal,
   type RequestRecord,
   type Target
 } from "@ya-skills/computer-runtime";
-import { COMMAND_DEADLINE_MS } from "./consts.js";
 
 export function defaultRequestsDir(): string {
   return join(homedir(), "Library", "Caches", "ya-skills", "computer-use", "requests");
@@ -53,6 +55,8 @@ export function batchCommand(
   deps: {
     createSession?: (options: { deadlineAt: number; artifactsDir?: string }) => ComputerSession;
     requestsDir?: string;
+    /** Test seam for persistence latency; production always uses requestsDir. */
+    journal?: RequestJournal;
   } = {}
 ): (request: BatchCommandRequest) => Promise<string> {
   const leaseSet = createAutoLeases(sessionRoot(), "single-step");
@@ -112,7 +116,12 @@ export function batchCommand(
 
     // 2. Dedup: same id + same content returns the recorded outcome without
     //    re-running anything; same id + different content is a conflict.
-    const journal = createRequestJournal(requestsDir);
+    // Start one absolute budget before journal claim/start persistence. The
+    // same deadline is passed to the session and recomputed before every
+    // per-action dispatch and final observation; it is never reset by a
+    // one-action runtime batch.
+    const deadlineAt = Date.now() + (batchRequest.timeoutMs ?? DEFAULT_BATCH_TIMEOUT_MS);
+    const journal = deps.journal ?? createRequestJournal(requestsDir);
     const hash = canonicalRequestHash({
       kind: "batch",
       target: { pid: request.pid, windowId: request.windowId ?? 0n },
@@ -167,7 +176,10 @@ export function batchCommand(
       );
     }
     const session = createSession({
-      deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
+      // The request budget, rather than the one-shot command's fixed 30s
+      // startup cap, governs this whole standalone batch. Runtime operations
+      // still apply their own per-operation ceiling to each native call.
+      deadlineAt,
       ...(request.outDir !== undefined ? { artifactsDir: request.outDir } : {})
     });
     let target: Target | undefined;
@@ -177,7 +189,6 @@ export function batchCommand(
     try {
       const win = selectWindow(await session.computer.windows(request.pid), request.windowId);
       target = { pid: request.pid, windowId: win.windowId };
-      const deadlineAt = Date.now() + (batchRequest.timeoutMs ?? 30_000);
       const steps: import("@ya-skills/computer-runtime").ActionReceipt[] = [];
       const fillNotRun = async (from: number, error?: { code: string; message: string }): Promise<void> => {
         for (let index = from; index < batchRequest.actions.length; index++) {
@@ -206,9 +217,24 @@ export function batchCommand(
           break;
         }
         await appendEvent("action_started", { index, kind: action.kind });
+        // Persisting action_started is part of the same absolute budget. Do
+        // not dispatch with the duration measured before that await.
+        const dispatchRemaining = deadlineAt - Date.now();
+        if (dispatchRemaining <= 0) {
+          const error = { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" };
+          steps[index] = { index, kind: action.kind, status: "not_run", error };
+          await appendEvent("action_finished", { index, kind: action.kind, outcome: "not_run", error });
+          finished.add(index);
+          await fillNotRun(index + 1);
+          status = "interrupted";
+          break;
+        }
         const one = await session.computer.batch(target, {
           actions: [action],
-          timeoutMs: Math.max(1, Math.min(remaining, 120_000)),
+          // Compute immediately before entering the runtime; the runtime
+          // receives the remaining budget, while the session's absolute
+          // deadline prevents setup/final evidence from extending it.
+          timeoutMs: Math.max(1, Math.min(dispatchRemaining, MAX_BATCH_TIMEOUT_MS)),
           maxActions: 1
         });
         const local = one.steps[0];
@@ -233,18 +259,32 @@ export function batchCommand(
         }
       }
       if (status === "completed" && batchRequest.observe !== undefined) {
-        try {
-          const observation = await session.computer.observe(target, batchRequest.observe);
-          result = { status, steps, observation };
-        } catch (error) {
+        const finalRemaining = deadlineAt - Date.now();
+        if (finalRemaining <= 0) {
           result = {
-            status,
+            status: "interrupted",
             steps,
             observationError: {
-              code: error instanceof ComputerError ? error.code : "final_observe_failed",
-              message: error instanceof Error ? error.message : String(error)
+              code: "batch_deadline",
+              message: "batch timeout budget exhausted before final observation"
             }
           };
+        } else {
+          try {
+            // SessionOptions carries the same absolute deadline, so this read
+            // cannot restart the budget after the last action.
+            const observation = await session.computer.observe(target, batchRequest.observe);
+            result = { status, steps, observation };
+          } catch (error) {
+            result = {
+              status,
+              steps,
+              observationError: {
+                code: error instanceof ComputerError ? error.code : "final_observe_failed",
+                message: error instanceof Error ? error.message : String(error)
+              }
+            };
+          }
         }
       } else {
         result = { status, steps };
