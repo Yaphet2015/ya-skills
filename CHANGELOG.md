@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/Yaphet2015/ya-skills/compare/v0.21.0...v0.22.0) (2026-09-15)
+
+
+### Features
+
+* rename eli18 skill to eli10 ([33f225d](https://github.com/Yaphet2015/ya-skills/commit/33f225d271b31a6b9b54bf4a1ae2a32b1c8f887f))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
