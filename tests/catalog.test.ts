@@ -131,12 +131,12 @@ test("root catalog exposes the design-grill skill", async () => {
   expect(designGrill?.functions).toEqual([]);
 });
 
-test("root catalog exposes the eli18 skill", async () => {
+test("root catalog exposes the eli10 skill", async () => {
   const catalog = await loadCatalog(resolve("skills"));
-  const eli18 = catalog.byName.get("eli18");
+  const eli10 = catalog.byName.get("eli10");
 
-  expect(eli18?.description).toContain("看不懂");
-  expect(eli18?.functions).toEqual([]);
+  expect(eli10?.description).toContain("看不懂");
+  expect(eli10?.functions).toEqual([]);
 });
 
 test("root catalog exposes the validator skill", async () => {

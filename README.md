@@ -63,7 +63,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
 | **pbench** | Capture real Codex or Claude workflow misses as local, private benchmark cases, then replay finalized cases through registered runners without cloud sync or leaderboard upload. | `yk install pbench` |
 | **eli5** | Explain like the reader knows nothing about the topic, using an HTML artifact with big pictures and few words. | `yk install eli5` |
-| **eli18** | Explain a diagnosis, root cause, bug mechanism, or architecture at primitive granularity: every sentence bottoms out at facts the reader already owns. Triggers on "why does this happen" answers and 看不懂 feedback. | `yk install eli18` |
+| **eli10** | Explain a diagnosis, root cause, bug mechanism, or architecture at primitive granularity: every sentence bottoms out at facts the reader already owns. Triggers on "why does this happen" answers and 看不懂 feedback. | `yk install eli10` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
 | **computer-use** | Drive any macOS desktop app (native, Electron, Chromium) via background-first AX perception and actions — inspect app state, reproduce UI issues, operate visible windows. macOS arm64 only. | `yk install computer-use` |
