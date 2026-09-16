@@ -1,0 +1,198 @@
+{
+  "command": [
+    "observe",
+    "--pid",
+    "53321",
+    "--window",
+    "29695",
+    "--mode",
+    "image",
+    "--max-dimension",
+    "400",
+    "--out-dir",
+    "/tmp/ya-native-unlocked-form/images"
+  ],
+  "started": 1789538977.132266,
+  "ended": 1789538977.5677052,
+  "exitCode": 0,
+  "result": {
+    "schemaVersion": 1,
+    "target": {
+      "pid": 53321,
+      "windowId": "29695"
+    },
+    "observation": {
+      "id": "bf50e300-4f7d-4bb2-aee8-f7e521791ed7",
+      "target": {
+        "pid": 53321,
+        "windowId": "29695"
+      },
+      "capturedAt": 1789538977404,
+      "epoch": "09694b83-5b56-4527-af01-e7ca87cee6b5",
+      "revision": 0,
+      "title": "YK native acceptance fixture",
+      "ax": {
+        "status": "unavailable",
+        "elements": [],
+        "total": 0,
+        "returned": 0,
+        "complete": false
+      },
+      "image": {
+        "status": "usable",
+        "frameValid": true,
+        "geometry": {
+          "sourceWidth": 1200,
+          "sourceHeight": 744,
+          "sentWidth": 400,
+          "sentHeight": 248,
+          "inputBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 600,
+            "height": 372
+          },
+          "windowBounds": {
+            "x": 80,
+            "y": 648,
+            "width": 600,
+            "height": 372
+          }
+        },
+        "originalPath": "/tmp/ya-native-unlocked-form/images/1789538977405-7b98af0e-cu.png",
+        "path": "/tmp/ya-native-unlocked-form/images/1789538977405-7b98af0e-cu-400.png"
+      }
+    }
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      },
+      {
+        "at": 1789538926.919353,
+        "pid": 53517
+      }
+    ],
+    "at": 1789538977.0882611,
+    "canvasClicks": 1,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789538905.63802,
+        "kind": "visual-change"
+      },
+      {
+        "at": 1789538930.039401,
+        "kind": "resize"
+      },
+      {
+        "at": 1789538962.915925,
+        "kind": "canvas"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53517,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 372,
+    "windowId": 29695,
+    "windowWidth": 600,
+    "windowX": 80,
+    "windowY": 60
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      },
+      {
+        "at": 1789538926.919353,
+        "pid": 53517
+      }
+    ],
+    "at": 1789538977.538161,
+    "canvasClicks": 1,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789538905.63802,
+        "kind": "visual-change"
+      },
+      {
+        "at": 1789538930.039401,
+        "kind": "resize"
+      },
+      {
+        "at": 1789538962.915925,
+        "kind": "canvas"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53517,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 372,
+    "windowId": 29695,
+    "windowWidth": 600,
+    "windowX": 80,
+    "windowY": 60
+  }
+}

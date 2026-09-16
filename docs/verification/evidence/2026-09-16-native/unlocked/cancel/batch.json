@@ -1,0 +1,1 @@
+{"actions": [{"kind": "click", "selector": {"text": "Block Increment", "match": "exact", "role": "AXButton"}}, {"kind": "click", "selector": {"text": "Block Increment", "match": "exact", "role": "AXButton"}}]}

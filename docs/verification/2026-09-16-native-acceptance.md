@@ -1,8 +1,26 @@
 # 原生验收续测 — 2026-09-16
 
-状态：后台坐标输入已取得 SDK 与打包产品路径的成功证据。原生取消发现的结果误分类已在 `b096bfd` 修复并通过无桌面/打包门禁；锁屏使修复后的实机复跑暂未完成。完整原生验收尚未通过。
+状态：后台坐标输入已取得 SDK 与打包产品路径的成功证据。原生取消发现的结果误分类已在 `b096bfd` 修复并通过无桌面/打包门禁；解锁后实机复跑确认首动作 unknown、第二动作 not_run，但发现独立宿主提前退出的问题。完整原生验收尚未通过。
 
 基线是本地分支 `computer-use/takeover-20260916` 的 `0cbaffd`。本轮最初的打包二进制来自已通过前轮门禁的产品提交 `82b1f49`，Bun 1.3.14、SDK 0.27.0。下面的“修复前”证据不能当作最终修复版的验收结果。
+
+## 解锁后续测
+
+使用 `b096bfd` 产品源码生成的本仓库打包二进制，仍只操作禁止成为 key/main window 的自有窗口。
+
+| 项目 | 结果 |
+|---|---|
+| 原生 AX 阻塞后取消 | 首动作 unknown、第二动作 not_run；释放回调后实际计数为 1，符合未知结果分类。[实机记录](evidence/2026-09-16-native/unlocked/cancel/cancel-run.json)。 |
+| unknown 后控制面 | 未通过：独立宿主退出，status 回退为 unusable 且保留 lease；重复请求和新请求连接失败。[记录](evidence/2026-09-16-native/unlocked/cancel/terminal-checks.json)。进程内 host 回归未覆盖此退出路径，正在补修。 |
+| 自定义 out-dir 跨命令 / 非整数缩放 | 通过：1040×664→400×255，新鲜图像坐标点击输入框成功，前台与 key/main 标志保持不变。[点击](evidence/2026-09-16-native/unlocked/form/field-click.json)。 |
+| 文本输入 | 未通过：坐标点击后 firstResponder 为 NSTextView，一次 type 返回成功，但独立 observe、fixture value 和截图均为空。停止输入，没有重试。[输入](evidence/2026-09-16-native/unlocked/form/field-type.json)、[复查](evidence/2026-09-16-native/unlocked/form/field-type-verify.json)、[截图](evidence/2026-09-16-native/unlocked/form/field-type-verify.png)。 |
+| 内容变化拒绝旧图 | 通过：自有画布变色后旧图被拒绝，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/changed-content-reject.json)。 |
+| 尺寸变化拒绝旧图 | 通过：520×332→600×372 后旧图被拒绝，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/resized-reject.json)。 |
+| 尺寸变化后新图点击 | 通过：1200×744→400×248，新图 (273,150) 命中无 AX 画布，计数 0→1；前台不变、key/main 为 false。[记录](evidence/2026-09-16-native/unlocked/form/after-resize-click.json)、[截图](evidence/2026-09-16-native/unlocked/form/after-resize.png)。 |
+| 越界坐标 | 通过：400×248 图像的 x=401 在派发前被拒绝，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/bounds-reject.json)。 |
+| 窗口不匹配 | 通过：将同一观察用于不同窗口号时返回 belongs to a different target，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/wrong-window-reject.json)。 |
+
+表单 fixture 已关闭。前台应用在步骤之间有用户切换；上述通过步骤的前后快照一致，fixture 没有成为前台或 key/main window。文本输入结果不证明普通应用的输入能力，也不能作为表单完成证据。
 
 ## 运行边界
 
@@ -44,15 +62,15 @@
 4. [session 返回 idle](evidence/2026-09-16-native/matrix-cancel/status-after.json)。
 5. 放开 fixture 后按钮完成，计数变为 1。动作实际进入过应用，not_delivered 分类不成立。
 
-根因位于 runtime `isKnownDriverRefusal()`：仅凭 Tool 异常类名，就把所有此类错误认定为输入前拒绝。修复只将明确的结构化派发前拒绝代码记为 not_delivered；无分类 Tool 错误和派发后的 AbortError 记为 unknown，并阻止会话后续派发。探针现在保留 errorCode，不再仅因捕获异常就宣称 driver-refused。实机同场景的修复后复跑仍待解锁。
+根因位于 runtime `isKnownDriverRefusal()`：仅凭 Tool 异常类名，就把所有此类错误认定为输入前拒绝。修复只将明确的结构化派发前拒绝代码记为 not_delivered；无分类 Tool 错误和派发后的 AbortError 记为 unknown，并阻止会话后续派发。探针现在保留 errorCode，不再仅因捕获异常就宣称 driver-refused。实机修复后分类已通过，后续宿主生命周期缺陷见上方续测。
 
 ## 跨命令观察目录缺陷
 
-真实 `observe --out-dir <dir>` 保存成功后，`act --out-dir <same-dir>` 仍从默认缓存路径寻找 observation，报 ENOENT。修复让一次性会话使用请求指定的 artifactsDir。回归使用真实磁盘 ObservationStore 和两个独立命令实例，验证保存后可读取并执行坐标映射。此回归修复前 0 pass / 1 fail，失败路径为默认 observation 目录；修复后通过。自定义目录的最终原生复跑仍待解锁。
+真实 `observe --out-dir <dir>` 保存成功后，`act --out-dir <same-dir>` 仍从默认缓存路径寻找 observation，报 ENOENT。修复让一次性会话使用请求指定的 artifactsDir。回归使用真实磁盘 ObservationStore 和两个独立命令实例，验证保存后可读取并执行坐标映射。此回归修复前 0 pass / 1 fail，失败路径为默认 observation 目录；修复后通过。解锁后的自定义目录原生复跑已通过，见上方续测。
 
 [取消请求的持久日志](evidence/2026-09-16-native/journals/7b45f071-8599-417a-a96d-a2e0eba20522/native-cancel-ax-1/events.jsonl)也保留了修复前错误的 not_delivered 结果，供复查。
 
-## 当前外部阻塞
+## 历史锁屏阻塞（用户已解锁）
 
 只读 CGSession 检查确认 `CGSSessionScreenIsLocked=1`。[锁屏记录](evidence/2026-09-16-native/lock-state.json)。SDK 同时返回 `px_capture_unavailable`，说明当前截图不可用并明确拒绝派发：[结构化错误](evidence/2026-09-16-native/matrix-cancel-allspaces/unresolved-detail.json)。未修改权限、解锁或尝试前台输入。
 
@@ -88,4 +106,4 @@
 
 [computer-integration-native-action-outcome.test.ts](../../tests/computer-integration-native-action-outcome.test.ts) 使用真实 Unix socket、进程内 host、真实 driver-worker 子进程、action 通知和 worker 内的 runtime；只有 backend 是无桌面测试替身，它抛出结构化 Tool 错误。该测试没有手写 unknown 回执。
 
-断言首个动作 unknown、第二个 not_run、实际调用次数为 type=1/key=0；相同请求返回既有结果，新请求被拒绝；host 为 unusable、lease 仍存在，journal 只有一个 unknown 终态。[独立复现输出](evidence/2026-09-16-native/ipc-structured-tool-result.json)。这证明修复跨 IPC 保持结果分类，不替代解锁后的真实 AX 取消复跑。
+断言首个动作 unknown、第二个 not_run、实际调用次数为 type=1/key=0；相同请求返回既有结果，新请求被拒绝；host 为 unusable、lease 仍存在，journal 只有一个 unknown 终态。[独立复现输出](evidence/2026-09-16-native/ipc-structured-tool-result.json)。这证明修复跨 IPC 保持结果分类。解锁后的真实 AX 取消分类也已通过，但独立宿主退出暴露了此进程内 host 测试未覆盖的生命周期问题。

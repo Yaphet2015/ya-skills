@@ -1,0 +1,159 @@
+{
+  "command": [
+    "observe",
+    "--pid",
+    "53321",
+    "--window",
+    "29695",
+    "--mode",
+    "both",
+    "--max-dimension",
+    "400",
+    "--out-dir",
+    "/tmp/ya-native-unlocked-form/images"
+  ],
+  "started": 1789538754.1183512,
+  "ended": 1789538754.762475,
+  "exitCode": 0,
+  "result": {
+    "schemaVersion": 1,
+    "target": {
+      "pid": 53321,
+      "windowId": "29695"
+    },
+    "observation": {
+      "id": "097ab0d8-6c9c-457f-9ac2-aa105427017c",
+      "target": {
+        "pid": 53321,
+        "windowId": "29695"
+      },
+      "capturedAt": 1789538754586,
+      "epoch": "53d19280-ccc0-4719-ab69-f2383c4ffd3c",
+      "revision": 0,
+      "title": "YK native acceptance fixture",
+      "ax": {
+        "status": "truncated",
+        "reason": "elements_incomplete",
+        "elements": [
+          {
+            "role": "AXWindow",
+            "label": "YK native acceptance fixture",
+            "elementToken": "s00000001:0",
+            "frame": {
+              "x": 80,
+              "y": 648,
+              "w": 520,
+              "h": 332
+            }
+          },
+          {
+            "role": "AXButton",
+            "label": "Increment",
+            "elementToken": "s00000001:1",
+            "frame": {
+              "x": 99,
+              "y": 723,
+              "w": 142,
+              "h": 38
+            },
+            "enabled": true
+          },
+          {
+            "role": "AXTextField",
+            "label": "Fixture input",
+            "elementToken": "s00000001:2",
+            "frame": {
+              "x": 99,
+              "y": 797,
+              "w": 282,
+              "h": 34
+            },
+            "enabled": true
+          }
+        ],
+        "total": 3,
+        "returned": 3,
+        "complete": false
+      },
+      "image": {
+        "status": "usable",
+        "frameValid": true,
+        "geometry": {
+          "sourceWidth": 1040,
+          "sourceHeight": 664,
+          "sentWidth": 400,
+          "sentHeight": 255,
+          "inputBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 332
+          },
+          "windowBounds": {
+            "x": 80,
+            "y": 648,
+            "width": 520,
+            "height": 332
+          }
+        },
+        "originalPath": "/tmp/ya-native-unlocked-form/images/1789538754587-6c44ca3e-cu.png",
+        "path": "/tmp/ya-native-unlocked-form/images/1789538754587-6c44ca3e-cu-400.png"
+      }
+    }
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [],
+    "at": 1789538754.0869331,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53167,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 29695,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [],
+    "at": 1789538754.736944,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53167,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 29695,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

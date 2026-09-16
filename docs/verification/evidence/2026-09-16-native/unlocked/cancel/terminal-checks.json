@@ -1,0 +1,154 @@
+{
+  "status": {
+    "exitCode": 0,
+    "response": {
+      "schemaVersion": 1,
+      "session": {
+        "id": "c3d28a8b-6822-4ed3-a82b-0c7e8955c717",
+        "target": {
+          "pid": 53163,
+          "windowId": "29623"
+        },
+        "state": "unusable",
+        "hostPid": 53180,
+        "generation": "0e09de58-0010-4941-a9d8-7e335e4c5f50",
+        "idleTimeoutMs": 120000
+      },
+      "cleanup": {
+        "leaseRetained": true,
+        "hostUnavailable": true
+      }
+    }
+  },
+  "leaseRetained": true,
+  "sameRequest": {
+    "exitCode": 1,
+    "response": "connect ENOENT /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/ya-skills-cu-phaethon/s-c3d28a8b6822.sock\n"
+  },
+  "newRequest": {
+    "exitCode": 1,
+    "response": "connect ENOENT /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/ya-skills-cu-phaethon/s-c3d28a8b6822.sock\n"
+  },
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789538528.921973,
+        "pid": 53167
+      },
+      {
+        "at": 1789538544.977459,
+        "pid": 80933
+      },
+      {
+        "at": 1789538556.386922,
+        "pid": 53167
+      },
+      {
+        "at": 1789538559.2850552,
+        "pid": 80933
+      },
+      {
+        "at": 1789538591.4845982,
+        "pid": 53167
+      },
+      {
+        "at": 1789538654.1935248,
+        "pid": 80933
+      },
+      {
+        "at": 1789538692.256164,
+        "pid": 53167
+      }
+    ],
+    "at": 1789538718.920094,
+    "canvasClicks": 0,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789538591.482794,
+        "kind": "blocking-button-completed"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53167,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53163,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 29623,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789538528.921973,
+        "pid": 53167
+      },
+      {
+        "at": 1789538544.977459,
+        "pid": 80933
+      },
+      {
+        "at": 1789538556.386922,
+        "pid": 53167
+      },
+      {
+        "at": 1789538559.2850552,
+        "pid": 80933
+      },
+      {
+        "at": 1789538591.4845982,
+        "pid": 53167
+      },
+      {
+        "at": 1789538654.1935248,
+        "pid": 80933
+      },
+      {
+        "at": 1789538692.256164,
+        "pid": 53167
+      }
+    ],
+    "at": 1789538719.2201328,
+    "canvasClicks": 0,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789538591.482794,
+        "kind": "blocking-button-completed"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53167,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53163,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 29623,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

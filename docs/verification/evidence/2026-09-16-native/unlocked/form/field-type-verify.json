@@ -1,0 +1,201 @@
+{
+  "command": [
+    "observe",
+    "--pid",
+    "53321",
+    "--window",
+    "29695",
+    "--mode",
+    "both",
+    "--max-dimension",
+    "400",
+    "--out-dir",
+    "/tmp/ya-native-unlocked-form/images"
+  ],
+  "started": 1789538881.94894,
+  "ended": 1789538882.377954,
+  "exitCode": 0,
+  "result": {
+    "schemaVersion": 1,
+    "target": {
+      "pid": 53321,
+      "windowId": "29695"
+    },
+    "observation": {
+      "id": "5179dca8-3fa5-420c-af8d-43b6837629f7",
+      "target": {
+        "pid": 53321,
+        "windowId": "29695"
+      },
+      "capturedAt": 1789538882213,
+      "epoch": "a1584a24-7984-4b12-96ae-c889c1d6973e",
+      "revision": 0,
+      "title": "YK native acceptance fixture",
+      "ax": {
+        "status": "truncated",
+        "reason": "elements_incomplete",
+        "elements": [
+          {
+            "role": "AXWindow",
+            "label": "YK native acceptance fixture",
+            "elementToken": "s00000001:0",
+            "frame": {
+              "x": 80,
+              "y": 648,
+              "w": 520,
+              "h": 332
+            }
+          },
+          {
+            "role": "AXButton",
+            "label": "Increment",
+            "elementToken": "s00000001:1",
+            "frame": {
+              "x": 99,
+              "y": 723,
+              "w": 142,
+              "h": 38
+            },
+            "enabled": true
+          },
+          {
+            "role": "AXTextField",
+            "label": "Fixture input",
+            "elementToken": "s00000001:2",
+            "frame": {
+              "x": 99,
+              "y": 797,
+              "w": 282,
+              "h": 34
+            },
+            "enabled": true
+          }
+        ],
+        "total": 3,
+        "returned": 3,
+        "complete": false
+      },
+      "image": {
+        "status": "usable",
+        "frameValid": true,
+        "geometry": {
+          "sourceWidth": 1040,
+          "sourceHeight": 664,
+          "sentWidth": 400,
+          "sentHeight": 255,
+          "inputBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 520,
+            "height": 332
+          },
+          "windowBounds": {
+            "x": 80,
+            "y": 648,
+            "width": 520,
+            "height": 332
+          }
+        },
+        "originalPath": "/tmp/ya-native-unlocked-form/images/1789538882214-3beadafa-cu.png",
+        "path": "/tmp/ya-native-unlocked-form/images/1789538882214-3beadafa-cu-400.png"
+      }
+    }
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      }
+    ],
+    "at": 1789538881.937605,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 29695,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      }
+    ],
+    "at": 1789538882.337647,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 29695,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

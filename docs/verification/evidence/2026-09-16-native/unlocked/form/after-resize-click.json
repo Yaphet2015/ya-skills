@@ -1,0 +1,189 @@
+{
+  "command": [
+    "act",
+    "--pid",
+    "53321",
+    "--window",
+    "29695",
+    "--click-x",
+    "273",
+    "--click-y",
+    "150",
+    "--observation",
+    "da54e736-a7c5-46fb-ae1f-3c3d71a8e338",
+    "--out-dir",
+    "/tmp/ya-native-unlocked-form/images"
+  ],
+  "started": 1789538962.394819,
+  "ended": 1789538964.188115,
+  "exitCode": 0,
+  "result": {
+    "pid": 53321,
+    "windowId": "29695",
+    "title": "YK native acceptance fixture",
+    "elements": [
+      {
+        "role": "AXWindow",
+        "label": "YK native acceptance fixture",
+        "elementToken": "s00000001:0",
+        "frame": {
+          "x": 80,
+          "y": 648,
+          "w": 600,
+          "h": 372
+        }
+      },
+      {
+        "role": "AXButton",
+        "label": "Increment",
+        "elementToken": "s00000001:1",
+        "frame": {
+          "x": 99,
+          "y": 763,
+          "w": 142,
+          "h": 38
+        },
+        "enabled": true
+      },
+      {
+        "role": "AXTextField",
+        "label": "Fixture input",
+        "elementToken": "s00000001:2",
+        "frame": {
+          "x": 99,
+          "y": 837,
+          "w": 282,
+          "h": 34
+        },
+        "enabled": true
+      }
+    ]
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      },
+      {
+        "at": 1789538926.919353,
+        "pid": 53517
+      }
+    ],
+    "at": 1789538962.388027,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789538905.63802,
+        "kind": "visual-change"
+      },
+      {
+        "at": 1789538930.039401,
+        "kind": "resize"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53517,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 372,
+    "windowId": 29695,
+    "windowWidth": 600,
+    "windowX": 80,
+    "windowY": 60
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      },
+      {
+        "at": 1789538926.919353,
+        "pid": 53517
+      }
+    ],
+    "at": 1789538964.138235,
+    "canvasClicks": 1,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789538905.63802,
+        "kind": "visual-change"
+      },
+      {
+        "at": 1789538930.039401,
+        "kind": "resize"
+      },
+      {
+        "at": 1789538962.915925,
+        "kind": "canvas"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53517,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 372,
+    "windowId": 29695,
+    "windowWidth": 600,
+    "windowX": 80,
+    "windowY": 60
+  }
+}

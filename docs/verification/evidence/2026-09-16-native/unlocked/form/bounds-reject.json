@@ -1,0 +1,152 @@
+{
+  "command": [
+    "act",
+    "--pid",
+    "53321",
+    "--window",
+    "29695",
+    "--click-x",
+    "401",
+    "--click-y",
+    "150",
+    "--observation",
+    "bf50e300-4f7d-4bb2-aee8-f7e521791ed7",
+    "--out-dir",
+    "/tmp/ya-native-unlocked-form/images"
+  ],
+  "started": 1789538987.71002,
+  "ended": 1789538988.105962,
+  "exitCode": 1,
+  "result": "",
+  "stderr": "point (401, 150) is outside the observation image (400x248)\n",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      },
+      {
+        "at": 1789538926.919353,
+        "pid": 53517
+      }
+    ],
+    "at": 1789538987.688154,
+    "canvasClicks": 1,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789538905.63802,
+        "kind": "visual-change"
+      },
+      {
+        "at": 1789538930.039401,
+        "kind": "resize"
+      },
+      {
+        "at": 1789538962.915925,
+        "kind": "canvas"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53517,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 372,
+    "windowId": 29695,
+    "windowWidth": 600,
+    "windowX": 80,
+    "windowY": 60
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789538817.006009,
+        "pid": 1383
+      },
+      {
+        "at": 1789538818.331716,
+        "pid": 53167
+      },
+      {
+        "at": 1789538820.1412401,
+        "pid": 1383
+      },
+      {
+        "at": 1789538821.460583,
+        "pid": 53167
+      },
+      {
+        "at": 1789538856.279185,
+        "pid": 1383
+      },
+      {
+        "at": 1789538926.919353,
+        "pid": 53517
+      }
+    ],
+    "at": 1789538988.088367,
+    "canvasClicks": 1,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789538905.63802,
+        "kind": "visual-change"
+      },
+      {
+        "at": 1789538930.039401,
+        "kind": "resize"
+      },
+      {
+        "at": 1789538962.915925,
+        "kind": "canvas"
+      }
+    ],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 53517,
+    "initialFrontmostPid": 53167,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 53321,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 372,
+    "windowId": 29695,
+    "windowWidth": 600,
+    "windowX": 80,
+    "windowY": 60
+  }
+}
