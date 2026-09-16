@@ -336,6 +336,10 @@ export async function runExec(
 
   const finish = (result: ExecResult) => {
     if (settled) return;
+    // A terminal worker frame closes dispatch admission. RPC frames that
+    // were already queued are reduced below as not_run unless their run has
+    // already crossed the native dispatch boundary.
+    admissionClosed = true;
     settled = true;
     terminal.result = result;
     for (const waiter of rpcWaiters.values()) {
@@ -344,7 +348,7 @@ export async function runExec(
     rpcWaiters.clear();
   };
 
-  const admissionError = (allowSettled = false): ComputerError | null => {
+  const admissionError = (): ComputerError | null => {
     if (runUnknownDelivery) {
       return new ComputerError("unknown_delivery", "the request has unknown native delivery", "unknown");
     }
@@ -358,7 +362,7 @@ export async function runExec(
       dispatchAbort.abort();
       return error;
     }
-    if ((settled && !allowSettled) || admissionClosed) {
+    if (settled || admissionClosed) {
       return new ComputerError("exec_finished", "the exec request is no longer accepting RPCs");
     }
     return null;
@@ -437,31 +441,35 @@ export async function runExec(
     actionCount += requestedCost;
     queuedDispatches++;
     const run = async (): Promise<JsonValue> => {
-      // If the worker's terminal frame was reduced in the same spool poll,
-      // allow this already-admitted RPC to cross one native boundary, but do
-      // not let an inner multi-action batch start a second step after the
-      // worker has exited.
-      let allowSettled = settled;
-      const runAdmissionError = (): ComputerError | null => admissionError(allowSettled);
-      const beforeRunError = runAdmissionError();
-      if (beforeRunError !== null) {
-        // The worker may emit exec_unawaited immediately after an RPC frame;
-        // the host can therefore reject a queued batch before its first step
-        // starts. Preserve a complete not_run receipt set rather than
-        // returning an empty action history.
-        if (method === "batch" && !receipts.some((receipt) => receipt.index === index)) {
-          try {
-            const request = validateBatch(rpcArgs.request);
-            await fillNotRun(request.actions, 0, undefined, { code: beforeRunError.code, message: beforeRunError.message }, index);
-          } catch {
-            // Structural validation errors are already represented by the
-            // worker/host terminal failure; no desktop input crossed here.
-          }
-        }
-        throw beforeRunError;
-      }
       let nativeCall: Promise<unknown> = Promise.resolve();
       try {
+        const runAdmissionError = (): ComputerError | null => admissionError();
+        const beforeRunError = runAdmissionError();
+        if (beforeRunError !== null) {
+          // The worker may emit exec_unawaited immediately after an RPC
+          // frame; the host can therefore reject a queued call before its
+          // first step starts. Preserve a receipt for every such call.
+          if (!receipts.some((receipt) => receipt.index === index)) {
+            if (method === "batch") {
+              try {
+                const request = validateBatch(rpcArgs.request);
+                await fillNotRun(request.actions, 0, undefined, { code: beforeRunError.code, message: beforeRunError.message }, index);
+              } catch {
+                // Structural validation errors are already represented by
+                // the worker/host terminal failure; no desktop input crossed
+                // here.
+              }
+            } else {
+              await addReceipt({
+                index,
+                kind: method as ActionReceipt["kind"],
+                status: "not_run",
+                error: { code: beforeRunError.code, message: beforeRunError.message }
+              });
+            }
+          }
+          throw beforeRunError;
+        }
         nativeCall = (async () => {
           if (method === "observe") {
             const beforeObserve = runAdmissionError();
@@ -470,7 +478,6 @@ export async function runExec(
               options: (rpcArgs.options as ObserveOptions | undefined) ?? { mode: "auto" },
               deadlineAt: runDeadlineAt
             }, dispatchAbort.signal)) as Observation;
-            allowSettled = false;
             const afterObserve = runAdmissionError();
             if (afterObserve !== null) throw afterObserve;
             return registerObservation(observation);
@@ -547,7 +554,6 @@ export async function runExec(
                 // treat the facade call as observation-dirty so the final
                 // result does not reuse a pre-wait snapshot.
                 mutationsSinceObservation++;
-                allowSettled = false;
                 const afterAction = runAdmissionError();
                 if (afterAction !== null || Date.now() >= batchDeadlineAt) {
                   const error = afterAction === null
@@ -740,6 +746,10 @@ export async function runExec(
         return;
       }
       case "exec_done": {
+        // A terminal frame received after an earlier terminal outcome is a
+        // late transport artifact. It must not create a pending state commit
+        // after the host has already classified the request as failed.
+        if (settled) return;
         const value = message.value as unknown;
         const candidateState = message.state as unknown;
         logs = (message.logs as string[]) ?? [];
@@ -815,6 +825,7 @@ export async function runExec(
         return;
       }
       case "exec_failed": {
+        if (settled) return;
         const error = message.error as { code: string; message: string };
         logs = (message.logs as string[]) ?? [];
         finish({
@@ -829,6 +840,7 @@ export async function runExec(
         return;
       }
       case "exec_unawaited": {
+        if (settled) return;
         logs = (message.logs as string[]) ?? [];
         finish({
           status: runUnknownDelivery ? "unknown" : runLimitError?.code === "request_cancelled" || signal?.aborted ? "interrupted" : "failed",
@@ -864,6 +876,7 @@ export async function runExec(
   const controlReader = new FrameReader();
   let controlOffset = 0;
   let controlPollFailed = false;
+  const CONTROL_CHUNK_BYTES = 64 * 1024;
   const processControlChunk = (chunk: Buffer): void => {
     let frames: string[];
     try {
@@ -887,7 +900,7 @@ export async function runExec(
       const remaining = size - controlOffset;
       if (remaining <= 0) return;
       // Keep each poll bounded; FrameReader carries partial UTF-8/frame data.
-      const requested = Math.min(64 * 1024, remaining);
+      const requested = Math.min(CONTROL_CHUNK_BYTES, remaining);
       const buffer = Buffer.allocUnsafe(requested);
       const count = readSync(controlReadFd, buffer, 0, requested, controlOffset);
       if (count <= 0) return;
@@ -897,6 +910,46 @@ export async function runExec(
       controlPollFailed = true;
       admissionClosed = true;
       void stopProcessGroup(child, TERM_GRACE_MS);
+    }
+  };
+  /**
+   * The worker writes its terminal frame synchronously and may exit before
+   * the interval gets another turn. A single bounded poll is insufficient:
+   * the terminal frame can span many chunks. Keep reading until a second EOF
+   * probe observes the same offset. The second probe also catches a writer
+   * that appended between the size check and the first probe.
+   */
+  const drainControlToEof = (): void => {
+    if (controlPollFailed) return;
+    let stableOffset: number | null = null;
+    while (!controlPollFailed) {
+      const before = controlOffset;
+      pollControl();
+      if (controlPollFailed) return;
+
+      const size = statSync(controlPath).size;
+      if (size > controlOffset || controlOffset !== before) {
+        stableOffset = null;
+        continue;
+      }
+
+      // A regular-file read at the current offset is the explicit EOF probe.
+      // Do not infer EOF only from stat: a child may append after that call.
+      const probe = Buffer.allocUnsafe(1);
+      const count = readSync(controlReadFd, probe, 0, 1, controlOffset);
+      if (count > 0) {
+        controlOffset += count;
+        processControlChunk(probe.subarray(0, count));
+        stableOffset = null;
+        continue;
+      }
+      const afterProbe = statSync(controlPath).size;
+      if (afterProbe !== controlOffset) {
+        stableOffset = null;
+        continue;
+      }
+      if (stableOffset === controlOffset) return;
+      stableOffset = controlOffset;
     }
   };
   const controlTimer = setInterval(pollControl, 10);
@@ -960,9 +1013,9 @@ export async function runExec(
 
   child.on("exit", (code, signal) => {
     // A short script can write exec_done and exit before the first interval
-    // tick. Drain its regular-file control tail before treating the exit as a
-    // missing terminal frame.
-    pollControl();
+    // tick. Drain its regular-file control stream to a verified EOF before
+    // treating the exit as a missing terminal frame.
+    drainControlToEof();
     exitInfo = { code, signal: signal ?? null };
     if (!settled) {
       finish({
@@ -1047,9 +1100,10 @@ export async function runExec(
       });
     }
   } finally {
-    // Keep the accepted RPCs drainable while the worker's terminal frame and
-    // any same-poll rpc frames are being reduced. `settled` rejects newly
-    // arriving calls; queued calls are allowed to finish below.
+    // Keep already queued RPCs reducible while the worker's terminal frame
+    // and any same-poll rpc frames are being reduced. Admission is closed by
+    // the terminal frame, so queued calls become not_run unless they already
+    // crossed the native dispatch boundary.
     // ALWAYS reclaim the group, including after successful completion (F4):
     // a script's surviving descendants are ordinary cleanup, not success.
     const stop = await stopProcessGroup(child, TERM_GRACE_MS);
@@ -1113,8 +1167,9 @@ export async function runExec(
     admissionClosed = true;
     clearInterval(controlTimer);
     // The worker may have flushed its final control frame just before group
-    // cleanup. One bounded poll preserves that frame before closing the spool.
-    pollControl();
+    // cleanup. The process group is now proven gone, so drain all remaining
+    // chunks before closing and deleting the spool.
+    drainControlToEof();
     closeOwnedFd(controlReadFd);
     await rm(configDir, { recursive: true, force: true }).catch(() => undefined);
   }
