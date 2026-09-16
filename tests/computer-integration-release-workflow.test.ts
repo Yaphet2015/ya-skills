@@ -23,7 +23,7 @@ describe("release integration workflow coverage", () => {
   test("the historical verification pointer delegates mutable current counts", () => {
     const document = readFileSync(resolve("docs/verification/2026-09-14-computer-use-agentic.md"), "utf8");
     const currentSection = document.split("## Historical checkpoint record", 1)[0];
-    expect(currentSection).toContain("docs/verification/2026-09-15-parallel-integration.md");
+    expect(currentSection).toContain("2026-09-16-takeover.md");
     expect(currentSection).not.toMatch(/default tests PASS \*\*\d+\/\d+/);
     expect(currentSection).not.toMatch(/packaged live lane PASS \*\*\d+\/\d+/);
   });

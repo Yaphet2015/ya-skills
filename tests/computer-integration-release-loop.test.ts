@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { stopProcessGroup } from "../packages/computer-session/src/process.js";
 import {
   isRunnableProcess,
@@ -46,14 +49,18 @@ describe("release integration loop proof helpers", () => {
   });
 
   posixTest("proves an owned TERM-ignoring descendant survives TERM before KILL escalation", async () => {
+    const root = mkdtempSync(join(tmpdir(), "cu-release-term-ready-"));
+    const readyPath = join(root, "ready");
     const child = spawn(
       "/bin/sh",
-      ["-c", "trap '' TERM; while :; do sleep 1; done"],
+      ["-c", 'trap \'\' TERM; printf ready > "$1"; while :; do sleep 1; done', "fixture", readyPath],
       { detached: true, stdio: "ignore" }
     );
     if (child.pid === undefined) throw new Error("owned process did not expose a pid");
     let stopped: Awaited<ReturnType<typeof stopProcessGroup>> | null = null;
     try {
+      // A PID/PGID proves spawn, not that the shell installed its TERM trap.
+      await waitFor(() => existsSync(readyPath) ? true : null, 5_000);
       const groupId = await waitFor(() => readProcessGroupId(child.pid!), 5_000);
       expect(groupId).toBe(child.pid);
       expect(isRunnableProcess(child.pid)).toBe(true);
@@ -72,6 +79,7 @@ describe("release integration loop proof helpers", () => {
       expect(isRunnableProcess(child.pid)).toBe(false);
     } finally {
       if (stopped === null) await stopOwnedGroup(child).catch(() => undefined);
+      rmSync(root, { recursive: true, force: true });
     }
   }, 20_000);
 });
