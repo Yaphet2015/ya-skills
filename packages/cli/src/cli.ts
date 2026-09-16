@@ -5,7 +5,14 @@ import { dirname, join, isAbsolute } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { installSkills, loadCatalog, uninstallSkills, type FunctionCommand, type SkillCatalog } from "@ya-skills/core";
+import {
+  installSkills,
+  loadCatalog,
+  uninstallSkills,
+  type CatalogSkill,
+  type FunctionCommand,
+  type SkillCatalog
+} from "@ya-skills/core";
 import { runWorkerFromConfig } from "@ya-skills/functions-computer-e2e";
 import { driverWorkerMain, execWorkerMain, hostMain } from "@ya-skills/computer-session";
 import { createCliFunctionRegistry } from "./function-registry.js";
@@ -104,16 +111,35 @@ async function main(argv: string[]) {
 
 async function listSkills() {
   const catalog = await loadDefaultCatalog();
-  for (const [index, skill] of catalog.skills.entries()) {
-    if (index > 0) {
-      console.log();
-    }
-    console.log(skill.name);
-    console.log(`  ${skill.description}`);
-    if (skill.dependsOn.length > 0) {
-      console.log(`  depends on: ${skill.dependsOn.join(", ")}`);
-    }
+  const nameWidth = catalog.skills.reduce((width, skill) => Math.max(width, skill.name.length), 0);
+  const color = shouldColor();
+  for (const skill of catalog.skills) {
+    console.log(formatSkillLine(skill, nameWidth, color));
   }
+}
+
+function formatSkillLine(skill: CatalogSkill, nameWidth: number, color: boolean): string {
+  const name = skill.name.padEnd(nameWidth);
+  let body = skill.description;
+  if (skill.dependsOn.length > 0) {
+    body += ` · ${skill.dependsOn.join(", ")}`;
+  }
+  if (!color) {
+    return `${name}  ${body}`;
+  }
+  return `${boldCyan(name)}  ${dim(body)}`;
+}
+
+function shouldColor(): boolean {
+  return Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+}
+
+function boldCyan(value: string): string {
+  return `\x1b[1;36m${value}\x1b[0m`;
+}
+
+function dim(value: string): string {
+  return `\x1b[2m${value}\x1b[0m`;
 }
 
 async function installCommand(skillNames: string[], projectDir: string) {

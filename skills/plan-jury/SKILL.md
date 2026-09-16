@@ -1,6 +1,6 @@
 ---
 name: plan-jury
-description: Use only when the user explicitly invokes plan-jury to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff.
+description: Sol/Grok/GLM plan review. Use only when the user invokes plan-jury.
 disable-model-invocation: true
 ---
 

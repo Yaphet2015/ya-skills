@@ -127,16 +127,16 @@ test("root catalog exposes the design-grill skill", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const designGrill = catalog.byName.get("design-grill");
 
-  expect(designGrill?.description).toContain("stress-test");
+  expect(designGrill?.description.toLowerCase()).toContain("stress-test");
   expect(designGrill?.functions).toEqual([]);
 });
 
-test("root catalog exposes the eli18 skill", async () => {
+test("root catalog exposes the eli10 skill", async () => {
   const catalog = await loadCatalog(resolve("skills"));
-  const eli18 = catalog.byName.get("eli18");
+  const eli10 = catalog.byName.get("eli10");
 
-  expect(eli18?.description).toContain("看不懂");
-  expect(eli18?.functions).toEqual([]);
+  expect(eli10?.description).toContain("看不懂");
+  expect(eli10?.functions).toEqual([]);
 });
 
 test("root catalog exposes the validator skill", async () => {
@@ -163,6 +163,14 @@ test("root catalog exposes the svg-icons skill without CLI functions", async () 
   expect(svgIcons?.functions).toEqual([]);
 });
 
+test("root catalog skill descriptions stay short enough to scan and route", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+
+  for (const skill of catalog.skills) {
+    expect(skill.description.length, skill.name).toBeLessThanOrEqual(160);
+  }
+});
+
 test("root catalog exposes the show-pr skill as manual-only", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const showPr = catalog.byName.get("show-pr");
@@ -174,6 +182,9 @@ test("root catalog exposes the show-pr skill as manual-only", async () => {
   const skill = await readFile(resolve("skills", "show-pr", "SKILL.md"), "utf8");
   expect(skill).toContain("disable-model-invocation: true");
   expect(skill).toContain("Invocation Gate");
+  expect(skill).toContain("package.json");
+  expect(skill).toContain("report-<n>.html");
+  expect(skill).not.toContain("$(git branch");
   expect(skill).not.toContain(".logoscode");
   expect(skill).not.toContain("pr-lens");
 });
@@ -240,6 +251,38 @@ async function buildExampleClone(mutate?: (doc: Record<string, unknown>) => void
   const html = await readFile(outFile, "utf8");
   return { outDir, outFile, docFile, html, buildErr, buildCode };
 }
+
+test("show-pr tools fail loudly without explicit paths", async () => {
+  const skillDir = resolve("skills", "show-pr");
+  const run = async (script: string, ...args: string[]) => {
+    const proc = Bun.spawn(["node", join(skillDir, "tools", script), ...args], {
+      stdout: "pipe",
+      stderr: "pipe"
+    });
+    const [, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited
+    ]);
+    return { err, code };
+  };
+
+  // Agent always passes argv (SKILL.md); missing args must not fall back to a default path
+  const validate = await run("validate.cjs");
+  expect(validate.code).toBe(1);
+  expect(validate.err).toContain("usage");
+
+  const buildNone = await run("build-report.cjs");
+  expect(buildNone.code).toBe(1);
+  expect(buildNone.err).toContain("usage");
+
+  const buildGraphOnly = await run(
+    "build-report.cjs",
+    join(skillDir, "references", "example.graph.json")
+  );
+  expect(buildGraphOnly.code).toBe(1);
+  expect(buildGraphOnly.err).toContain("usage");
+});
 
 test("show-pr report embeds evidence and renders mermaid from the example document", async () => {
   const { html, buildErr, buildCode, outDir } = await buildExampleClone();
@@ -368,7 +411,7 @@ test("yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs", async () => 
 
   expect(stderr).toBe("");
   expect(exitCode).toBe(0);
-  expect(stdout).toContain("homebrew-only\n  Packaged catalog skill");
+  expect(stdout).toContain("homebrew-only  Packaged catalog skill");
   expect(stdout).not.toContain("pbench");
 });
 

@@ -65,7 +65,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **computer-use** | 通过后台优先的 AX 感知与操作驱动任意 macOS 桌面应用——检查应用状态、复现 UI 问题、操作可见窗口。仅 macOS arm64。 | `yk install computer-use` |
 | **computer-e2e** | 确定性桌面回放：项目本地 `*.e2e.ts` 套件由同一个 yk 执行，带执行历史与报告——使用方零 npm 安装、零 Node/Vitest/SDK 依赖。依赖 computer-use。 | `yk install computer-e2e` |
 | **eli5** | 当读者完全不懂这个主题来解释：用 HTML artifact，大图、少字。 | `yk install eli5` |
-| **eli18** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli18` |
+| **eli10** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli10` |
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
 | **validator** | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
 | **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |

@@ -1,6 +1,6 @@
 ---
 name: pbench
-description: Use when a coding-agent outcome is wrong or incomplete, or when the user asks to capture, run, replay, compare, report, or operate PBench.
+description: PBench capture/replay. Use when a coding-agent outcome is wrong, or the user asks to capture, run, or compare runs.
 ---
 
 # PBench

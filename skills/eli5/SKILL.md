@@ -1,6 +1,6 @@
 ---
 name: eli5
-description: Use when the user explicitly asks for eli5, or to explain like they know nothing about a topic using an HTML artifact with big pictures and few words.
+description: Picture-heavy HTML explainer. Use only when the user asks for eli5.
 disable-model-invocation: true
 ---
 

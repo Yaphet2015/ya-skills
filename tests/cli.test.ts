@@ -33,10 +33,10 @@ test("yk list discovers plan-jury in the root catalog", async () => {
 
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
-  expect(result.stdout).toContain("plan-jury\n");
+  expect(result.stdout).toMatch(/^plan-jury\s/m);
 });
 
-test("yk list prints each skill as a name-first block so names stay scannable", async () => {
+test("yk list prints each skill on one aligned line so names stay scannable", async () => {
   const catalogDir = await mkdtemp(join(tmpdir(), "yk-list-catalog-"));
 
   try {
@@ -54,17 +54,7 @@ test("yk list prints each skill as a name-first block so names stay scannable", 
 
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toBe("");
-    expect(result.stdout).toBe(
-      [
-        "alpha",
-        "  Base skill",
-        "",
-        "beta",
-        "  Dependent skill",
-        "  depends on: alpha",
-        ""
-      ].join("\n")
-    );
+    expect(result.stdout).toBe(["alpha  Base skill", "beta   Dependent skill · alpha", ""].join("\n"));
   } finally {
     await rm(catalogDir, { recursive: true, force: true });
   }

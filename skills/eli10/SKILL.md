@@ -1,9 +1,9 @@
 ---
-name: eli18
-description: Use when explaining a diagnosis, root cause, bug mechanism, architecture, or any "why does this happen" answer to the user — especially after they say they don't understand (看不懂 / 太费劲 / 再详细解释). Not for quick status updates, confirmations, or one-line answers.
+name: eli10
+description: Finer-grained explanation of a diagnosis or mechanism. Use after 看不懂 / 太费劲 / 再详细解释.
 ---
 
-# ELI18
+# ELI10
 
 ## Core Principle
 

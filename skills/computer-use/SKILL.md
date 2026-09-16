@@ -1,6 +1,6 @@
 ---
 name: computer-use
-description: Use when a task needs real desktop UI interaction on macOS, such as inspecting app state, reproducing a UI issue, or operating a visible window.
+description: Drive real macOS UI. Use when the task must operate a visible desktop app.
 ---
 
 # Computer-Use (via `yk`)
