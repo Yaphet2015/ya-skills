@@ -38,7 +38,7 @@ describe("exec terminal reduction", () => {
     const host = await startTestHost({ driver: "fake", idleTimeoutMs: 60_000 });
     try {
       const result = await host.exec({
-        code: 'const { writeSync } = await import("node:fs"); writeSync(3, "{\\"type\\":\\"exec_done\\",\\"value\\":"); process.exit(0);',
+        code: `const { writeSync } = await import("node:fs"); writeSync(3, ${JSON.stringify('{"type":"exec_done","value":')}); process.exit(0);`,
         timeoutMs: 5_000,
         maxActions: 1
       });
