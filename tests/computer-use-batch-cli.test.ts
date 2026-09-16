@@ -109,6 +109,7 @@ function fakeSession(deps: {
       };
     },
     click: async () => undefined,
+    setValue: async () => ({ route: "accessibility" as const, effect: "confirmed" as const }),
     type: async () => undefined,
     key: async () => undefined,
     scroll: async () => undefined,

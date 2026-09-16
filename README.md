@@ -77,7 +77,12 @@ Browse the full catalog at any time with `yk list`.
 
 For computer-use coordinate actions, pass the same `--out-dir` to `observe` and
 `act`. Native failures with uncertain delivery return `unknown` and stop further
-input in that session. See [computer-use](docs/computer-use.md).
+input in that session. For controls with a writable AXValue, use
+`act --set-value VALUE --element-token TOKEN`; this path never falls back to
+keyboard events and accepts only a confirmed Accessibility result. Background
+delivery does not guarantee mouse/keyboard noninterference; native input tests
+need an independent desktop when the user must keep working uninterrupted. See
+[computer-use](docs/computer-use.md).
 
 ## 📑 Table of Contents
 

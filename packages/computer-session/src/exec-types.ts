@@ -2,6 +2,7 @@
 // the host. Only these method names may cross the pipe; args are JSON.
 
 import type {
+  AxValueResult,
   Condition,
   ObserveOptions,
   ScrollSpec,
@@ -14,6 +15,7 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 export type ScriptRpcMethod =
   | "click"
   | "click_point"
+  | "set_value"
   | "type"
   | "key"
   | "scroll"
@@ -36,6 +38,7 @@ export type ScriptRpcReply =
 export interface ScriptComputer {
   click(selector: Selector): Promise<void>;
   clickPoint(point: PointClick): Promise<void>;
+  setValue(elementToken: string, value: string): Promise<AxValueResult>;
   type(text: string, before?: Condition): Promise<void>;
   key(key: string, modifiers?: string[], before?: Condition): Promise<void>;
   scroll(spec: ScrollSpec): Promise<void>;
@@ -78,6 +81,7 @@ export const EXEC_MAX_OBSERVATIONS = 20;
 export const SCRIPT_METHODS: readonly ScriptRpcMethod[] = [
   "click",
   "click_point",
+  "set_value",
   "type",
   "key",
   "scroll",

@@ -26,6 +26,21 @@ describe("exec through the session host (C1, real exec-worker subprocess)", () =
     }
   }, 60_000);
 
+  test("strict AX setValue returns the host-validated route proof", async () => {
+    const host = await startTestHost({ driver: "fake", idleTimeoutMs: 60_000 });
+    try {
+      const { reply, result } = await host.exec({
+        code: `return await computer.setValue("field-token", "Ada");`
+      });
+      expect(reply.status).toBe("completed");
+      expect(result.value).toEqual({ route: "accessibility", effect: "confirmed" });
+      expect(result.actions).toEqual([{ index: 0, kind: "set_value", status: "delivered" }]);
+    } finally {
+      await host.close();
+      await host.cleanup();
+    }
+  }, 60_000);
+
   test("state persists across exec calls only on clean completion", async () => {
     const host = await startTestHost({ driver: "fake", idleTimeoutMs: 60_000 });
     try {
@@ -116,11 +131,15 @@ describe("createScriptComputer (fixed wire surface)", () => {
           image: { status: "unavailable" }
         } as never;
       }
+      if (method === "set_value") {
+        return { route: "accessibility", effect: "confirmed" };
+      }
       if (method === "batch") return { status: "completed", steps: [] } as never;
       return null;
     });
     await computer.click({ text: "OK", match: "exact" });
     await computer.clickPoint({ observationId: "01234567-89ab-cdef-0123-456789abcdef", x: 1, y: 2 });
+    await computer.setValue("field-token", "Ada");
     await computer.type("hi");
     await computer.key("Return", ["cmd"]);
     await computer.scroll({ direction: "down", amount: 2, x: 1, y: 1 });
@@ -130,6 +149,7 @@ describe("createScriptComputer (fixed wire surface)", () => {
     expect(calls.map((c) => c.method)).toEqual([
       "click",
       "click_point",
+      "set_value",
       "type",
       "key",
       "scroll",

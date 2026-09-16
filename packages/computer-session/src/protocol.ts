@@ -15,6 +15,7 @@ import type {
   ActionReceipt,
   AxChannel,
   AxElement,
+  AxValueResult,
   BatchAction,
   BatchRequest,
   BatchResult,
@@ -60,7 +61,7 @@ const MAX_MODIFIERS = 64;
 
 const OBSERVATION_MODES = ["auto", "ax", "image", "both"] as const;
 const CHANNEL_STATUSES = ["usable", "empty", "degraded", "truncated", "unavailable"] as const;
-const ACTION_KINDS = ["click", "click_point", "type", "key", "scroll", "wait"] as const;
+const ACTION_KINDS = ["click", "click_point", "set_value", "type", "key", "scroll", "wait"] as const;
 const RECEIPT_STATUSES = ["delivered", "not_delivered", "unknown", "satisfied", "not_run"] as const;
 const REPLY_STATUSES = ["completed", "failed", "interrupted", "running", "unknown"] as const;
 const EXEC_STATUSES = ["completed", "failed", "interrupted", "unknown"] as const;
@@ -374,6 +375,12 @@ function parseBatchAction(value: unknown, context: ValidationContext, index: num
     case "click_point":
       assertKnownKeys(raw, ["kind", "point"], context, where);
       return { kind, point: parsePointClick(raw.point, context, `${where}.point`) };
+    case "set_value": {
+      assertKnownKeys(raw, ["kind", "elementToken", "value"], context, where);
+      const elementToken = requiredString(raw, "elementToken", context, where, { nonEmpty: true, maxBytes: MAX_ID_BYTES });
+      const value = requiredString(raw, "value", context, where, { maxBytes: MAX_FIELD_BYTES });
+      return { kind, elementToken, value };
+    }
     case "type": {
       assertKnownKeys(raw, ["kind", "text", "before"], context, where);
       const text = requiredString(raw, "text", context, where, { nonEmpty: true, maxBytes: 10_000 });
@@ -920,6 +927,33 @@ export function decodeSessionReply(line: string, operation: SessionOperation): S
 /** Decode a host RPC observation after the worker-side wire conversion. */
 export function decodeObservationValue(value: unknown): Observation {
   return parseObservation(value, "protocol_rpc", "rpc.observation", "native");
+}
+
+/** Decode the result of the strict AX-only value-write RPC. */
+export function decodeAxValueResult(value: unknown): AxValueResult {
+  const context: ValidationContext = "protocol_rpc";
+  const where = "rpc.set_value";
+  const raw = requireRecord(value, context, where);
+  assertKnownKeys(raw, ["route", "effect", "delivery"], context, where);
+  if (raw.route !== "accessibility") fail(context, `${where}.route`, "must be accessibility");
+  if (raw.effect !== "confirmed") fail(context, `${where}.effect`, "must be confirmed");
+  if (raw.delivery === undefined || raw.delivery === null) return { route: "accessibility", effect: "confirmed" };
+  const deliveryRaw = requireRecord(raw.delivery, context, `${where}.delivery`);
+  assertKnownKeys(deliveryRaw, ["mode", "deliveredCount"], context, `${where}.delivery`);
+  const mode = deliveryRaw.mode === undefined
+    ? undefined
+    : enumValue(deliveryRaw.mode, ["not_applicable", "background", "foreground", "unknown"] as const, context, `${where}.delivery.mode`);
+  const deliveredCount = deliveryRaw.deliveredCount === undefined || deliveryRaw.deliveredCount === null
+    ? deliveryRaw.deliveredCount
+    : nonNegativeInteger(deliveryRaw.deliveredCount, context, `${where}.delivery.deliveredCount`);
+  return {
+    route: "accessibility",
+    effect: "confirmed",
+    delivery: {
+      ...(mode !== undefined ? { mode } : {}),
+      ...(deliveredCount !== undefined ? { deliveredCount } : {})
+    }
+  };
 }
 
 /** Decode a host RPC batch after the worker-side wire conversion. */

@@ -36,6 +36,11 @@ SDK dependencies in the consumer project.
 - **SDK delivery success is not business success.** Every action must be
   followed by an explicit postcondition (`ctx.computer.waitFor(...)` or a
   fresh-snapshot assertion).
+- **Use strict AX values for native fields.** `ctx.computer.setValue(target,
+  elementToken, value)` calls the AXValue-only `set_value` operation and has no
+  keyboard fallback. Take the token from a fresh observation of the same
+  target; the call succeeds only with a confirmed Accessibility route. It does
+  not guarantee support for web content or custom controls.
 - **Only authorized targets.** Run suites only against apps/windows the user
   approved; a suite may spawn its own instance via project helpers.
 - **Never read credentials.** Password field values are stripped from every

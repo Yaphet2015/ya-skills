@@ -177,9 +177,28 @@ yk computer-use act --pid P --window W --observation <observationId> --click-x 5
 - The coordinates are pixels on the returned image file. `--max-dimension`
   derives a smaller SAME-FRAME copy (original kept); coordinates are mapped
   back automatically — always read coordinates off the exact file you saw.
-- Clicks stay in the background; a refused background click is reported
-  (`action_refused`), never retried in the foreground.
+- Coordinate clicks request background delivery and can synthesize mouse
+  events. A refused background click is reported (`action_refused`), never
+  retried in the foreground.
 - Delivered ≠ succeeded: after the click, read the returned observation.
+
+## Strict AX value writes
+
+For a field that exposes a writable AXValue, use the token from a fresh
+observation instead of `--type`:
+
+```sh
+yk computer-use observe --pid P --window W --mode ax
+yk computer-use act --pid P --window W --set-value VALUE --element-token TOKEN
+```
+
+`set-value` calls the generic SDK `set_value` operation. It never calls
+`type_text`, sends keystrokes, or enables foreground activation. The token is
+snapshot-scoped; re-observe after any mutation. The host accepts the result
+only when it reports `route: "accessibility"` and `effect: "confirmed"`.
+Other routes, refusal, or an unstructured result stop the session as unknown.
+This works for controls that implement writable AXValue; it does not prove
+that web content or every custom control applies the value.
 
 ## Rules that keep this safe
 
@@ -188,17 +207,25 @@ yk computer-use act --pid P --window W --observation <observationId> --click-x 5
   returned screenshot. Observe (don't guess) when validity is `degraded`,
   `truncated`, or the image is stale — there are no automatic confidence
   scores.
-- **Background-first.** Clicks never steal focus. `--activate` exists ONLY
-  when the user explicitly asks for foreground operation ("show me").
+- **Background delivery.** Background delivery does not
+  guarantee that a user can keep using the mouse and keyboard undisturbed.
+  SDK 0.27 coordinate clicks synthesize mouse events, and typing can fall
+  back from AX to synthetic keystrokes. An unchanged frontmost PID or a
+  non-key test window does not prove noninterference. When the user requires
+  uninterrupted input, use read-only observation on their active desktop and
+  run native input tests on an independent test desktop. `--activate` still
+  requires an explicit request for foreground operation.
 - **Never `--activate` your way around a degraded/empty perception.**
   Minimized or occluded windows have suspended AX trees — ask the user to
   surface the window instead.
 - **Ambiguity is an error.** If windows or click matches are not unique, the
   command refuses; narrow the selector (`--window`, `--click-role`), do not
   click "the first match".
-- **Typing needs focus.** Click the field first (background click sets
-  window focus), then `--type`. If the draft does not appear, re-observe
-  ONCE to confirm the actual state — while delivery is uncertain, do NOT
+- **Typing needs a verified target.** A successful background click does
+  not prove keyboard focus. On an authorized input-test desktop, click the
+  intended field and check the returned observation before `--type`. If the
+  draft does not appear, re-observe ONCE to confirm the actual state — while
+  delivery is uncertain, do NOT
   retype; a repeated action may land twice. Show the user the evidence and
   let them decide.
 - **An echo is not success.** Text visible in AX after typing may be a stale

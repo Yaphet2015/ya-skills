@@ -27,6 +27,7 @@ function sessionFor(
     clickPoint: async () => undefined,
     batch: async (_target: Target, request: BatchRequest) => onBatch(request),
     click: async () => undefined,
+    setValue: async () => ({ route: "accessibility" as const, effect: "confirmed" as const }),
     type: async () => undefined,
     key: async () => undefined,
     scroll: async () => undefined,

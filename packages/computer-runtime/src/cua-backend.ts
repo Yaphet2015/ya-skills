@@ -48,6 +48,8 @@ interface DriverLike {
     elements?: Array<Record<string, unknown>>;
     images?: Array<{ dataBase64?: string }>;
   }>;
+  /** Generic SDK seam used only for the AX-only set_value operation. */
+  callTool(name: string, argumentsJson: string): Promise<ToolResultLike>;
   click(input: never): Promise<ToolResultLike | void>;
   typeText(input: never): Promise<ToolResultLike>;
   pressKey(input: never): Promise<ToolResultLike>;
@@ -211,6 +213,15 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
         }) as never
       );
       return (result ?? { isError: false }) as ToolResultLike;
+    },
+
+    // `set_value` writes the token's AXValue directly. This adapter never
+    // calls typeText or any event-injection primitive for this operation.
+    async setValue(target: Target, elementToken: string, value: string): Promise<ToolResultLike> {
+      return driver.callTool(
+        "set_value",
+        JSON.stringify({ pid: target.pid, element_token: elementToken, value })
+      );
     },
 
     async type(target: Target, text: string): Promise<ToolResultLike> {

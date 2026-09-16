@@ -3,8 +3,8 @@
 // cross the boundary. Receipts are HOST-generated — the script cannot
 // self-report success.
 
-import type { BatchRequest, Condition, ObserveOptions, PointClick, ScrollSpec, Selector } from "@ya-skills/computer-runtime";
-import { decodeBatchResultValue, decodeObservationValue } from "./protocol.js";
+import type { AxValueResult, BatchRequest, Condition, ObserveOptions, PointClick, ScrollSpec, Selector } from "@ya-skills/computer-runtime";
+import { decodeAxValueResult, decodeBatchResultValue, decodeObservationValue } from "./protocol.js";
 import type { JsonValue, ScriptComputer, ScriptRpcMethod } from "./exec-types.js";
 
 export function createScriptComputer(
@@ -16,6 +16,10 @@ export function createScriptComputer(
     },
     async clickPoint(point: PointClick): Promise<void> {
       await send("click_point", { point: point as unknown as JsonValue });
+    },
+    async setValue(elementToken: string, value: string): Promise<AxValueResult> {
+      const result = await send("set_value", { elementToken, value });
+      return decodeAxValueResult(result);
     },
     async type(text: string, before?: Condition): Promise<void> {
       await send("type", { text, ...(before !== undefined ? { before: before as unknown as JsonValue } : {}) });

@@ -26,6 +26,7 @@ export interface ScrollSpec {
 export type ActSpec =
   | { action: "click"; click: ClickSpec }
   | { action: "click_point"; clickPoint: { observationId: string; x: number; y: number } }
+  | { action: "set_value"; elementToken: string; value: string }
   | { action: "type"; type: string }
   | { action: "key"; key: string }
   | { action: "scroll"; scroll: ScrollSpec };
@@ -70,6 +71,8 @@ const VALUE_FLAGS = new Set([
   "name",
   "out-dir",
   "type",
+  "set-value",
+  "element-token",
   "key",
   "scroll",
   "click-text",
@@ -118,6 +121,8 @@ const ALLOWED: Record<string, Set<string>> = {
     "activate",
     "out-dir",
     "type",
+    "set-value",
+    "element-token",
     "key",
     "scroll",
     "click-text",
@@ -242,6 +247,9 @@ function parseRequestId(value: string | undefined): string {
 
 function parseActSpec(tokens: Tokens): ActSpec {
   const hasType = tokens.values["type"] !== undefined;
+  const setValue = tokens.values["set-value"];
+  const elementToken = tokens.values["element-token"];
+  const hasSetValue = setValue !== undefined || elementToken !== undefined;
   const hasKey = tokens.values["key"] !== undefined;
   const hasScroll = tokens.values["scroll"] !== undefined;
   const clickText = tokens.values["click-text"];
@@ -251,12 +259,18 @@ function parseActSpec(tokens: Tokens): ActSpec {
   const clickY = tokens.values["click-y"];
   const observation = tokens.values["observation"];
   const hasClickPoint = clickX !== undefined || clickY !== undefined || observation !== undefined;
-  const count = [hasType, hasKey, hasScroll, hasClick, hasClickPoint].filter(Boolean).length;
+  const count = [hasType, hasKey, hasScroll, hasClick, hasClickPoint, hasSetValue].filter(Boolean).length;
   if (count === 0) {
-    fail("act needs exactly one action: --click-text/--click-contains [--click-role], --click-x/--click-y --observation, --type, --key, --scroll");
+    fail("act needs exactly one action: --click-text/--click-contains [--click-role], --click-x/--click-y --observation, --set-value VALUE --element-token TOKEN, --type, --key, --scroll");
   }
   if (count > 1) {
     fail("act takes exactly one action per invocation");
+  }
+  if (hasSetValue) {
+    if (setValue === undefined) fail("--set-value requires --element-token");
+    if (elementToken === undefined) fail("--element-token requires --set-value");
+    if (elementToken.trim() === "") fail("--element-token requires a non-empty value");
+    return { action: "set_value", elementToken, value: setValue };
   }
   if (hasType) {
     return { action: "type", type: requireNonEmpty("--type", tokens.values["type"]) };
@@ -428,13 +442,19 @@ export function parseRequest(action: string, argv: string[]): ParsedRequest {
         ...(maxActions !== undefined ? { maxActions } : {})
       };
     }
-    case "act":
+    case "act": {
+      const options = common(tokens);
+      const spec = parseActSpec(tokens);
+      if (spec.action === "set_value" && options.activate) {
+        fail("--activate cannot be used with --set-value; the AX-only action never activates a window");
+      }
       return {
         kind: "act",
         pid: tokens.values["session"] !== undefined ? 0 : parsePid(tokens.values["pid"]),
-        ...common(tokens),
-        ...parseActSpec(tokens)
+        ...options,
+        ...spec
       };
+    }
     default:
       fail(`unknown action: ${action}`);
   }

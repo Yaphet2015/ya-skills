@@ -157,6 +157,7 @@ function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): 
     clickPoint: check(computer.clickPoint),
     batch,
     click: check(computer.click),
+    setValue: check(computer.setValue),
     type: check(computer.type),
     key: check(computer.key),
     scroll: check(computer.scroll),

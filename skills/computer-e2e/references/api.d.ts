@@ -27,6 +27,14 @@ export interface AxElement {
   enabled?: boolean;
   selected?: boolean;
 }
+export interface AxValueResult {
+  route: "accessibility";
+  effect: "confirmed";
+  delivery?: {
+    mode?: "not_applicable" | "background" | "foreground" | "unknown";
+    deliveredCount?: number | null;
+  };
+}
 export interface Snapshot {
   elements: AxElement[];
   title: string;
@@ -53,6 +61,11 @@ export interface Computer {
    * actions without pretending an in-flight native input was undone. */
   batch(target: Target, request: BatchRequest, signal?: AbortSignal): Promise<BatchResult>;
   click(target: Target, predicate: Predicate, description: string): Promise<void>;
+  /**
+   * Set a snapshot-scoped accessibility value without a keyboard fallback.
+   * The token comes from a fresh AX observation of this exact target.
+   */
+  setValue(target: Target, elementToken: string, value: string): Promise<AxValueResult>;
   type(target: Target, text: string): Promise<void>;
   key(target: Target, key: string, modifiers?: string[]): Promise<void>;
   scroll(target: Target, options: ScrollSpec): Promise<void>;
@@ -138,6 +151,7 @@ export type Condition =
 export type BatchAction =
   | { kind: "click"; selector: Selector }
   | { kind: "click_point"; point: PointClick }
+  | { kind: "set_value"; elementToken: string; value: string }
   | { kind: "type"; text: string; before?: Condition }
   | { kind: "key"; key: string; modifiers?: string[]; before?: Condition }
   | { kind: "scroll"; spec: ScrollSpec }

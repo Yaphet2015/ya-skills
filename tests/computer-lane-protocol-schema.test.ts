@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   decodeBatchResultValue,
+  decodeAxValueResult,
   decodeControlReply,
   decodeObservationValue,
   decodeRequest,
@@ -207,6 +208,24 @@ describe("protocol lane deep schema validation", () => {
       status: "completed",
       result: oversizedValue
     }), execOperation())).toThrow(/value/);
+  });
+
+  test("decodes only a confirmed Accessibility set_value result", () => {
+    expect(decodeAxValueResult({
+      route: "accessibility",
+      effect: "confirmed",
+      delivery: { mode: "not_applicable", deliveredCount: 1 }
+    })).toEqual({
+      route: "accessibility",
+      effect: "confirmed",
+      delivery: { mode: "not_applicable", deliveredCount: 1 }
+    });
+    expect(decodeAxValueResult({ route: "accessibility", effect: "confirmed", delivery: null })).toEqual({
+      route: "accessibility",
+      effect: "confirmed"
+    });
+    expect(() => decodeAxValueResult({ route: "synthetic_events", effect: "confirmed" })).toThrow(ProtocolError);
+    expect(() => decodeAxValueResult({ route: "accessibility", effect: "unverifiable" })).toThrow(ProtocolError);
   });
 
   test("validates batch receipt and optional final observation shapes", () => {

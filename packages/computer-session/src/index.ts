@@ -17,6 +17,7 @@ export {
   FrameReader,
   ProtocolError,
   decodeReply,
+  decodeAxValueResult,
   decodeSessionReply,
   decodeRequest,
   encodeControl,

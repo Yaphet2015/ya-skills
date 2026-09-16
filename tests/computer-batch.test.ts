@@ -22,6 +22,7 @@ function fakeComputer(overrides: Partial<Computer> = {}): Computer & { observeCo
     clickPoint: async () => undefined,
     batch: async () => ({ status: "completed", steps: [] }) as BatchResult,
     click: async () => undefined,
+    setValue: async () => ({ route: "accessibility", effect: "confirmed" }),
     type: async () => undefined,
     key: async () => undefined,
     scroll: async () => undefined,
@@ -69,6 +70,7 @@ describe("validateBatch (full pre-validation, no driver side effects)", () => {
     [{ actions: [] }, /non-empty/],
     [{ actions: [{ kind: "explode" }] }, /kind/],
     [{ actions: [{ kind: "type", text: "" }] }, /text/],
+    [{ actions: [{ kind: "set_value", elementToken: "", value: "x" }] }, /elementToken/],
     [{ actions: [{ kind: "key", key: "Return", modifiers: [5] }] }, /modifiers/],
     [{ actions: [{ kind: "scroll", spec: { direction: "sideways", amount: 1, x: 0, y: 0 } }] }, /direction/],
     [{ actions: [{ kind: "wait", condition: { kind: "window_exists" }, timeoutMs: 0 }] }, /timeoutMs/],
@@ -120,6 +122,21 @@ describe("runBatch (serial execution with partial receipts)", () => {
     });
     expect(result.status).toBe("failed");
     expect(result.steps.map((s) => s.status)).toEqual(["delivered", "not_delivered", "not_run"]);
+  });
+
+  test("set_value is a distinct AX-only batch action", async () => {
+    const calls: Array<{ token: string; value: string }> = [];
+    const computer = fakeComputer({
+      setValue: async (_target, elementToken, value) => {
+        calls.push({ token: elementToken, value });
+        return { route: "accessibility", effect: "confirmed" };
+      }
+    });
+    const result = await runBatch(computer, target, {
+      actions: [{ kind: "set_value", elementToken: "field-token", value: "Ada" }]
+    });
+    expect(calls).toEqual([{ token: "field-token", value: "Ada" }]);
+    expect(result).toMatchObject({ status: "completed", steps: [{ kind: "set_value", status: "delivered" }] });
   });
 
   test("two normal steps produce exactly ONE final observation", async () => {

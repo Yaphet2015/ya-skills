@@ -24,6 +24,8 @@ export const MAX_ACTIONS_LIMIT = 20;
 export const DEFAULT_BATCH_TIMEOUT_MS = 30_000;
 export const MAX_BATCH_TIMEOUT_MS = 120_000;
 const MAX_TEXT_LENGTH = 10_000;
+const MAX_ELEMENT_TOKEN_LENGTH = 256;
+const MAX_VALUE_LENGTH = 256 * 1024;
 const MAX_ACTIONS_HARD_LIMIT = 500;
 
 function fail(message: string): never {
@@ -120,6 +122,17 @@ function validateAction(value: unknown, index: number): BatchAction {
       return { kind, selector: validateSelector(v.selector, `${where}.selector`) };
     case "click_point":
       return { kind, point: validatePointClick(v.point, `${where}.point`) };
+    case "set_value": {
+      const elementToken = v.elementToken;
+      if (typeof elementToken !== "string" || elementToken.trim().length === 0 || Buffer.byteLength(elementToken, "utf8") > MAX_ELEMENT_TOKEN_LENGTH) {
+        fail(`${where}.elementToken must be a non-empty string <= ${MAX_ELEMENT_TOKEN_LENGTH} UTF-8 bytes`);
+      }
+      const value = v.value;
+      if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > MAX_VALUE_LENGTH) {
+        fail(`${where}.value must be a string <= ${MAX_VALUE_LENGTH} UTF-8 bytes`);
+      }
+      return { kind, elementToken, value };
+    }
     case "type": {
       const text = v.text;
       if (typeof text !== "string" || text.length === 0 || text.length > MAX_TEXT_LENGTH) {
@@ -157,7 +170,7 @@ function validateAction(value: unknown, index: number): BatchAction {
       return { kind, condition: validateCondition(v.condition, `${where}.condition`), timeoutMs };
     }
     default:
-      fail(`${where}.kind must be click|click_point|type|key|scroll|wait`);
+      fail(`${where}.kind must be click|click_point|set_value|type|key|scroll|wait`);
   }
 }
 
@@ -286,6 +299,11 @@ export async function runBatch(
         }
         case "click_point": {
           await computer.clickPoint(target, action.point);
+          steps[i] = { index: i, kind: action.kind, status: "delivered" };
+          break;
+        }
+        case "set_value": {
+          await computer.setValue(target, action.elementToken, action.value);
           steps[i] = { index: i, kind: action.kind, status: "delivered" };
           break;
         }

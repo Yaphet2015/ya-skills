@@ -82,7 +82,7 @@ function encodePerception(target: Target, snapshot: Snapshot, outDir?: string): 
 }
 
 function actSpecToSingleAction(request: ParsedRequest & { kind: "act" }): {
-  kind: "click" | "click_point" | "type" | "key" | "scroll";
+  kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll";
   [key: string]: unknown;
 } {
   switch (request.action) {
@@ -97,6 +97,8 @@ function actSpecToSingleAction(request: ParsedRequest & { kind: "act" }): {
       };
     case "click_point":
       return { kind: "click_point", point: request.clickPoint };
+    case "set_value":
+      return { kind: "set_value", elementToken: request.elementToken, value: request.value };
     case "type":
       return { kind: "type", text: request.type };
     case "key":
@@ -133,6 +135,18 @@ function mapError(request: ParsedRequest, error: unknown): unknown {
     }
     if (error.code === "action_refused") {
       return jsonError("action_refused", error.message);
+    }
+    if (error.code === "ax_only_unverified") {
+      return jsonError("ax_only_unverified", error.message, {
+        actionOutcome: "unknown",
+        nextStep: "observe the target before any further action; do NOT repeat the set-value request"
+      });
+    }
+    if (error.code === "ax_only_unsupported") {
+      return jsonError("ax_only_unsupported", error.message, { actionOutcome: "not_delivered" });
+    }
+    if (error.code === "invalid_request") {
+      return jsonError("invalid_request", error.message, { actionOutcome: "not_delivered" });
     }
     if (error.code === "degraded_snapshot") {
       return jsonError("degraded_snapshot", error.message);
@@ -259,6 +273,8 @@ async function runReal(
           );
         } else if (request.action === "click_point") {
           await session.computer.clickPoint(target, request.clickPoint);
+        } else if (request.action === "set_value") {
+          await session.computer.setValue(target, request.elementToken, request.value);
         } else if (request.action === "type") {
           await session.computer.type(target, request.type);
         } else if (request.action === "key") {
@@ -396,6 +412,6 @@ export function createComputerUseCommands(
         "Run a bounded ordered action batch from a JSON file (--file, --request-id); deduped by request id, never replayed.",
       run: run("batch")
     },
-    { domain, action: "act", description: "Perform one background action (click/type/key/scroll), then re-perceive.", run: run("act") }
+    { domain, action: "act", description: "Perform one background action (click/set-value/type/key/scroll), then re-perceive.", run: run("act") }
   ];
 }

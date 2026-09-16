@@ -4,6 +4,7 @@
 
 export type {
   AppRef,
+  AxValueResult,
   AxChannel,
   AxElement,
   Backend,

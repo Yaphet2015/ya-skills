@@ -126,6 +126,7 @@ function fakeBatchSession(
       steps: request.actions.map((action, index) => ({ index, kind: action.kind, status: "delivered" }))
     }),
     click: async () => undefined,
+    setValue: async () => ({ route: "accessibility", effect: "confirmed" }),
     type: async () => undefined,
     key: async () => undefined,
     scroll: async () => undefined,

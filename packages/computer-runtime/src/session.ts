@@ -5,6 +5,7 @@
 import type {
   AppRef,
   AxElement,
+  AxValueResult,
   Backend,
   BackendFactory,
   BatchRequest,
@@ -39,10 +40,12 @@ import { validateBatch, runBatch, DEFAULT_BATCH_TIMEOUT_MS } from "./batch.js";
 import { acquireTargetLease, LeaseError, type LeaseHandle, type LeaseOwner } from "./target-lease.js";
 import { randomUUID } from "node:crypto";
 
-export type { AxElement, Backend, BackendFactory, ToolResultLike } from "./types.js";
+export type { AxElement, AxValueResult, Backend, BackendFactory, ToolResultLike } from "./types.js";
 
 export const OP_LIMIT_MS = 30_000;
 export const CLEANUP_BUDGET_MS = 5_000;
+const MAX_AX_ELEMENT_TOKEN_BYTES = 256;
+const MAX_AX_VALUE_BYTES = 256 * 1024;
 
 export class ComputerError extends Error {
   constructor(
@@ -134,7 +137,7 @@ export interface SessionOptions {
   leases?: MutationLeases;
   onAction?: (event: {
     phase: "started" | "finished";
-    kind: "click" | "click_point" | "type" | "key" | "scroll";
+    kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll";
     outcome?: "delivered" | "not_delivered" | "unknown";
   }) => unknown;
 }
@@ -211,6 +214,84 @@ function driverErrorDiagnostic(error: unknown): string {
   return code !== undefined && /^[a-z0-9_]+$/i.test(code)
     ? `${base} (errorCode=${code})`
     : base;
+}
+
+function parseStructuredObject(text: string | undefined): Record<string, unknown> | undefined {
+  if (text === undefined) return undefined;
+  try {
+    const value = JSON.parse(text) as unknown;
+    return asRecord(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `set_value` is the strict AX-only seam. The generic SDK keeps its
+ * structured action result in `structuredJson`; accepting a result without a
+ * confirmed Accessibility route would turn this method into an unsafe
+ * fallback. A result that crossed the native seam but cannot prove the route
+ * is therefore an unknown delivery and poisons the session in `action()`.
+ */
+function parseAxValueResult(result: void | ToolResultLike): AxValueResult {
+  const tool = asRecord(result);
+  const structured = parseStructuredObject(tool?.structuredJson as string | undefined);
+  // Generic set_value is accepted only from its structured JSON envelope.
+  // Typed `action` metadata or raw JSON is not a substitute: accepting either
+  // would make an unrelated result look like proof that this call stayed on
+  // the AX route.
+  const candidate = structured;
+  const route = candidate?.route;
+  const effect = candidate?.effect;
+  if (route !== "accessibility" || effect !== "confirmed") {
+    throw new ComputerError(
+      "ax_only_unverified",
+      "set_value did not return a confirmed Accessibility route; delivery is unknown and the session is now unusable",
+      "unknown"
+    );
+  }
+  const deliveryValue = candidate?.delivery;
+  if (deliveryValue !== undefined && deliveryValue !== null && asRecord(deliveryValue) === undefined) {
+    throw new ComputerError(
+      "ax_only_unverified",
+      "set_value returned malformed delivery metadata; delivery is unknown and the session is now unusable",
+      "unknown"
+    );
+  }
+  const delivery = asRecord(deliveryValue);
+  const mode = delivery?.mode;
+  if (mode !== undefined && mode !== "not_applicable" && mode !== "background" && mode !== "foreground" && mode !== "unknown") {
+    throw new ComputerError(
+      "ax_only_unverified",
+      "set_value returned an unknown delivery mode; delivery is unknown and the session is now unusable",
+      "unknown"
+    );
+  }
+  const deliveryMode = mode as "not_applicable" | "background" | "foreground" | "unknown" | undefined;
+  // The SDK envelope uses snake_case JSON; the public TypeScript result keeps
+  // camelCase. Validate the optional count before converting its spelling.
+  const rawDeliveredCount = delivery?.delivered_count ?? delivery?.deliveredCount;
+  if (rawDeliveredCount !== undefined && rawDeliveredCount !== null &&
+      (typeof rawDeliveredCount !== "number" || !Number.isSafeInteger(rawDeliveredCount) || rawDeliveredCount < 0)) {
+    throw new ComputerError(
+      "ax_only_unverified",
+      "set_value returned malformed delivery count; delivery is unknown and the session is now unusable",
+      "unknown"
+    );
+  }
+  const deliveredCount = rawDeliveredCount;
+  return {
+    route: "accessibility",
+    effect: "confirmed",
+    ...(deliveryMode !== undefined || deliveredCount !== undefined
+      ? {
+          delivery: {
+            ...(deliveryMode !== undefined ? { mode: deliveryMode } : {}),
+            ...(typeof deliveredCount === "number" || deliveredCount === null ? { deliveredCount } : {})
+          }
+        }
+      : {})
+  };
 }
 
 function normalizeObserveCallOptions(callOptions?: ObserveCallOptions | AbortSignal): ObserveCallOptions {
@@ -334,6 +415,8 @@ class SessionImpl implements ComputerSession {
       batch: (target: Target, request, signal?: AbortSignal) => this.batch(target, request, signal),
       click: (target: Target, predicate: Predicate, description: string) =>
         this.clickViaToken(target, predicate, description),
+      setValue: (target: Target, elementToken: string, value: string) =>
+        this.setValue(target, elementToken, value),
       type: (target: Target, text: string) => this.action("type", target, (b) => b.type(target, text)),
       key: (target: Target, key: string, modifiers?: string[]) =>
         this.action("key", target, (b) => b.key(target, key, modifiers)),
@@ -939,11 +1022,23 @@ class SessionImpl implements ComputerSession {
 
   // ---- actions: unknown delivery poisons; refusals are not_delivered ------
 
-  private async action(
-    kind: "click" | "click_point" | "type" | "key" | "scroll",
+  private action(
+    kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
     fn: (backend: Backend) => Promise<void | ToolResultLike>
-  ): Promise<void> {
+  ): Promise<void>;
+  private action<T>(
+    kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
+    target: Target,
+    fn: (backend: Backend) => Promise<void | ToolResultLike>,
+    validate: (result: void | ToolResultLike) => T
+  ): Promise<T>;
+  private async action<T>(
+    kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
+    target: Target,
+    fn: (backend: Backend) => Promise<void | ToolResultLike>,
+    validate?: (result: void | ToolResultLike) => T
+  ): Promise<void | T> {
     const deadlineAt = this.beginOp();
     try {
       // Shared target ownership (B3): the FIRST mutation of each app acquires
@@ -1026,7 +1121,9 @@ class SessionImpl implements ComputerSession {
             "not_delivered"
           );
         }
+        const projected = validate?.(result);
         await finish("delivered");
+        return projected;
       } catch (error) {
         if (isTimeoutError(error)) {
           this.poisoned = true;
@@ -1034,6 +1131,7 @@ class SessionImpl implements ComputerSession {
           throw new ComputerError("command_timeout", String((error as Error).message), "unknown");
         }
         if (error instanceof ComputerError && error.actionOutcome !== undefined) {
+          if (error.actionOutcome === "unknown") this.poisoned = true;
           await finish(error.actionOutcome);
           throw error;
         }
@@ -1067,6 +1165,31 @@ class SessionImpl implements ComputerSession {
     } finally {
       this.endOp();
     }
+  }
+
+  private async setValue(target: Target, elementToken: string, value: string): Promise<AxValueResult> {
+    if (typeof elementToken !== "string" || elementToken.trim() === "") {
+      throw new ComputerError("invalid_request", "setValue requires a non-empty element token", "not_delivered");
+    }
+    if (Buffer.byteLength(elementToken, "utf8") > MAX_AX_ELEMENT_TOKEN_BYTES) {
+      throw new ComputerError("invalid_request", `setValue element token exceeds ${MAX_AX_ELEMENT_TOKEN_BYTES} UTF-8 bytes`, "not_delivered");
+    }
+    if (typeof value !== "string") {
+      throw new ComputerError("invalid_request", "setValue requires a string value", "not_delivered");
+    }
+    if (Buffer.byteLength(value, "utf8") > MAX_AX_VALUE_BYTES) {
+      throw new ComputerError("invalid_request", `setValue value exceeds ${MAX_AX_VALUE_BYTES} UTF-8 bytes`, "not_delivered");
+    }
+    return this.action("set_value", target, async (backend) => {
+      if (typeof backend.setValue !== "function") {
+        throw new ComputerError(
+          "ax_only_unsupported",
+          "the backend does not expose the AX-only set_value operation",
+          "not_delivered"
+        );
+      }
+      return backend.setValue(target, elementToken, value);
+    }, parseAxValueResult);
   }
 
   private async ensureLease(target: Target): Promise<void> {

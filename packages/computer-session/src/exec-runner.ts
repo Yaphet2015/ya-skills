@@ -664,7 +664,13 @@ export async function runExec(
           await addReceipt(receipt);
           if (status === "delivered" || status === "satisfied") {
             mutationsSinceObservation++;
-            return null;
+            // The runtime has already validated the native set_value result
+            // before producing a delivered receipt. Return its narrow proof
+            // to the script facade; do not reconstruct it from a generic
+            // driver response in the worker.
+            return method === "set_value" && status === "delivered"
+              ? { route: "accessibility", effect: "confirmed" }
+              : null;
           }
           // A failed single-action RPC REJECTS the script call with its
           // receipt error (F6): `await computer.wait(...)` timeouts, refused
@@ -1397,6 +1403,14 @@ function singleActionBatch(method: ScriptRpcMethod, args: Record<string, JsonVal
       return { actions: [{ kind: "click", selector: args.selector as never }] };
     case "click_point":
       return { actions: [{ kind: "click_point", point: args.point as never }] };
+    case "set_value":
+      return {
+        actions: [{
+          kind: "set_value",
+          elementToken: String(args.elementToken ?? ""),
+          value: String(args.value ?? "")
+        }]
+      };
     case "type":
       return {
         actions: [

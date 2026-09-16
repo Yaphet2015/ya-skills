@@ -85,11 +85,20 @@ export interface AxElement {
   enabled?: boolean;
   selected?: boolean;
 }
+export interface AxValueResult {
+  route: "accessibility";
+  effect: "confirmed";
+  delivery?: {
+    mode?: "not_applicable" | "background" | "foreground" | "unknown";
+    deliveredCount?: number | null;
+  };
+}
 export type ChannelStatus = "usable" | "empty" | "degraded" | "truncated" | "unavailable";
 export type ObservationMode = "auto" | "ax" | "image" | "both";
 export type BatchAction =
   | { kind: "click"; selector: Selector }
   | { kind: "click_point"; point: PointClick }
+  | { kind: "set_value"; elementToken: string; value: string }
   | { kind: "type"; text: string; before?: Condition }
   | { kind: "key"; key: string; modifiers?: string[]; before?: Condition }
   | { kind: "scroll"; spec: ScrollSpec }
@@ -122,6 +131,7 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 export interface ScriptComputer {
   click(selector: Selector): Promise<void>;
   clickPoint(point: PointClick): Promise<void>;
+  setValue(elementToken: string, value: string): Promise<AxValueResult>;
   type(text: string, before?: Condition): Promise<void>;
   key(key: string, modifiers?: string[], before?: Condition): Promise<void>;
   scroll(spec: ScrollSpec): Promise<void>;

@@ -158,6 +158,24 @@ describe("parseRequest rejects before any driver exists", () => {
     );
   });
 
+  test("set-value requires a token and preserves an empty value", () => {
+    const req = parseRequest("act", ["--pid", "1", "--set-value", "", "--element-token", "field-token"]);
+    expect(req).toMatchObject({
+      kind: "act",
+      action: "set_value",
+      elementToken: "field-token",
+      value: ""
+    });
+    expect(() => parseRequest("act", ["--pid", "1", "--set-value", "Ada"])).toThrow(/element-token/);
+    expect(() => parseRequest("act", ["--pid", "1", "--element-token", "field-token"])).toThrow(/set-value/);
+    expect(() => parseRequest("act", ["--pid", "1", "--set-value", "Ada", "--element-token", "  "])).toThrow(/element-token/);
+  });
+
+  test("set-value cannot be combined with activation", () => {
+    expect(() => parseRequest("act", ["--pid", "1", "--activate", "--set-value", "Ada", "--element-token", "field-token"]))
+      .toThrow(/cannot be used with --set-value/);
+  });
+
   test("key with empty text is rejected", () => {
     expect(() => parseRequest("act", ["--pid", "1", "--key", ""])).toThrow(/--key/);
   });
@@ -221,6 +239,7 @@ function makeFakeComputer(overrides: Partial<Computer> = {}): Computer {
     clickPoint: unexpected,
     batch: unexpected,
     click: unexpected,
+    setValue: unexpected,
     type: unexpected,
     key: unexpected,
     scroll: unexpected,
@@ -348,5 +367,22 @@ describe("command orchestration via injected session", () => {
     expect(body.windowId).toBe("9");
     expect(body.title).toBe("Doc");
     expect(body.elements[0].label).toBe("OK");
+  });
+
+  test("act --set-value uses the AX-only Computer seam", async () => {
+    const calls: Array<{ pid: number; windowId: bigint; token: string; value: string }> = [];
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 7, windowId: 9n, title: "Form" }],
+      setValue: async (target, token, value) => {
+        calls.push({ pid: target.pid, windowId: target.windowId, token, value });
+        return { route: "accessibility", effect: "confirmed" };
+      },
+      snapshot: async () => ({ elements: [], title: "Form" })
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    await commands.find((c) => c.action === "act")!.run([
+      "--pid", "7", "--set-value", "Ada", "--element-token", "field-token"
+    ]);
+    expect(calls).toEqual([{ pid: 7, windowId: 9n, token: "field-token", value: "Ada" }]);
   });
 });

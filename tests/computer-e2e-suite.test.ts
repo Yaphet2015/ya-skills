@@ -33,6 +33,7 @@ function makeContext(): CaseContext {
       clickPoint: unexpected,
       batch: unexpected,
       click: unexpected,
+      setValue: unexpected,
       type: unexpected,
       key: unexpected,
       scroll: unexpected,

@@ -11,7 +11,7 @@ yk computer-use windows --pid PID
 yk computer-use perceive --pid PID [--window ID] [--shot] [--out-dir DIR]
 yk computer-use observe --pid PID [--window ID] [--mode auto|ax|image|both] \
     [--max-dimension N] [--select-text T [--select-match exact|contains] [--select-role R]]
-yk computer-use act --pid PID [--window ID] ACTION   # --click-text/--click-contains [--click-role] | --click-x/--click-y --observation ID | --type | --key | --scroll
+yk computer-use act --pid PID [--window ID] ACTION   # --click-text/--click-contains [--click-role] | --click-x/--click-y --observation ID | --set-value VALUE --element-token TOKEN | --type | --key | --scroll
 yk computer-use batch --pid PID [--window ID] --file steps.json --request-id ID
 yk computer-use session open --pid PID [--window ID] [--idle-timeout-ms N (<=120000)]
 yk computer-use session status --session ID
@@ -35,6 +35,29 @@ The agent-facing usage guide lives in the skill itself
 - Accessibility + Screen Recording must be granted to the program that runs
   `yk` (usually your terminal app). `doctor` reports the read-only status and
   prints the exact grant steps; it never opens permission dialogs itself.
+
+## Background input and desktop use
+
+Background delivery requests input without bringing the target to the front.
+It does not isolate the user's mouse and keyboard. SDK 0.27 coordinate clicks
+use synthetic events, and text insertion can fall back from AX to synthetic
+keystrokes; the `type_text` tool schema has no public AX-only/no-fallback
+input option. Unchanged frontmost/window-focus flags do not establish noninterference.
+Use an independent test desktop for native input when the user's current desktop
+must remain undisturbed. Observation and permission checks can remain read-only.
+
+## Strict AX value writes
+
+`Computer.setValue(target, elementToken, value)` and CLI
+`act --set-value VALUE --element-token TOKEN` use the generic SDK
+`set_value` operation. The adapter passes the target pid, the snapshot element
+token, and the value. It does not call `typeText` or inject keyboard events.
+The host returns success only for a structured result with
+`route: "accessibility"` and `effect: "confirmed"`; another route or an
+unverifiable result poisons the session. The token must come from a fresh AX
+observation of the same target. This is a capability for controls with a
+writable AXValue. It does not establish support for arbitrary web content or
+custom controls.
 
 ## Where evidence goes
 
@@ -70,7 +93,8 @@ directory, the yk install prefix, or your project.
 - Sessions hold an application-level target lease: a second session (or a
   single-step act) on the same app pid is refused while the lease is alive.
   Unknown native delivery marks the session `unusable` and KEEPS the lease —
-  the target stays protected until the user closes it explicitly.
+  explicit close ends the host control plane but does not clear an unresolved
+  delivery verdict or prove that the target application's callback has finished.
 - exec scripts are trusted local JavaScript; state is explicit JSON committed
   only on clean completion. Generated script API:
   `skills/computer-use/references/api.d.ts`.

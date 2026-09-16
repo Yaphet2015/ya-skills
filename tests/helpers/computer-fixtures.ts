@@ -90,6 +90,7 @@ export function fakeBackendFactory(overrides: Partial<Backend> = {}): () => Prom
       observe: unexpected("observe"),
       clickToken: unexpected("clickToken"),
       clickPoint: unexpected("clickPoint"),
+      setValue: unexpected("setValue"),
       type: unexpected("type"),
       key: unexpected("key"),
       scroll: unexpected("scroll"),

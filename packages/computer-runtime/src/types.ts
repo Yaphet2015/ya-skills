@@ -58,6 +58,11 @@ export interface Computer {
    * actions without pretending an in-flight native input was undone. */
   batch(target: Target, request: BatchRequest, signal?: AbortSignal): Promise<BatchResult>;
   click(target: Target, predicate: Predicate, description: string): Promise<void>;
+  /**
+   * Set a snapshot-scoped accessibility value without a keyboard fallback.
+   * The token comes from a fresh AX observation of this exact target.
+   */
+  setValue(target: Target, elementToken: string, value: string): Promise<AxValueResult>;
   type(target: Target, text: string): Promise<void>;
   key(target: Target, key: string, modifiers?: string[]): Promise<void>;
   scroll(target: Target, options: ScrollSpec): Promise<void>;
@@ -73,6 +78,24 @@ export interface Computer {
 export interface ToolResultLike {
   isError?: boolean;
   text?: string;
+  /** Generic SDK results keep the structured route/effect envelope here. */
+  structuredJson?: string;
+  rawJson?: string;
+  action?: {
+    route?: string | number;
+    effect?: string | number;
+    delivery?: { mode?: string | number; deliveredCount?: number | null };
+  };
+}
+
+/** A successful value write that crossed only the Accessibility route. */
+export interface AxValueResult {
+  route: "accessibility";
+  effect: "confirmed";
+  delivery?: {
+    mode?: "not_applicable" | "background" | "foreground" | "unknown";
+    deliveredCount?: number | null;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +195,7 @@ export type Condition =
 export type BatchAction =
   | { kind: "click"; selector: Selector }
   | { kind: "click_point"; point: PointClick }
+  | { kind: "set_value"; elementToken: string; value: string }
   | { kind: "type"; text: string; before?: Condition }
   | { kind: "key"; key: string; modifiers?: string[]; before?: Condition }
   | { kind: "scroll"; spec: ScrollSpec }
@@ -215,6 +239,8 @@ export interface Backend {
   ): Promise<NativeObservationLike>;
   clickToken(target: Target, token: string): Promise<ToolResultLike>;
   clickPoint(target: Target, point: Point): Promise<ToolResultLike>;
+  /** Optional so test or older backends fail closed before native dispatch. */
+  setValue?(target: Target, elementToken: string, value: string): Promise<ToolResultLike>;
   type(target: Target, text: string): Promise<ToolResultLike>;
   key(target: Target, key: string, modifiers?: string[]): Promise<ToolResultLike>;
   scroll(target: Target, options: ScrollSpec): Promise<ToolResultLike>;
