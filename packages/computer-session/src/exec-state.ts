@@ -10,77 +10,9 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { JsonValue } from "./exec-types.js";
 import { EXEC_MAX_STATE_BYTES } from "./exec-types.js";
+import { validateJsonValue } from "./json-value.js";
 
-export function validateJsonValue(value: unknown, maxBytes: number): JsonValue {
-  // Reject non-JSON-legal leaves first (NaN/Infinity/bigint/function/undefined
-  // object values), then cycle-check, then enforce the byte budget.
-  const seen = new WeakSet<object>();
-  const walk = (node: unknown, path: string): JsonValue => {
-    if (node === null) return null;
-    switch (typeof node) {
-      case "boolean":
-      case "string":
-        return node;
-      case "number":
-        if (!Number.isFinite(node)) {
-          throw new Error(`${path}: numbers must be finite (got ${node})`);
-        }
-        return node;
-      case "bigint":
-        throw new Error(`${path}: bigint is not valid state — use strings`);
-      case "function":
-      case "symbol":
-      case "undefined":
-        throw new Error(`${path}: ${typeof node} is not valid state`);
-      case "object": {
-        if (seen.has(node as object)) {
-          throw new Error(`${path}: circular reference in state`);
-        }
-        seen.add(node as object);
-        try {
-          if (Array.isArray(node)) {
-            const values: JsonValue[] = [];
-            for (let i = 0; i < node.length; i++) {
-              if (!Object.prototype.hasOwnProperty.call(node, i)) {
-                throw new Error(`${path}[${i}]: sparse array entries are not valid JSON state`);
-              }
-              values.push(walk(node[i], `${path}[${i}]`));
-            }
-            return values;
-          }
-          // Class instances (Date, Map, custom...) must NOT silently degrade
-          // to "{}" via JSON round-tripping — state is plain JSON data only.
-          const proto = Object.getPrototypeOf(node as object);
-          if (proto !== Object.prototype && proto !== null) {
-            throw new Error(
-              `${path}: class instances are not valid state — state is plain JSON data (convert dates to ISO strings explicitly)`
-            );
-          }
-          const out: { [key: string]: JsonValue } = {};
-          for (const [key, entry] of Object.entries(node as Record<string, unknown>)) {
-            out[key] = walk(entry, `${path}.${key}`);
-          }
-          return out;
-        } finally {
-          // `seen` is the active recursion stack, not a global visited set:
-          // the same acyclic object may legitimately be referenced twice.
-          seen.delete(node as object);
-        }
-      }
-      default:
-        throw new Error(`${path}: unsupported value`);
-    }
-  };
-  const validated = walk(value, "state");
-  const encoded = JSON.stringify(validated);
-  if (encoded === undefined) {
-    throw new Error("state is not JSON-serializable");
-  }
-  if (Buffer.byteLength(encoded, "utf8") > maxBytes) {
-    throw new Error(`state is ${Buffer.byteLength(encoded, "utf8")} bytes (limit ${maxBytes})`);
-  }
-  return validated;
-}
+export { validateJsonValue } from "./json-value.js";
 
 export interface ExecStateFile {
   version: number;
@@ -170,6 +102,14 @@ export function commitExecState(
   expectedVersion: number,
   value: Record<string, JsonValue>
 ): number {
+  // State is an object contract, not an arbitrary JsonValue. Validate both
+  // shape and contents before creating or replacing any state file so a
+  // producer cannot send a valid array/scalar that the durable reader rejects
+  // only on the next request.
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("exec state must be a plain JSON object");
+  }
+  validateJsonValue(value, EXEC_MAX_STATE_BYTES);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const current = loadExecState(directory);
   if (current.version !== expectedVersion) {
@@ -177,7 +117,6 @@ export function commitExecState(
       `state version conflict: expected ${expectedVersion}, found ${current.version} — concurrent writers are impossible; the session state is inconsistent`
     );
   }
-  validateJsonValue(value, EXEC_MAX_STATE_BYTES);
   const next: ExecStateFile = { version: expectedVersion + 1, value, hash: execStateHash(value) };
   const file = statePath(directory);
   const history = join(directory, HISTORY_DIR);

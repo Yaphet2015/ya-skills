@@ -45,6 +45,7 @@ import {
   type ExecResult,
   type JsonValue
 } from "./exec-types.js";
+import { JsonValueValidationError, validateJsonValue } from "./json-value.js";
 
 export const MAX_MESSAGE_BYTES = 1024 * 1024;
 export const PROTOCOL_VERSION = 1;
@@ -56,7 +57,6 @@ const MAX_ERROR_BYTES = 64 * 1024;
 const MAX_AX_ELEMENTS = 10_000;
 const MAX_RECEIPTS = EXEC_MAX_ACTIONS_LIMIT;
 const MAX_MODIFIERS = 64;
-const MAX_JSON_DEPTH = 128;
 
 const OBSERVATION_MODES = ["auto", "ax", "image", "both"] as const;
 const CHANNEL_STATUSES = ["usable", "empty", "degraded", "truncated", "unavailable"] as const;
@@ -761,30 +761,18 @@ function parseBatchResult(value: unknown, context: ValidationContext, where: str
 
 /** Validate JSON values without transforming them. This is especially
  * important for ExecResult.value: user data may legitimately contain nested
- * `windowId` keys with either text or numeric values. */
-function parseJsonValue(value: unknown, context: ValidationContext, where: string, depth = 0): JsonValue {
-  if (depth > MAX_JSON_DEPTH) fail(context, where, `exceeds maximum JSON nesting depth ${MAX_JSON_DEPTH}`);
-  if (value === null) return null;
-  if (typeof value === "string") {
-    stringValue(value, context, where, { maxBytes: EXEC_MAX_STATE_BYTES });
-    return value;
-  }
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) fail(context, where, "must be a finite number");
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry, index) => parseJsonValue(entry, context, `${where}[${index}]`, depth + 1)) as JsonValue[];
-  }
-  if (isRecord(value)) {
-    const parsed: Record<string, JsonValue> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      parsed[key] = parseJsonValue(entry, context, `${where}.${key}`, depth + 1);
+ * `windowId` keys with either text or numeric values. The producer and this
+ * consumer call the same validator so a reply cannot become invalid only
+ * after the host has committed state. */
+function parseJsonValue(value: unknown, context: ValidationContext, where: string): JsonValue {
+  try {
+    return validateJsonValue(value, EXEC_MAX_STATE_BYTES, { rootPath: where });
+  } catch (error) {
+    if (error instanceof JsonValueValidationError) {
+      fail(context, error.path, error.reason);
     }
-    return parsed;
+    fail(context, where, error instanceof Error ? error.message : String(error));
   }
-  fail(context, where, "must be a JSON value");
 }
 
 function parseExecResult(value: unknown, context: ValidationContext, where: string, encoding: WindowIdEncoding): ExecResult {

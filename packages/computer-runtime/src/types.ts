@@ -49,7 +49,10 @@ export interface Computer {
   apps(): Promise<AppRef[]>;
   windows(pid: number, options?: { onScreenOnly?: boolean }): Promise<WindowRef[]>;
   snapshot(target: Target, options?: { screenshot?: boolean }): Promise<Snapshot>;
-  observe(target: Target, options?: ObserveOptions): Promise<Observation>;
+  /** Read a native observation with an optional request-local cancellation
+   * signal. The signal is also passed to the backend so persistent session
+   * callers do not lose their absolute deadline at the observation seam. */
+  observe(target: Target, options?: ObserveOptions, callOptions?: ObserveCallOptions | AbortSignal): Promise<Observation>;
   clickPoint(target: Target, point: PointClick): Promise<void>;
   /** Execute one serial batch; an optional signal closes admission between
    * actions without pretending an in-flight native input was undone. */
@@ -114,6 +117,13 @@ export interface ObserveOptions {
   mode?: ObservationMode;
   maxDimension?: number;
   selector?: Selector;
+}
+
+/** Request-local controls used by persistent callers to carry cancellation and
+ * one absolute native-observation deadline without rebuilding the driver. */
+export interface ObserveCallOptions {
+  signal?: AbortSignal;
+  deadlineAt?: number;
 }
 
 export interface AxChannel {
@@ -198,7 +208,11 @@ export interface Backend {
   snapshot(target: Target, screenshot: boolean): Promise<Snapshot>;
   /** Raw single-read observation. `screenshot` requests the image channel;
    * the returned state carries whatever channels the driver produced. */
-  observe(target: Target, options: { accessibility: boolean; screenshot: boolean; maxDimension?: number }): Promise<NativeObservationLike>;
+  observe(
+    target: Target,
+    options: { accessibility: boolean; screenshot: boolean; maxDimension?: number },
+    callOptions?: ObserveCallOptions
+  ): Promise<NativeObservationLike>;
   clickToken(target: Target, token: string): Promise<ToolResultLike>;
   clickPoint(target: Target, point: Point): Promise<ToolResultLike>;
   type(target: Target, text: string): Promise<ToolResultLike>;

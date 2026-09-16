@@ -34,6 +34,7 @@ const RUNTIME_SURFACE = [
   "ImageGeometry",
   "Selector",
   "ObserveOptions",
+  "ObserveCallOptions",
   "AxChannel",
   "ImageChannel",
   "Observation",

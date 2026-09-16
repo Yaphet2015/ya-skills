@@ -92,6 +92,37 @@ function withBudget<T>(budgetMs: number, promise: Promise<T>): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+function combineAbortSignals(
+  caseSignal: AbortSignal,
+  callerSignal?: AbortSignal
+): { signal: AbortSignal; dispose: () => void } {
+  if (callerSignal === undefined || callerSignal === caseSignal) {
+    return { signal: caseSignal, dispose: () => undefined };
+  }
+  const controller = new AbortController();
+  const abort = (event: Event): void => {
+    if (!controller.signal.aborted) {
+      const source = event.target as AbortSignal | null;
+      controller.abort(source?.reason);
+    }
+  };
+  if (caseSignal.aborted) {
+    controller.abort(caseSignal.reason);
+  } else if (callerSignal.aborted) {
+    controller.abort(callerSignal.reason);
+  } else {
+    caseSignal.addEventListener("abort", abort, { once: true });
+    callerSignal.addEventListener("abort", abort, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      caseSignal.removeEventListener("abort", abort);
+      callerSignal.removeEventListener("abort", abort);
+    }
+  };
+}
+
 function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): CaseContext["computer"] {
   const refused = async (): Promise<never> => {
     throw new Error("the owning case was interrupted — no further desktop operations");
@@ -101,17 +132,22 @@ function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): 
       signal.throwIfAborted();
       return fn(...a);
     };
-  // Batch is the one facade method whose runtime contract accepts the
-  // owning request signal. Passing it through the case guard is essential:
-  // checking only before the call leaves an already admitted multi-action
-  // batch free to dispatch later actions after a case timeout (including
-  // while afterAll is running).
-  const batch = (
+  // Batch is the one facade method whose runtime contract accepts both the
+  // owning case signal and an optional caller signal. The signals are joined
+  // for this request only; disposing both listeners when the batch settles is
+  // required so a late case/caller abort cannot affect another case.
+  const batch = async (
     target: Parameters<CaseContext["computer"]["batch"]>[0],
-    request: Parameters<CaseContext["computer"]["batch"]>[1]
+    request: Parameters<CaseContext["computer"]["batch"]>[1],
+    callerSignal?: Parameters<CaseContext["computer"]["batch"]>[2]
   ) => {
     signal.throwIfAborted();
-    return computer.batch(target, request, signal);
+    const combined = combineAbortSignals(signal, callerSignal);
+    try {
+      return await computer.batch(target, request, combined.signal);
+    } finally {
+      combined.dispose();
+    }
   };
   return {
     apps: signal.aborted ? refused : check(computer.apps),
@@ -210,6 +246,10 @@ export async function runSuite(
     if (item.skip !== undefined) {
       cases.push({ id: item.id, name: item.name, status: "skipped", reason: item.skip });
       emit({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: item.skip } });
+      // A skipped case never enters its body, so remove the propagation
+      // listener here rather than retaining its case controller until the
+      // suite-level signal aborts (or the process exits).
+      context.signal.removeEventListener("abort", propagate);
       continue;
     }
     const budget = item.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS;

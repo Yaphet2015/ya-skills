@@ -203,7 +203,12 @@ async function runReal(
     }
     // act on a session: single action through the host's batch operation
     const single = actSpecToSingleAction(request as ParsedRequest & { kind: "act" });
-    return runOnSession(request.session, { kind: "batch", request: { actions: [single] }, requestId: `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
+    return runOnSession(
+      request.session,
+      { kind: "batch", request: { actions: [single] }, requestId: `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
+      30_000,
+      sessionTransport
+    );
   }
   const platform = process.platform === "darwin" && process.arch === "arm64";
   if (!platform) {

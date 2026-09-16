@@ -1,7 +1,7 @@
 // Exec worker (C1/C2): one disposable subprocess per exec request. Runs the
 // captured JS string (an async-function body, NOT an ES module) with the
 // fixed facade; every desktop operation is an RPC to the host over the
-// CONTROL channel (fd4). stdout/stderr are plain LOGS. Logs are bounded; the
+// CONTROL channel (fd3). stdout/stderr are plain LOGS. Logs are bounded; the
 // worker never decides its own success — the host does.
 //
 // Static imports are rejected by SYNTAX validation (P2.2): an async-function
@@ -46,7 +46,7 @@ interface HostMessage {
   type: "exec_boot_ok";
 }
 
-/** Control frames (protocol) go to fd3 — the dedicated control pipe — while
+/** Control frames (protocol) go to fd3 — the dedicated control stream — while
  * logs go to stdout/stderr; the two channels never mix (F16). */
 function sendControl(value: unknown): void {
   writeSync(3, `${JSON.stringify(value)}\n`);
@@ -162,7 +162,7 @@ export async function execWorkerMain(configPath: string): Promise<number> {
   };
 
   // RPC plumbing: worker-initiated fixed-method calls over the CONTROL
-  // channel (fd4). Outstanding calls are bounded (F16): a runaway fan-out
+  // channel (fd3). Outstanding calls are bounded (F16): a runaway fan-out
   // fails immediately instead of queueing without limit.
   let nextSeq = 1;
   const waiters = new Map<number, { resolve: (v: JsonValue) => void; reject: (e: unknown) => void }>();
@@ -296,6 +296,9 @@ export async function execWorkerMain(configPath: string): Promise<number> {
   // strings/objects on their way to the host.
   try {
     const { validateJsonValue } = await import("./exec-state.js");
+    if (typeof state !== "object" || state === null || Array.isArray(state)) {
+      throw new Error("exec state must be a plain JSON object");
+    }
     validateJsonValue(state, 256 * 1024);
     validateJsonValue(value ?? null, 256 * 1024);
   } catch (error) {

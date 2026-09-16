@@ -44,7 +44,10 @@ export interface Computer {
   apps(): Promise<AppRef[]>;
   windows(pid: number, options?: { onScreenOnly?: boolean }): Promise<WindowRef[]>;
   snapshot(target: Target, options?: { screenshot?: boolean }): Promise<Snapshot>;
-  observe(target: Target, options?: ObserveOptions): Promise<Observation>;
+  /** Read a native observation with an optional request-local cancellation
+   * signal. The signal is also passed to the backend so persistent session
+   * callers do not lose their absolute deadline at the observation seam. */
+  observe(target: Target, options?: ObserveOptions, callOptions?: ObserveCallOptions | AbortSignal): Promise<Observation>;
   clickPoint(target: Target, point: PointClick): Promise<void>;
   /** Execute one serial batch; an optional signal closes admission between
    * actions without pretending an in-flight native input was undone. */
@@ -89,6 +92,10 @@ export interface ObserveOptions {
   mode?: ObservationMode;
   maxDimension?: number;
   selector?: Selector;
+}
+export interface ObserveCallOptions {
+  signal?: AbortSignal;
+  deadlineAt?: number;
 }
 export interface AxChannel {
   status: ChannelStatus;

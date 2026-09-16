@@ -3,8 +3,8 @@
 **Status: desktop-free/release integration verified; native acceptance still open.**
 The authoritative current record is `docs/verification/2026-09-15-parallel-integration.md`.
 This ledger supersedes the earlier checkpoint wording in this file. The current
-worktree is checkpoint `e7c172f57b2bdb846ad388ba4961757d969bd59a` plus five
-unstaged lane deltas and narrow integration fixes. No commit, merge, push, or
+worktree is checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` plus four
+current lane deltas and narrow integration fixes. No commit, merge, push, or
 publication was performed.
 
 ## Current R1–R17 dispositions
@@ -62,6 +62,12 @@ integration run. It does not mean native macOS/TCC acceptance.
 - Classified cancellation during runtime/host final observation as
   `interrupted`, while preserving ordinary final-observation failures as
   completed-with-error evidence. Added runtime and real-socket host regressions.
+- Added an operation-local observe signal/deadline context that survives the
+  persistent driver worker boundary and is enforced before/through native
+  observation setup; direct observations now have a finite host budget.
+- Switched the exec worker's parent control channel to a private incrementally
+  polled fd3 spool, drained accepted RPCs during same-poll worker exits, and
+  made numeric-fd cleanup idempotent for Bun 1.3.14.
 
 ## Remaining precise plan gaps
 
@@ -73,11 +79,9 @@ integration run. It does not mean native macOS/TCC acceptance.
 3. Real model/provider usage and a fixed-prompt A/B comparison remain pending;
    synthetic runtime timings and initialization counts must not be presented as
    native or token evidence.
-4. The two release workflows continue to run the contract-required
-   `computer-e2e-release.test.ts` and `computer-session-release.test.ts` files.
-   The new packaged lane test was run manually with `YK_RELEASE_TESTS=1` but is
-   not currently in those workflow command lines; this is an explicit CI
-   coverage gap, not a hidden pass.
+4. The required native/model acceptance remains open; the two release
+   workflows now also run `tests/computer-lane-release-packaging.test.ts` after
+   `package:release`, and the final integration gate executes that same lane.
 
 The implementation is mergeable as the current desktop-free/release-tested
 code delta, subject to independent review. It is **not** fully accepted as a

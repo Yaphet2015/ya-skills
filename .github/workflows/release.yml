@@ -42,7 +42,7 @@ jobs:
           bun run package:release -- --version "${version}"
 
       - name: Release closed loop (packaged yk, no desktop)
-        run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts tests/computer-session-release.test.ts
+        run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts tests/computer-session-release.test.ts tests/computer-lane-release-packaging.test.ts
 
       - name: Build node target
         run: bun run build

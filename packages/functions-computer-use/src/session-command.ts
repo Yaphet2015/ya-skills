@@ -13,7 +13,8 @@ import {
   sendRequest,
   validateSessionId,
   type OpenedSession,
-  type SessionInfo
+  type SessionInfo,
+  type SessionOperation
 } from "@ya-skills/computer-session";
 import { createComputerSession, selectWindow, type ComputerSession, type Target } from "@ya-skills/computer-runtime";
 
@@ -316,6 +317,15 @@ export async function runOnSession(
     operation.kind === "batch"
       ? (operation.requestId ?? throwMissingRequestId())
       : `observe-${randomUUID()}`;
+  // `file` and `requestId` are CLI orchestration metadata, not part of the
+  // strict wire operation schema. Build the clean discriminated operation
+  // before encodeRequest so public session batch/act calls use the same
+  // protocol boundary as every other client.
+  const wireOperation: SessionOperation = operation.kind === "observe"
+    ? operation.options === undefined
+      ? { kind: "observe" }
+      : { kind: "observe", options: operation.options as Extract<SessionOperation, { kind: "observe" }>["options"] }
+    : { kind: "batch", request: operation.request as Extract<SessionOperation, { kind: "batch" }>["request"] };
   const request = transport.sendRequest ?? sendRequest;
   const reply = await request(
     session.socketPath,
@@ -324,7 +334,7 @@ export async function runOnSession(
       sessionId,
       generation: session.generation,
       requestId,
-      operation: operation as never
+      operation: wireOperation
     },
     timeoutMs
   );

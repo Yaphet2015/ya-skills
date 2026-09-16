@@ -19,7 +19,7 @@
 - 不要求安装额外 Node/Bun；SDK继续lazy，help/list/install不启动worker。
 - E2E默认测试desktop-free；发布门禁和真实桌面结果独立记录。
 
-> **Integration status (2026-09-15):** The five lane deltas, generated API references, and exact Bun 1.3.14 desktop-free/release gates are integrated and recorded in `docs/verification/2026-09-15-parallel-integration.md`. Native Background/TCC, real UI/model usage, and performance acceptance remain unchecked; this plan is not wholly complete.
+> **Integration status (2026-09-15):** The four current lane deltas, generated API references, and exact Bun 1.3.14 desktop-free/release gates are integrated at checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` and recorded in `docs/verification/2026-09-15-parallel-integration.md`. Native Background/TCC, real UI/model usage, and performance acceptance remain unchecked; this plan is not wholly complete.
 
 ---
 

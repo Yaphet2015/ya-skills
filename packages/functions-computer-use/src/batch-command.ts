@@ -272,12 +272,29 @@ export function batchCommand(
         } else {
           try {
             // SessionOptions carries the same absolute deadline, so this read
-            // cannot restart the budget after the last action.
+            // cannot restart the budget after the last action. Re-check after
+            // it resolves too: a native observer may return a successful frame
+            // only after the absolute command budget has expired.
             const observation = await session.computer.observe(target, batchRequest.observe);
-            result = { status, steps, observation };
+            if (Date.now() >= deadlineAt) {
+              result = {
+                status: "interrupted",
+                steps,
+                observationError: {
+                  code: "batch_deadline",
+                  message: "batch timeout budget exhausted during final observation"
+                }
+              };
+            } else {
+              result = { status, steps, observation };
+            }
           } catch (error) {
+            const interrupted =
+              Date.now() >= deadlineAt ||
+              (error instanceof ComputerError &&
+                (error.code === "command_timeout" || error.code === "aborted" || error.code === "request_cancelled"));
             result = {
-              status,
+              status: interrupted ? "interrupted" : status,
               steps,
               observationError: {
                 code: error instanceof ComputerError ? error.code : "final_observe_failed",

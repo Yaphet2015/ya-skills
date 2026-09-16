@@ -7,6 +7,7 @@ import type {
   AppRef,
   Backend,
   NativeObservationLike,
+  ObserveCallOptions,
   Point,
   ScrollDirection,
   ScrollSpec,
@@ -37,7 +38,10 @@ type Sdk = typeof import("@trycua/cua-driver");
 interface DriverLike {
   listApps(input: never): Promise<{ apps?: Array<Record<string, unknown>> }>;
   listWindows(input: never): Promise<{ windows?: Array<{ pid: number; windowId: bigint; title: string }> }>;
-  getWindowState(input: never): Promise<{
+  getWindowState(
+    input: never,
+    callOptions?: ObserveCallOptions
+  ): Promise<{
     degraded?: boolean;
     truncated?: boolean;
     windowTitle?: string;
@@ -60,8 +64,15 @@ interface DriverLike {
 // respawn osascript every snapshot.
 const WAKE_BUDGET_MS = 2_000;
 
-function wakeAxOnce(pid: number, seen: Set<number>): void {
+function wakeAxOnce(
+  pid: number,
+  seen: Set<number>,
+  callOptions?: ObserveCallOptions
+): void {
   if (seen.has(pid)) return;
+  if (callOptions?.signal?.aborted) {
+    throw new ComputerError("aborted", "the observation was aborted");
+  }
   seen.add(pid);
   const jxa = [
     "ObjC.import('ApplicationServices');",
@@ -70,7 +81,16 @@ function wakeAxOnce(pid: number, seen: Set<number>): void {
     "$.AXUIElementSetAttributeValue(app, 'AXEnhancedUserInterface', true);",
     "'ok';"
   ].join("\n");
-  spawnSync("osascript", ["-l", "JavaScript", "-e", jxa], { stdio: "ignore", timeout: WAKE_BUDGET_MS });
+  const remaining = callOptions?.deadlineAt === undefined
+    ? WAKE_BUDGET_MS
+    : Math.min(WAKE_BUDGET_MS, Math.max(1, callOptions.deadlineAt - Date.now()));
+  spawnSync("osascript", ["-l", "JavaScript", "-e", jxa], { stdio: "ignore", timeout: remaining });
+  if (callOptions?.signal?.aborted) {
+    throw new ComputerError("aborted", "the observation was aborted");
+  }
+  if (callOptions?.deadlineAt !== undefined && Date.now() >= callOptions.deadlineAt) {
+    throw new ComputerError("command_timeout", "the observation budget expired while preparing accessibility data");
+  }
 }
 
 function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
@@ -129,7 +149,8 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
     // channel; at least one channel is required (InvalidArguments otherwise).
     async observe(
       target: Target,
-      options: { accessibility: boolean; screenshot: boolean; maxDimension?: number }
+      options: { accessibility: boolean; screenshot: boolean; maxDimension?: number },
+      callOptions?: ObserveCallOptions
     ): Promise<NativeObservationLike> {
       if (!options.accessibility && !options.screenshot) {
         throw new ComputerError(
@@ -137,7 +158,7 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
           "observe requires at least one channel (accessibility or screenshot)"
         );
       }
-      wakeAxOnce(target.pid, woken);
+      wakeAxOnce(target.pid, woken, callOptions);
       const state = (await driver.getWindowState(
         sdk.GetWindowStateInput.new({
           pid: target.pid,
@@ -145,8 +166,15 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
           includeAccessibilityTree: options.accessibility,
           includeScreenshot: options.screenshot,
           ...(options.maxDimension !== undefined ? { maxDimension: options.maxDimension } : {})
-        }) as never
+        }) as never,
+        callOptions
       )) as NativeObservation;
+      if (callOptions?.signal?.aborted) {
+        throw new ComputerError("aborted", "the observation was aborted");
+      }
+      if (callOptions?.deadlineAt !== undefined && Date.now() >= callOptions.deadlineAt) {
+        throw new ComputerError("command_timeout", "the observation budget expired");
+      }
       return state as unknown as NativeObservationLike;
     },
 

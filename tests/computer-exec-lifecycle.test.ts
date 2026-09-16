@@ -214,7 +214,17 @@ describe("exec lifecycle (C3)", () => {
     await host.exec({ code: "return 1;" }).catch(() => undefined);
     await host.close();
     await host.cleanup();
-    const stray = execSync("pgrep -fl '__computer-exec-worker' || true").toString().trim();
+    // Bun runs test files concurrently, so another file may still be
+    // finishing its private worker when this assertion first runs. Poll for
+    // quiescence rather than turning that harmless overlap into a false leak;
+    // a real orphan still fails after the bounded grace period.
+    const deadline = Date.now() + 5_000;
+    let stray = "";
+    while (Date.now() < deadline) {
+      stray = execSync("pgrep -fl '__computer-exec-worker' || true").toString().trim();
+      if (stray === "") break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     expect(stray).toBe("");
   }, 60_000);
 });

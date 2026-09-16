@@ -6,9 +6,8 @@
 
 ## Current integration pointer (2026-09-15)
 
-- Current checkout: checkpoint `e7c172f57b2bdb846ad388ba4961757d969bd59a` plus five applied lane deltas and narrow integration fixes; no commit, merge, push, or publication.
-- Exact final gates used `/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun` (Bun **1.3.14**): typecheck PASS; default tests PASS **584/594 with 10 explicit skips**; `package:release --version 0.19.0` PASS; required release tests PASS **10/10**; build PASS; smoke PASS.
-- Additional desktop-free packaged live lane PASS **3/3** (including deduplication and symlink worker spawn) and benchmark PASS with synthetic-only/null model usage.
+- Current checkout: checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` plus the four current lane deltas and narrow integration fixes; no commit, merge, push, or publication.
+- Current cumulative release-gate, packaged-lane, and benchmark evidence—including mutable test counts—is maintained in [`docs/verification/2026-09-15-parallel-integration.md`](2026-09-15-parallel-integration.md). This historical filename intentionally does not duplicate those counts.
 - Native Background Coordinates success on a never-activated fixture, host TCC attribution, real UI matrix, and real model/performance usage remain unverified; this is not a whole-plan completion claim.
 
 ## Historical checkpoint record (superseded)

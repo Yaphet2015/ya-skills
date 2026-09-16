@@ -20,6 +20,7 @@ export type {
   NativeObservationLike,
   Observation,
   ObservationMode,
+  ObserveCallOptions,
   ObserveOptions,
   Point,
   PointClick,

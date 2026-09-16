@@ -47,6 +47,18 @@ const WATCHDOG_GRACE_MS = 5_000;
 const MAX_EVENT_LINE = 1024 * 1024;
 const SPOOL_READ_CHUNK_BYTES = 64 * 1024;
 
+/** Bun may close a parent-owned numeric fd while setting up child stdio. The
+ * parent no longer owns those descriptors after spawn, so cleanup treats an
+ * already-closed fd as complete rather than turning a valid worker result into
+ * a supervisor failure. Other close errors remain fatal. */
+function closeOwnedFd(fd: number): void {
+  try {
+    closeSync(fd);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EBADF") throw error;
+  }
+}
+
 const WORKER_EVENT_TYPES = new Set<string>([
   "runtime",
   "suite_collected",
@@ -141,6 +153,27 @@ export class IncrementalE2ESpoolReader {
     }
     lines.push(...this.frameReader.push(chunk));
     return { lines, bytesRead: count };
+  }
+
+  /**
+   * Drain all bytes that were written before the worker group reached EOF.
+   * Each poll remains capped at the live 64KiB chunk size; two consecutive
+   * empty polls after group cleanup verify that the regular-file tail is
+   * stable before the caller finalizes the frame and removes the spool.
+   */
+  async drainToEof(onLines: (lines: string[]) => void): Promise<void> {
+    let emptyPolls = 0;
+    for (;;) {
+      const poll = this.poll();
+      onLines(poll.lines);
+      if (poll.bytesRead === 0) {
+        emptyPolls += 1;
+        if (emptyPolls >= 2) return;
+      } else {
+        emptyPolls = 0;
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
   }
 
   finalize(): SpoolTail {
@@ -540,14 +573,20 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
         env: { ...process.env, BUN_CONFIG_NO_CLEAR_TERMINAL: "1" }
       });
     } catch (error) {
-      closeSync(stdoutFd);
-      closeSync(stderrFd);
-      closeSync(eventFd);
+      closeOwnedFd(stdoutFd);
+      closeOwnedFd(stderrFd);
+      closeOwnedFd(eventFd);
       rmSync(eventSpoolPath, { force: true });
       append("suite_collected", { file: displayFile, loadError: `spawn failed: ${error instanceof Error ? error.message : String(error)}` });
       stopped = true;
       break;
     }
+    // The child now owns its duplicated stdio descriptors. Closing the
+    // parent's copies before opening the incremental reader prevents Bun from
+    // aliasing the reader fd with eventFd during group reaping.
+    closeOwnedFd(stdoutFd);
+    closeOwnedFd(stderrFd);
+    closeOwnedFd(eventFd);
 
     append("runtime", { workerPid: child.pid });
 
@@ -642,12 +681,28 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       child.once("error", () => resolveExit({ exitCode: null, signal: null }));
       child.once("exit", (code, signal) => resolveExit({ exitCode: code, signal }));
     });
-    // Do not lose the final events: read the completed fd3 spool once more
-    // after the leader exits. A non-newline tail is an unconfirmed/truncated
-    // frame, never a silently accepted final event.
-    pollSpool();
     clearInterval(spoolTimer);
+    // A leader exit is not proof that a descendant is gone. Reap the whole
+    // detached worker group before declaring the regular-file spool at EOF;
+    // otherwise an inherited fd3 could append after the final poll and its
+    // terminal/cleanup events would be deleted with the spool.
+    const groupReaped = await reapWorkerGroup(child.pid, cleanupGraceMs);
+    if (!groupReaped) {
+      append("worker_protocol_error", { file: displayFile, reason: `worker process group ${child.pid ?? "?"} could not be fully reaped` });
+    }
     if (!spoolFailed) {
+      try {
+        // The live timer only gets one bounded chunk per tick. Once the worker
+        // group is gone, continue in bounded chunks until two stable empty
+        // polls prove that no unread tail remains, including a frame split at
+        // either side of a chunk boundary.
+        await spoolReader.drainToEof((lines) => {
+          for (const line of lines) processLine(line);
+        });
+      } catch (error) {
+        spoolFailed = true;
+        append("worker_protocol_error", { file: displayFile, reason: error instanceof Error ? error.message : String(error) });
+      }
       const tail = spoolReader.finalize();
       if (!tail.complete) {
         spoolFailed = true;
@@ -658,18 +713,13 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       }
     }
     spoolReader.close();
-    closeSync(stdoutFd);
-    closeSync(stderrFd);
-    closeSync(eventFd);
+    // Keep cleanup idempotent for Bun versions that close numeric stdio fds as
+    // part of child setup; closeOwnedFd still surfaces unrelated failures.
+    closeOwnedFd(stdoutFd);
+    closeOwnedFd(stderrFd);
+    closeOwnedFd(eventFd);
     rmSync(eventSpoolPath, { force: true });
     clearTimers();
-    // A leader exit is not proof that a descendant is gone. Reap the whole
-    // detached worker group before the next run can start; this also avoids
-    // Bun 1.3.14 cold-start/stdio contention after a hard timeout.
-    const groupReaped = await reapWorkerGroup(child.pid, cleanupGraceMs);
-    if (!groupReaped) {
-      append("worker_protocol_error", { file: displayFile, reason: `worker process group ${child.pid ?? "?"} could not be fully reaped` });
-    }
     rmSync(configPath, { force: true });
 
     if (outcome.exitCode !== null) workerExitCodes.push(outcome.exitCode);

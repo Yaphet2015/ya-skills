@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { stopProcessGroup } from "../packages/computer-session/src/process.js";
+import {
+  isRunnableProcess,
+  parseExecBodyReadyFrame,
+  readProcessGroupId
+} from "./helpers/integration-release-process.js";
 
 // Packaged agentic closed loop, desktop-free (C5): the REAL compiled yk runs
 // its internal exec worker; THIS test process is the RPC peer that answers
@@ -185,9 +190,10 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
     rmSync(dir, { recursive: true, force: true });
   }, 120_000);
 
-  maybe("the compiled exec loop starts on fd3 before TERM/KILL cleanup", async () => {
+  maybe("the compiled exec loop proves body readiness before TERM/KILL cleanup", async () => {
     const dir = consumerDir("exec-loop");
     const configPath = join(dir, "exec.json");
+    const readyPath = join(dir, "descendant.ready");
     writeFileSync(
       configPath,
       JSON.stringify({
@@ -196,17 +202,31 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
         requestId: "rel-2",
         generation: "g",
         target: { pid: 4242, windowId: "12345" },
-        // The child ignores TERM so the production group cleanup must
-        // escalate to KILL. It is deliberately a child of the compiled
-        // worker, not a process found by a global-name sweep.
+        // The body installs its own TERM handler, starts an owned child whose
+        // shell installs `trap '' TERM`, waits for that child to report
+        // readiness, and only then emits the body-level fd3 acknowledgement.
+        // This is deliberately an exact child of the compiled worker, not a
+        // process found by a global-name sweep.
         code: `
-          Bun.spawn(["/bin/sh", "-c", "trap '' TERM; while :; do sleep 1; done"], {
+          process.on("SIGTERM", () => {});
+          const { readFileSync, writeSync } = await import("node:fs");
+          const child = Bun.spawn(["/bin/sh", "-c", ${JSON.stringify(`trap '' TERM; printf '%s\\n' "$$" > ${JSON.stringify(readyPath)}; while :; do sleep 1; done`)}], {
             stdin: "ignore", stdout: "ignore", stderr: "ignore"
           });
+          let reportedPid = "";
+          for (let attempt = 0; attempt < 100; attempt++) {
+            try {
+              reportedPid = readFileSync(${JSON.stringify(readyPath)}, "utf8").trim();
+            } catch {}
+            if (reportedPid !== "") break;
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          if (reportedPid !== String(child.pid)) throw new Error("descendant did not report its own pid");
+          writeSync(3, JSON.stringify({ type: "exec_body_ready", childPid: child.pid, reportedPid: Number(reportedPid), ready: true }) + "\\n");
           while (true) {}
         `,
         sourceName: "loop.js",
-        timeoutMs: 300,
+        timeoutMs: 30_000,
         maxActions: 5,
         state: {},
         cwd: dir
@@ -220,39 +240,51 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
     });
     proc.stdout?.resume();
     proc.stderr?.resume();
+    const workerPid = proc.pid;
+    if (workerPid === undefined) {
+      proc.kill();
+      throw new Error("compiled loop worker did not expose a pid");
+    }
     const control = proc.stdio[3];
     if (control === null) throw new Error("compiled loop worker did not allocate fd3");
     const lines: string[] = [];
     const reader = createInterface({ input: control as import("node:stream").Readable });
-    let startedResolve!: () => void;
-    let startedReject!: (error: Error) => void;
     let sawStarted = false;
-    const started = new Promise<void>((resolveStarted, rejectStarted) => {
-      startedResolve = resolveStarted;
-      startedReject = rejectStarted;
+    let bodyReadyResolve!: (frame: NonNullable<ReturnType<typeof parseExecBodyReadyFrame>>) => void;
+    let bodyReadyReject!: (error: Error) => void;
+    const bodyReady = new Promise<NonNullable<ReturnType<typeof parseExecBodyReadyFrame>>>((resolveReady, rejectReady) => {
+      bodyReadyResolve = resolveReady;
+      bodyReadyReject = rejectReady;
     });
     reader.on("line", (line) => {
       lines.push(line);
-      try {
-        const frame = JSON.parse(line) as { type?: string };
-        if (frame.type === "exec_started" && !sawStarted) {
-          sawStarted = true;
-          startedResolve();
-        }
-      } catch {
-        // The worker's control channel is JSON; malformed output cannot prove
-        // that execution started and is intentionally ignored here.
-      }
+      if (line.includes('"type":"exec_started"')) sawStarted = true;
+      const frame = parseExecBodyReadyFrame(line);
+      if (frame !== null) bodyReadyResolve(frame);
     });
     proc.once("exit", (code, signal) => {
-      if (!sawStarted) startedReject(new Error(`compiled loop exited before exec_started (code=${code}, signal=${signal})`));
+      if (!sawStarted) bodyReadyReject(new Error(`compiled loop exited before exec_started (code=${code}, signal=${signal})`));
+      else bodyReadyReject(new Error(`compiled loop exited before body readiness (code=${code}, signal=${signal})`));
     });
-    const bootTimer = setTimeout(() => startedReject(new Error("compiled loop did not acknowledge exec_started on fd3")), 10_000);
+    const bootTimer = setTimeout(() => bodyReadyReject(new Error("compiled loop did not acknowledge body readiness on fd3")), 10_000);
     let stop: Awaited<ReturnType<typeof stopProcessGroup>> | null = null;
     try {
-      // A nonzero startup exit is not a timeout pass: this must resolve only
-      // from the worker's fd3 execution-start acknowledgement.
-      await started;
+      // `exec_started` is emitted before the body and is not sufficient. The
+      // proof waits for the body to report the descendant PID after readiness.
+      const ready = await bodyReady;
+      expect(sawStarted).toBe(true);
+      expect(ready.childPid).toBe(ready.reportedPid);
+      expect(readProcessGroupId(workerPid)).toBe(workerPid);
+      expect(readProcessGroupId(ready.childPid)).toBe(workerPid);
+      expect(isRunnableProcess(ready.childPid)).toBe(true);
+
+      // Signal only this owned worker group. Both the worker body and its
+      // descendant ignore TERM, so survival here proves KILL escalation is
+      // required rather than accepting leader exit as complete cleanup.
+      process.kill(-workerPid, "SIGTERM");
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(isRunnableProcess(ready.childPid)).toBe(true);
+
       stop = await stopProcessGroup(proc, 2_000);
     } finally {
       clearTimeout(bootTimer);
@@ -262,10 +294,14 @@ describe("packaged computer-use agentic closed loop (no desktop, no node/npm/bun
       rmSync(dir, { recursive: true, force: true });
     }
     if (stop === null) throw new Error("compiled loop cleanup did not produce a stop result");
-    expect(sawStarted).toBe(true);
     expect(stop.exited).toBe(true);
+    expect(stop.signal).toBe("SIGKILL");
     expect(stop.groupSurvivors).toBeNull();
-    // No terminal success frame can escape a worker reclaimed while executing.
+    // The exact reported descendant is gone after production TERM→KILL group
+    // cleanup; no terminal success frame can escape the reclaimed worker.
+    const bodyFrame = lines.map(parseExecBodyReadyFrame).find((frame) => frame !== null);
+    if (bodyFrame === undefined) throw new Error("body readiness frame was lost from the control stream");
+    expect(isRunnableProcess(bodyFrame.childPid)).toBe(false);
     expect(lines.some((line) => {
       try {
         return (JSON.parse(line) as { type?: string }).type === "exec_done";

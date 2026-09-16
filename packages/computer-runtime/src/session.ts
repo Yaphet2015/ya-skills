@@ -11,6 +11,7 @@ import type {
   BatchResult,
   Computer,
   NativeObservationLike,
+  ObserveCallOptions,
   ObserveOptions,
   Observation,
   PointClick,
@@ -153,18 +154,43 @@ function isKnownDriverRefusal(error: unknown): boolean {
   return /DriverError\.(Tool|InvalidArguments)/.test(signature);
 }
 
-function withDeadline<T>(label: string, promise: Promise<T>, deadlineMs: number): Promise<T> {
+function normalizeObserveCallOptions(callOptions?: ObserveCallOptions | AbortSignal): ObserveCallOptions {
+  if (callOptions !== undefined && typeof callOptions === "object" && callOptions !== null &&
+    "aborted" in callOptions && typeof (callOptions as AbortSignal).addEventListener === "function") {
+    return { signal: callOptions as AbortSignal };
+  }
+  return (callOptions ?? {}) as ObserveCallOptions;
+}
+
+function withDeadline<T>(label: string, promise: Promise<T>, deadlineMs: number, signal?: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${deadlineMs}ms`));
-    }, deadlineMs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(new ComputerError("aborted", `${label} was aborted`));
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    if (Number.isFinite(deadlineMs)) {
+      timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`${label} timed out after ${deadlineMs}ms`));
+      }, Math.max(1, deadlineMs));
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
     promise.then(
       (value) => {
-        clearTimeout(timer);
+        cleanup();
         resolve(value);
       },
       (error) => {
-        clearTimeout(timer);
+        cleanup();
         reject(error);
       }
     );
@@ -213,7 +239,7 @@ class SessionImpl implements ComputerSession {
         this.read("list windows", (b) => b.windows(pid, opts?.onScreenOnly ?? false)),
       snapshot: (target: Target, opts?: { screenshot?: boolean }) =>
         this.read("snapshot", (b) => b.snapshot(target, opts?.screenshot ?? false)),
-      observe: (target: Target, opts?: ObserveOptions) => this.observe(target, opts),
+      observe: (target: Target, opts?: ObserveOptions, signal?: AbortSignal) => this.observe(target, opts, signal),
       clickPoint: (target: Target, point) => this.clickPoint(target, point),
       batch: (target: Target, request, signal?: AbortSignal) => this.batch(target, request, signal),
       click: (target: Target, predicate: Predicate, description: string) =>
@@ -272,7 +298,7 @@ class SessionImpl implements ComputerSession {
    * Awaiting a lease, journal callback, invalidation, or driver setup can
    * consume the entire caller budget; no native request may cross the seam
    * after cancellation or expiration. */
-  private assertDispatchAllowed(deadlineAt: number, outcome?: "not_delivered"): void {
+  private assertDispatchAllowed(deadlineAt: number, outcome?: "not_delivered", operationSignal?: AbortSignal): void {
     // close() may race an operation that is still waiting for a lease or
     // driver setup. These lifecycle guards must be checked at the final
     // native seam, not only when beginOp() first reserved admission.
@@ -286,7 +312,7 @@ class SessionImpl implements ComputerSession {
         outcome
       );
     }
-    if (this.options.signal?.aborted || this.batchSignal?.aborted) {
+    if (this.options.signal?.aborted || this.batchSignal?.aborted || operationSignal?.aborted) {
       throw new ComputerError("aborted", "the operation was aborted", outcome);
     }
     if (Date.now() >= deadlineAt) {
@@ -391,13 +417,43 @@ class SessionImpl implements ComputerSession {
 
   // ---- reads: timeout is reportable but does not poison ------------------
 
-  private async read<T>(label: string, fn: (backend: Backend) => Promise<T>): Promise<T> {
-    const deadlineAt = this.beginOp();
+  private async read<T>(
+    label: string,
+    fn: (backend: Backend, context: { signal?: AbortSignal; deadlineAt: number }) => Promise<T>,
+    callOptions?: ObserveCallOptions
+  ): Promise<T> {
+    const deadlineAt = Math.min(this.beginOp(), callOptions?.deadlineAt ?? Infinity);
+    const operationSignal = callOptions?.signal ?? this.batchSignal ?? this.options.signal;
     try {
-      const backend = await this.ensureReady(deadlineAt);
-      this.assertDispatchAllowed(deadlineAt);
+      if (operationSignal?.aborted) {
+        throw new ComputerError("aborted", "the operation was aborted");
+      }
+      let backend: Backend;
       try {
-        return await withDeadline(label, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
+        backend = await withDeadline(
+          "driver setup",
+          this.trackNative(this.ensureReady(deadlineAt)),
+          // ensureReady owns the absolute setup deadline so its late-create
+          // cleanup path can observe the real factory promise. This wrapper
+          // adds only request-local cancellation; racing a second timeout
+          // here could win before ensureReady records the late backend.
+          Number.POSITIVE_INFINITY,
+          operationSignal
+        );
+      } catch (error) {
+        if (isTimeoutError(error)) {
+          throw new ComputerError("command_timeout", (error as Error).message);
+        }
+        throw this.wrapAborted(error);
+      }
+      this.assertDispatchAllowed(deadlineAt, undefined, operationSignal);
+      try {
+        return await withDeadline(
+          label,
+          this.trackNative(fn(backend, { signal: operationSignal, deadlineAt })),
+          Math.max(deadlineAt - Date.now(), 1),
+          operationSignal
+        );
       } catch (error) {
         if (isTimeoutError(error)) {
           throw new ComputerError("command_timeout", (error as Error).message);
@@ -453,12 +509,19 @@ class SessionImpl implements ComputerSession {
 
   private async readObservation(
     target: Target,
-    channels: { accessibility: boolean; screenshot: boolean; maxDimension?: number }
+    channels: { accessibility: boolean; screenshot: boolean; maxDimension?: number },
+    callOptions?: ObserveCallOptions
   ): Promise<NativeObservationLike> {
-    return this.read("observe", (b) => b.observe(target, channels));
+    return this.read("observe", (b, context) => b.observe(target, channels, context), callOptions);
   }
 
-  private async observe(target: Target, opts?: ObserveOptions): Promise<Observation> {
+  private async observe(
+    target: Target,
+    opts?: ObserveOptions,
+    rawCallOptions?: ObserveCallOptions | AbortSignal
+  ): Promise<Observation> {
+    const callOptions = normalizeObserveCallOptions(rawCallOptions);
+    const operationSignal = callOptions.signal ?? this.batchSignal ?? this.options.signal;
     const mode = opts?.mode ?? "auto";
     if (mode !== "auto" && mode !== "ax" && mode !== "image" && mode !== "both") {
       throw new ComputerError("invalid_request", `unknown observation mode: ${String(mode)}`);
@@ -477,16 +540,16 @@ class SessionImpl implements ComputerSession {
     let requested: { accessibility: boolean; screenshot: boolean };
     if (mode === "ax") {
       requested = { accessibility: true, screenshot: false };
-      raw = await this.readObservation(target, requested);
+      raw = await this.readObservation(target, requested, callOptions);
     } else if (mode === "image" || mode === "both") {
       requested = { accessibility: mode === "both", screenshot: true };
-      raw = await this.readObservation(target, requested);
+      raw = await this.readObservation(target, requested, callOptions);
     } else {
       // auto: AX first; only take a screenshot when AX is insufficient. The
       // second frame (with its own metadata) becomes the latest observation.
       // Insufficient means incomplete, degraded/truncated, OR an empty tree:
       // a complete-but-empty AX view cannot suppress the visual fallback.
-      const axOnly = await this.readObservation(target, { accessibility: true, screenshot: false });
+      const axOnly = await this.readObservation(target, { accessibility: true, screenshot: false }, callOptions);
       const axUsable =
         axOnly.elementsComplete === true &&
         axOnly.degraded !== true &&
@@ -497,7 +560,7 @@ class SessionImpl implements ComputerSession {
         raw = axOnly;
       } else {
         requested = { accessibility: true, screenshot: true };
-        raw = await this.readObservation(target, requested);
+        raw = await this.readObservation(target, requested, callOptions);
       }
     }
     const stamped = this.stampObservation(raw);
@@ -520,7 +583,7 @@ class SessionImpl implements ComputerSession {
           const { resizeScreenshot } = await import("./observation-store.js");
           let resized: Awaited<ReturnType<typeof resizeScreenshot>>;
           try {
-            resized = await resizeScreenshot(path, opts.maxDimension, this.options.signal);
+            resized = await resizeScreenshot(path, opts.maxDimension, operationSignal);
           } catch (error) {
             throw new ComputerError(
               "artifact_derivation_failed",

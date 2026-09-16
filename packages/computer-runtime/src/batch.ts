@@ -403,7 +403,10 @@ export async function runBatch(
       };
     }
     try {
-      const observation: Observation = await computer.observe(target, request.observe);
+      const observation: Observation = await computer.observe(target, request.observe, {
+        signal,
+        deadlineAt: deadline
+      });
       if (signal?.aborted) {
         return {
           status: "interrupted",
@@ -470,7 +473,10 @@ async function assertBefore(
         "not_delivered"
       );
     }
-    const observation = await computer.observe(target, { mode: "ax" });
+    const observation = await computer.observe(target, { mode: "ax" }, {
+      signal,
+      deadlineAt: checkDeadline
+    });
     if (now() >= checkDeadline) {
       throw new ComputerError(
         "condition_not_met",
@@ -507,7 +513,10 @@ async function waitForConditionLocally(
   const deadline = now() + budget;
   for (;;) {
     if (signal?.aborted || now() >= deadline) return false;
-    const observation = await computer.observe(target, { mode: "ax" });
+    const observation = await computer.observe(target, { mode: "ax" }, {
+      signal,
+      deadlineAt: deadline
+    });
     if (now() >= deadline) return false;
     if (evaluateCondition(condition, observation)) return true;
     if (now() >= deadline) return false;

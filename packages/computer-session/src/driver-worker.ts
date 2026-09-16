@@ -76,8 +76,21 @@ export function createRealDriverSession(config: DriverConfig): DriverSessionLike
     async call(method, args, signal) {
       const computer = ensure().computer;
       switch (method) {
-        case "observe":
-          return computer.observe(target, (args.options as ObserveOptions | undefined) ?? undefined);
+        case "observe": {
+          // Preserve the host's request-local cancellation/deadline context at
+          // the persistent runtime session boundary. Without this third
+          // argument, a cancelled final observation could continue past the
+          // host deadline even though batch calls already propagated it.
+          const rawDeadline = args.deadlineAt;
+          const deadlineAt = typeof rawDeadline === "number" && Number.isFinite(rawDeadline)
+            ? rawDeadline
+            : undefined;
+          return computer.observe(
+            target,
+            (args.options as ObserveOptions | undefined) ?? undefined,
+            { signal, ...(deadlineAt !== undefined ? { deadlineAt } : {}) }
+          );
+        }
         case "batch":
           return computer.batch(target, args.request as BatchRequest, signal);
         case "close":

@@ -287,6 +287,29 @@ export interface CleanupReport {
   unresolvedRequests: string[];
 }
 
+type StateCommitDisposition = "committed" | "abandoned" | "uncertain";
+
+function classifyExecStateCommit(result: unknown): StateCommitDisposition {
+  if (typeof result !== "object" || result === null) return "uncertain";
+  const value = result as {
+    status?: unknown;
+    stateCommitted?: unknown;
+    error?: { code?: unknown };
+  };
+  if (value.stateCommitted === true) return "committed";
+  // The runner checks the request signal after the durable intent and before
+  // the synchronous state rename. A terminal cancellation with no commit is
+  // therefore conclusive; all other false values remain crash-uncertain.
+  if (value.status === "interrupted" && value.error?.code === "request_cancelled") {
+    return "abandoned";
+  }
+  return "uncertain";
+}
+
+function isMissingStateHistory(error: unknown): boolean {
+  return error instanceof Error && /missing committed state history version/.test(error.message);
+}
+
 export async function startHost(config: HostConfig, deps: HostDeps = {}): Promise<Host> {
   validateSessionId(config.sessionId);
   assertSocketPathLength(config.socketPath);
@@ -731,7 +754,11 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           : null;
       if (beforeObservation !== null) return { status: "interrupted", steps, observationError: beforeObservation };
       try {
-        const observation = await driver.call("observe", { options: request.observe }, signal);
+        const observation = await driver.call(
+          "observe",
+          { options: request.observe, deadlineAt },
+          signal
+        );
         if (signal.aborted || Date.now() >= deadlineAt) {
           return {
             status: "interrupted",
@@ -764,7 +791,8 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
 
   const recordOutcome = async (
     requestId: string,
-    outcome: { status: SessionReply["status"]; result?: unknown; error?: { code: string; message: string } }
+    outcome: { status: SessionReply["status"]; result?: unknown; error?: { code: string; message: string } },
+    stateCommitDisposition?: StateCommitDisposition
   ): Promise<boolean> => {
     // A terminal reply is not published until its terminal event is durable.
     // If persistence fails after input was dispatched, fail closed and keep
@@ -773,7 +801,8 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       await appendJournalEvent(requestId, "request_finished", {
         status: outcome.status,
         ...(outcome.result !== undefined ? { result: outcome.result } : {}),
-        ...(outcome.error !== undefined ? { error: outcome.error } : {})
+        ...(outcome.error !== undefined ? { error: outcome.error } : {}),
+        ...(stateCommitDisposition !== undefined ? { stateCommitDisposition } : {})
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -791,7 +820,13 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   };
 
   const validateRecoveredExecState = (record: Awaited<ReturnType<RequestJournal["read"]>>): boolean => {
-    const value = record.result as { stateCommitted?: unknown; stateVersion?: unknown; stateHash?: unknown } | undefined;
+    const value = record.result as {
+      status?: unknown;
+      stateCommitted?: unknown;
+      stateVersion?: unknown;
+      stateHash?: unknown;
+      error?: { code?: unknown };
+    } | undefined;
     const intent = record.events.find((event) => event.type === "state_commit_intent");
     if (intent === undefined) return value?.stateCommitted !== true;
     const payload = intent.payload;
@@ -803,17 +838,53 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       payload.version !== payload.expectedVersion + 1 ||
       typeof payload.stateHash !== "string"
     ) return false;
+    const finished = [...record.events].reverse().find((event) => event.type === "request_finished");
+    const disposition = finished?.payload.stateCommitDisposition;
+    if (
+      disposition !== undefined &&
+      disposition !== "committed" &&
+      disposition !== "abandoned" &&
+      disposition !== "uncertain"
+    ) return false;
+    const terminalProvesAbandoned =
+      finished?.payload.status === "interrupted" &&
+      value?.status === "interrupted" &&
+      value.stateCommitted === false &&
+      value.error?.code === "request_cancelled";
+    const explicitlyAbandoned =
+      terminalProvesAbandoned && (disposition === undefined || disposition === "abandoned");
+    // Only the runner's post-intent cancellation check can make a no-commit
+    // result conclusive. A failed commit, timeout, unknown delivery, or a
+    // hand-written/malformed terminal marker remains crash-uncertain.
+    if (disposition === "abandoned" && !explicitlyAbandoned) return false;
+    if (disposition === "committed" && value?.stateCommitted !== true) return false;
     try {
-      // Validate the historical snapshot named by the intent. The current
-      // state head may have advanced through later successful execs, but it
-      // must not still be behind an intent whose history rename was only
-      // partially applied.
       const current = loadExecState(stateDir);
+      if (explicitlyAbandoned) {
+        // Prove that the proposed version did not land. The normal case is an
+        // unchanged head with no history file. If a later request consumed
+        // the version, a different hash is also proof that this intent did
+        // not commit. A matching/corrupt/unverifiable snapshot stays blocked.
+        if (current.version < payload.expectedVersion) return false;
+        try {
+          const snapshot = loadExecStateVersion(stateDir, payload.version);
+          // A history entry while the head is still at expectedVersion is an
+          // orphaned partial commit, not proof of this cancellation. Keep the
+          // session blocked rather than letting the next commit collide with
+          // unverifiable history.
+          if (current.version === payload.expectedVersion) return false;
+          return snapshot.hash !== payload.stateHash;
+        } catch (error) {
+          return current.version === payload.expectedVersion && isMissingStateHistory(error);
+        }
+      }
+      // For committed and crash-uncertain intents, only a matching historical
+      // snapshot proves that the atomic rename landed. This preserves the
+      // conservative unknown-crash recovery rule and historical replies.
       if (current.version < payload.version) return false;
       const snapshot = loadExecStateVersion(stateDir, payload.version);
       if (snapshot.hash !== payload.stateHash) return false;
       if (value?.stateCommitted === true) {
-        const finished = [...record.events].reverse().find((event) => event.type === "request_finished");
         return finished !== undefined &&
           typeof value.stateVersion === "number" &&
           value.stateVersion === payload.version &&
@@ -856,7 +927,11 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     const requestTimeoutMs = typeof rawTimeout === "number" && Number.isSafeInteger(rawTimeout) && rawTimeout > 0
       ? rawTimeout
       : request.operation.kind === "exec" ? 60_000 : DEFAULT_BATCH_TIMEOUT_MS;
-    const requestDeadlineAt = request.operation.kind === "observe" ? Number.POSITIVE_INFINITY : requestStartedAt + requestTimeoutMs;
+    // Observation requests have no public timeout field, but they still need
+    // a bounded native read. A persistent driver must receive the same
+    // request-local abort signal as batch/exec calls rather than resetting its
+    // deadline at the observation seam.
+    const requestDeadlineAt = requestStartedAt + requestTimeoutMs;
     // 1. dedup FIRST (before busy): same id returns the recorded outcome.
     const hash = canonicalRequestHash({
       kind: request.operation.kind,
@@ -989,7 +1064,14 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       activeRequestId = undefined;
       return errorReply(request, "journal_error", `could not persist the request start — nothing was dispatched: ${message}`);
     }
-    // 5. execute through the driver, exactly once.
+    // 5. execute through the driver, exactly once. The request-local timer is
+    // the deadline propagation path for a persistent driver: its observe
+    // method receives this signal instead of silently resetting to a fresh
+    // per-call budget.
+    const requestDeadlineTimer = request.operation.kind === "observe" && Number.isFinite(requestDeadlineAt)
+      ? setTimeout(() => requestAbort.abort(new Error("request deadline exceeded")), Math.max(1, requestDeadlineAt - Date.now()))
+      : undefined;
+    requestDeadlineTimer?.unref?.();
     let validatedBatchRequest: ReturnType<typeof validateBatch> | null = null;
     const finishedBatchActions = new Set<number>();
     try {
@@ -1063,12 +1145,20 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
             target: { pid: config.target.pid, windowId: BigInt(config.target.windowId) },
             stateDir,
             driverCall: (method, args, signal) => driver.call(method, args, signal ?? requestAbort.signal),
-            finalObserve: async (signal) => {
+            finalObserve: async (signal, deadlineAt) => {
               if (!driver.alive()) return null;
               // Errors propagate: the runner must be able to report
               // final_observe_failed instead of silently omitting the
-              // observation (F14).
-              return (await driver.call("observe", { options: { mode: "auto" } }, signal ?? requestAbort.signal)) as never;
+              // observation (F14). The absolute execution deadline follows
+              // the call into the persistent driver session as well.
+              return (await driver.call(
+                "observe",
+                {
+                  options: { mode: "auto" },
+                  ...(deadlineAt !== undefined ? { deadlineAt } : {})
+                },
+                signal ?? requestAbort.signal
+              )) as never;
             },
             onExecWorkerSpawn: registerExecWorker,
             onExecWorkerExit: unregisterExecWorker,
@@ -1120,7 +1210,11 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         const status: SessionReply["status"] =
           result.status === "completed" ? "completed" : result.status === "interrupted" ? "interrupted" : result.status === "unknown" ? "unknown" : "failed";
         if (status === "unknown") await terminateBeforeUnknownReply();
-        const durable = await recordOutcome(request.requestId, { status, result });
+        const durable = await recordOutcome(
+          request.requestId,
+          { status, result },
+          classifyExecStateCommit(result)
+        );
         if (!durable) {
           state.value = "unusable";
           afterReply = () => void shutdown("journal-failure", false);
@@ -1138,7 +1232,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         return { schemaVersion: 1, requestId: request.requestId, status, result };
       }
       const method: DriverMethod = request.operation.kind;
-      const args = { options: request.operation.options };
+      const args = { options: request.operation.options, deadlineAt: requestDeadlineAt };
       const result = await driver.call(method, args as Record<string, unknown>, requestAbort.signal);
       const status: SessionReply["status"] = "completed";
       const durable = await recordOutcome(request.requestId, { status, result: result ?? null });
@@ -1156,10 +1250,14 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     } catch (error) {
       const code = error instanceof ComputerError ? error.code : "request_failed";
       const message = error instanceof Error ? error.message : String(error);
+      const observationInterrupted = request.operation.kind === "observe" &&
+        (code === "aborted" || code === "request_cancelled" || code === "command_timeout");
       const status: SessionReply["status"] =
-        (error instanceof ComputerError && error.actionOutcome === "unknown") || isUnknownDelivery(code)
+        (error instanceof ComputerError && error.actionOutcome === "unknown") || (!observationInterrupted && isUnknownDelivery(code))
           ? "unknown"
-          : "failed";
+          : observationInterrupted
+            ? "interrupted"
+            : "failed";
       // A batch call that throws after dispatch has no returned receipts. Its
       // planned actions are therefore conservatively marked unknown before
       // the terminal request event is written.
@@ -1191,7 +1289,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           error: { code: "journal_error", message: "terminal request outcome could not be persisted; delivery is unknown" }
         };
       }
-      if (isUnknownDelivery(code)) {
+      if (!observationInterrupted && isUnknownDelivery(code)) {
         // Unknown native delivery: the driver is no longer trusted. Teardown
         // waits until THIS reply reaches the client (socket teardown must
         // never eat the terminal reply).
@@ -1200,6 +1298,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       }
       return { schemaVersion: 1, requestId: request.requestId, status, error: { code, message } };
     } finally {
+      if (requestDeadlineTimer !== undefined) clearTimeout(requestDeadlineTimer);
       inFlight = null;
       activeRequestId = undefined;
       if (state.value === "running") state.value = "idle";

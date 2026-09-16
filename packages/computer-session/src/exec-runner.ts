@@ -4,7 +4,7 @@
 // only, and builds the ExecResult from HOST-side observations — the script
 // never self-reports success.
 //
-// Channel split (F16): fd4 is the CONTROL channel (RPC requests/replies,
+// Channel split (F16): fd3 is the CONTROL spool (RPC requests/replies,
 // terminal events) with per-frame caps; stdout/stderr are LOGS captured into
 // bounded host-side buffers. Output overflow closes admission and cancels
 // the script immediately — it never silently continues.
@@ -16,6 +16,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -30,6 +31,7 @@ import {
   EXEC_MAX_ACTIONS_LIMIT,
   EXEC_MAX_CODE_BYTES,
   EXEC_MAX_OBSERVATIONS,
+  EXEC_MAX_STATE_BYTES,
   EXEC_MAX_TIMEOUT_MS,
   SCRIPT_METHODS,
   type ExecOptions,
@@ -47,6 +49,14 @@ const EXEC_RPC_QUEUE_LIMIT = 64;
 const NATIVE_SETTLE_MS = 5_000;
 /** Leave room for the session reply envelope around ExecResult. */
 const EXEC_RESULT_MAX_BYTES = MAX_MESSAGE_BYTES - 4 * 1024;
+
+function closeOwnedFd(fd: number): void {
+  try {
+    closeSync(fd);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EBADF") throw error;
+  }
+}
 
 function jsonBytes(value: unknown): number {
   const encoded = JSON.stringify(value, (_key, entry) => (typeof entry === "bigint" ? entry.toString() : entry));
@@ -108,24 +118,42 @@ function boundedResult(result: ExecResult, requestId: string): ExecResult {
   };
 }
 
+let execSpawnTail: Promise<void> = Promise.resolve();
+
 async function spawnExecWorkerWithRetry(
   command: string,
   args: string[],
   options: Parameters<typeof spawn>[2]
 ): Promise<ChildProcess> {
+  // Bun 1.3.14 has a process-wide race while several callers create four
+  // stdio pipes at once. Serialize only the synchronous spawn setup (not the
+  // worker execution) so independent session requests still run in parallel
+  // without losing a child before its control fd is attached.
+  const previous = execSpawnTail;
+  let release!: () => void;
+  execSpawnTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
   let lastError: unknown;
   // Bun 1.3.14 can fail synchronously while creating the four stdio pipes
   // under concurrent desktop-free tests. No child exists on this path, so a
-  // bounded retry is safe and does not replay script/native work.
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return spawn(command, args, options);
-    } catch (error) {
-      lastError = error;
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 25));
+  // bounded retry is safe and does not replay script/native work. The longer
+  // backoff covers the full-suite descriptor contention without changing the
+  // exec request's own timeout budget (the worker has not started yet).
+  try {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      try {
+        return spawn(command, args, options);
+      } catch (error) {
+        lastError = error;
+        if (attempt < 11) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
     }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  } finally {
+    release();
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 export interface ExecDeps {
@@ -138,7 +166,7 @@ export interface ExecDeps {
   driverCall(method: "observe" | "batch", args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   /** One auto-observation at the end when the script made none. Errors
    * PROPAGATE (F14): the runner records final_observe_failed. */
-  finalObserve(signal?: AbortSignal): Promise<Observation | null>;
+  finalObserve(signal?: AbortSignal, deadlineAt?: number): Promise<Observation | null>;
   /** Live-worker tracking for lease ownership + diagnostics (F2/F23). */
   onExecWorkerSpawn?(pid: number | null): Promise<void> | void;
   onExecWorkerExit?(pid: number | null): Promise<void> | void;
@@ -241,6 +269,7 @@ export async function runExec(
 
   const configDir = await mkdtemp(join(tmpdir(), "yk-cu-exec-"));
   const configPath = join(configDir, "exec.json");
+  const controlPath = join(configDir, "control.spool");
   const bootCwd = join(configDir, "boot");
   const { mkdir } = await import("node:fs/promises");
   await mkdir(bootCwd, { recursive: true });
@@ -262,17 +291,33 @@ export async function runExec(
     { mode: 0o600 }
   );
   const { command, args } = internalSpawnCommand("__computer-exec-worker", configPath);
-  const child: ChildProcess = await spawnExecWorkerWithRetry(command, args, {
-    detached: true,
-    // fd4 = control channel; stdout/stderr are pure logs (F16).
-    stdio: ["pipe", "pipe", "pipe", "pipe"],
-    cwd: bootCwd,
-    env: { ...process.env }
-  });
+  // A regular file avoids Bun 1.3.14's concurrent fourth-pipe setup race.
+  // The worker still writes the same fd3 NDJSON control protocol; the host
+  // tails this private spool incrementally while stdin remains the reply pipe.
+  const controlWriteFd = openSync(controlPath, "a", 0o600);
+  let child: ChildProcess;
+  try {
+    child = await spawnExecWorkerWithRetry(command, args, {
+      detached: true,
+      // fd3 = control spool; stdout/stderr are pure logs (F16).
+      stdio: ["pipe", "pipe", "pipe", controlWriteFd],
+      cwd: bootCwd,
+      env: { ...process.env }
+    });
+  } catch (error) {
+    closeOwnedFd(controlWriteFd);
+    await rm(configDir, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+  // The child has its own inherited fd3; the parent tails through a separate
+  // read descriptor so the append offset never affects polling.
+  closeOwnedFd(controlWriteFd);
+  const controlReadFd = openSync(controlPath, "r");
   try {
     await deps.onExecWorkerSpawn?.(child.pid ?? null);
   } catch (error) {
     await stopProcessGroup(child, TERM_GRACE_MS).catch(() => undefined);
+    closeOwnedFd(controlReadFd);
     await rm(configDir, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
@@ -292,7 +337,6 @@ export async function runExec(
   const finish = (result: ExecResult) => {
     if (settled) return;
     settled = true;
-    admissionClosed = true;
     terminal.result = result;
     for (const waiter of rpcWaiters.values()) {
       waiter.reject(new ComputerError("exec_finished", "the exec request has finished"));
@@ -300,7 +344,7 @@ export async function runExec(
     rpcWaiters.clear();
   };
 
-  const admissionError = (): ComputerError | null => {
+  const admissionError = (allowSettled = false): ComputerError | null => {
     if (runUnknownDelivery) {
       return new ComputerError("unknown_delivery", "the request has unknown native delivery", "unknown");
     }
@@ -314,7 +358,7 @@ export async function runExec(
       dispatchAbort.abort();
       return error;
     }
-    if (settled || admissionClosed) {
+    if ((settled && !allowSettled) || admissionClosed) {
       return new ComputerError("exec_finished", "the exec request is no longer accepting RPCs");
     }
     return null;
@@ -393,7 +437,13 @@ export async function runExec(
     actionCount += requestedCost;
     queuedDispatches++;
     const run = async (): Promise<JsonValue> => {
-      const beforeRunError = admissionError();
+      // If the worker's terminal frame was reduced in the same spool poll,
+      // allow this already-admitted RPC to cross one native boundary, but do
+      // not let an inner multi-action batch start a second step after the
+      // worker has exited.
+      let allowSettled = settled;
+      const runAdmissionError = (): ComputerError | null => admissionError(allowSettled);
+      const beforeRunError = runAdmissionError();
       if (beforeRunError !== null) {
         // The worker may emit exec_unawaited immediately after an RPC frame;
         // the host can therefore reject a queued batch before its first step
@@ -414,12 +464,14 @@ export async function runExec(
       try {
         nativeCall = (async () => {
           if (method === "observe") {
-            const beforeObserve = admissionError();
+            const beforeObserve = runAdmissionError();
             if (beforeObserve !== null) throw beforeObserve;
             const observation = (await deps.driverCall("observe", {
-              options: (rpcArgs.options as ObserveOptions | undefined) ?? { mode: "auto" }
+              options: (rpcArgs.options as ObserveOptions | undefined) ?? { mode: "auto" },
+              deadlineAt: runDeadlineAt
             }, dispatchAbort.signal)) as Observation;
-            const afterObserve = admissionError();
+            allowSettled = false;
+            const afterObserve = runAdmissionError();
             if (afterObserve !== null) throw afterObserve;
             return registerObservation(observation);
           }
@@ -433,7 +485,7 @@ export async function runExec(
             );
             for (const [stepIndex, action] of request.actions.entries()) {
               const eventIndex = index + stepIndex;
-              const boundary = admissionError();
+              const boundary = runAdmissionError();
               if (boundary !== null || Date.now() >= batchDeadlineAt) {
                 const error = boundary === null
                   ? { code: "batch_deadline", message: "the batch timeout budget expired before this action was dispatched" }
@@ -443,7 +495,7 @@ export async function runExec(
                 break;
               }
               await deps.onActionStarted?.(eventIndex, action.kind);
-              const afterJournal = admissionError();
+              const afterJournal = runAdmissionError();
               if (afterJournal !== null || Date.now() >= batchDeadlineAt) {
                 const error = afterJournal === null
                   ? { code: "batch_deadline", message: "the batch timeout budget expired before this action was dispatched" }
@@ -495,7 +547,8 @@ export async function runExec(
                 // treat the facade call as observation-dirty so the final
                 // result does not reuse a pre-wait snapshot.
                 mutationsSinceObservation++;
-                const afterAction = admissionError();
+                allowSettled = false;
+                const afterAction = runAdmissionError();
                 if (afterAction !== null || Date.now() >= batchDeadlineAt) {
                   const error = afterAction === null
                     ? { code: "batch_deadline", message: "the batch timeout budget expired after this action" }
@@ -515,7 +568,7 @@ export async function runExec(
               break;
             }
             if (batchStatus === "completed" && request.observe !== undefined) {
-              const beforeObservation = admissionError();
+              const beforeObservation = runAdmissionError();
               if (beforeObservation !== null || Date.now() >= batchDeadlineAt) {
                 const error = beforeObservation === null
                   ? { code: "batch_deadline", message: "the batch timeout budget expired before final observation" }
@@ -523,7 +576,11 @@ export async function runExec(
                 return { status: "interrupted", steps: batchSteps, observationError: error };
               }
               try {
-                const observation = (await deps.driverCall("observe", { options: request.observe }, dispatchAbort.signal)) as Observation;
+                const observation = (await deps.driverCall(
+                  "observe",
+                  { options: request.observe, deadlineAt: batchDeadlineAt },
+                  dispatchAbort.signal
+                )) as Observation;
                 if (Date.now() >= batchDeadlineAt || signal?.aborted) {
                   return {
                     status: "interrupted",
@@ -549,7 +606,7 @@ export async function runExec(
           // Single actions ride a one-step batch so receipts and selector/
           // condition validation stay in ONE implementation.
           const kind = method as ActionReceipt["kind"];
-          const beforeSingle = admissionError();
+          const beforeSingle = runAdmissionError();
           if (beforeSingle !== null) {
             const receipt: ActionReceipt = { index, kind, status: "not_run", error: { code: beforeSingle.code, message: beforeSingle.message } };
             await addReceipt(receipt);
@@ -567,7 +624,7 @@ export async function runExec(
             await addReceipt({ index, kind, status: "not_delivered", error: validationError });
             throw new ComputerError(validationError.code, validationError.message, "not_delivered");
           }
-          const afterValidation = admissionError();
+          const afterValidation = runAdmissionError();
           if (afterValidation !== null) {
             const receipt: ActionReceipt = { index, kind, status: "not_run", error: { code: afterValidation.code, message: afterValidation.message } };
             await addReceipt(receipt);
@@ -683,8 +740,8 @@ export async function runExec(
         return;
       }
       case "exec_done": {
-        const value = message.value as JsonValue;
-        const candidateState = message.state as Record<string, JsonValue>;
+        const value = message.value as unknown;
+        const candidateState = message.state as unknown;
         logs = (message.logs as string[]) ?? [];
         if (runUnknownDelivery) {
           // An unknown native delivery happened during the run: completion
@@ -716,10 +773,14 @@ export async function runExec(
           return;
         }
         try {
-          validateJsonValue(candidateState, 256 * 1024);
+          if (typeof candidateState !== "object" || candidateState === null || Array.isArray(candidateState)) {
+            throw new Error("exec state must be a plain JSON object");
+          }
+          const validatedState = validateJsonValue(candidateState, EXEC_MAX_STATE_BYTES) as Record<string, JsonValue>;
+          const validatedValue = validateJsonValue(value ?? null, EXEC_MAX_STATE_BYTES);
           const candidate: ExecResult = {
             status: "completed",
-            value,
+            value: validatedValue,
             stateVersion: stateBefore.version,
             stateCommitted: false,
             actions: receipts,
@@ -734,7 +795,7 @@ export async function runExec(
             // required final observation. This lets the host reject an
             // oversized aggregate before committing, while a final-read
             // failure still commits the already-valid script state factually.
-            pendingCommit = { value, state: candidateState, result: candidate };
+            pendingCommit = { value: validatedValue, state: validatedState, result: candidate };
             finish(candidate);
           }
         } catch (error) {
@@ -801,13 +862,16 @@ export async function runExec(
   };
 
   const controlReader = new FrameReader();
-  (child.stdio[3] as import("node:stream").Readable | null)?.on("data", (chunk: Buffer) => {
+  let controlOffset = 0;
+  let controlPollFailed = false;
+  const processControlChunk = (chunk: Buffer): void => {
     let frames: string[];
     try {
       frames = controlReader.push(chunk);
     } catch {
       // Oversized/malformed control frame: treat as a protocol failure and
       // reclaim the worker.
+      controlPollFailed = true;
       admissionClosed = true;
       void stopProcessGroup(child, TERM_GRACE_MS);
       return;
@@ -815,7 +879,28 @@ export async function runExec(
     for (const line of frames) {
       if (line.trim() !== "") handleWorkerLine(line);
     }
-  });
+  };
+  const pollControl = (): void => {
+    if (controlPollFailed) return;
+    try {
+      const size = statSync(controlPath).size;
+      const remaining = size - controlOffset;
+      if (remaining <= 0) return;
+      // Keep each poll bounded; FrameReader carries partial UTF-8/frame data.
+      const requested = Math.min(64 * 1024, remaining);
+      const buffer = Buffer.allocUnsafe(requested);
+      const count = readSync(controlReadFd, buffer, 0, requested, controlOffset);
+      if (count <= 0) return;
+      controlOffset += count;
+      processControlChunk(buffer.subarray(0, count));
+    } catch {
+      controlPollFailed = true;
+      admissionClosed = true;
+      void stopProcessGroup(child, TERM_GRACE_MS);
+    }
+  };
+  const controlTimer = setInterval(pollControl, 10);
+  controlTimer.unref();
 
   // stdout/stderr are LOGS: bounded host-side capture; overflow cancels the
   // script immediately (F16) — it can never keep issuing desktop actions.
@@ -874,6 +959,10 @@ export async function runExec(
   child.stderr!.on("data", (chunk: Buffer) => capture("stderr", chunk));
 
   child.on("exit", (code, signal) => {
+    // A short script can write exec_done and exit before the first interval
+    // tick. Drain its regular-file control tail before treating the exit as a
+    // missing terminal frame.
+    pollControl();
     exitInfo = { code, signal: signal ?? null };
     if (!settled) {
       finish({
@@ -958,7 +1047,9 @@ export async function runExec(
       });
     }
   } finally {
-    admissionClosed = true;
+    // Keep the accepted RPCs drainable while the worker's terminal frame and
+    // any same-poll rpc frames are being reduced. `settled` rejects newly
+    // arriving calls; queued calls are allowed to finish below.
     // ALWAYS reclaim the group, including after successful completion (F4):
     // a script's surviving descendants are ordinary cleanup, not success.
     const stop = await stopProcessGroup(child, TERM_GRACE_MS);
@@ -1000,15 +1091,18 @@ export async function runExec(
         };
       }
     }
-    // Settle the in-flight native dispatch (F3): the terminal state must not
-    // leave native work executing behind an idle session.
-    if (inFlightNative !== null) {
+    // Settle queued and in-flight native dispatches (F3): regular-file
+    // control polling can observe an rpc frame at the same time as the worker
+    // exit, so the dispatch may not have assigned inFlightNative yet. Wait for
+    // both counters before publishing the terminal state.
+    if (queuedDispatches > 0 || inFlightNative !== null) {
       const settleDeadline = Date.now() + NATIVE_SETTLE_MS;
-      while (inFlightNative !== null && Date.now() < settleDeadline) {
+      while ((queuedDispatches > 0 || inFlightNative !== null) && Date.now() < settleDeadline) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
-      if (inFlightNative !== null && terminal.result) {
+      if ((queuedDispatches > 0 || inFlightNative !== null) && terminal.result) {
         nativeDispatchUnresolved = true;
+        dispatchAbort.abort();
         terminal.result.status = "unknown";
         terminal.result.error = {
           code: "native_in_flight",
@@ -1016,6 +1110,12 @@ export async function runExec(
         };
       }
     }
+    admissionClosed = true;
+    clearInterval(controlTimer);
+    // The worker may have flushed its final control frame just before group
+    // cleanup. One bounded poll preserves that frame before closing the spool.
+    pollControl();
+    closeOwnedFd(controlReadFd);
     await rm(configDir, { recursive: true, force: true }).catch(() => undefined);
   }
 
@@ -1058,7 +1158,7 @@ export async function runExec(
       } else {
         // Track the final read just like every other native dispatch. A timed
         // out final read cannot be left behind an apparently idle session.
-        const finalNative = Promise.resolve().then(() => deps.finalObserve(dispatchAbort.signal));
+        const finalNative = Promise.resolve().then(() => deps.finalObserve(dispatchAbort.signal, runDeadlineAt));
         let finalSettled = false;
         void finalNative.then(
           () => { finalSettled = true; },

@@ -19,7 +19,7 @@
 - 任何未验证 SDK 能力必须作为 A1 阻塞项报告。
 - 默认测试 desktop-free；计划中的真实操作只对明确指定的测试窗口进行。
 
-> **Integration status (2026-09-15):** Implementation lanes and the exact desktop-free/release gates are applied and evidenced in `docs/verification/2026-09-15-parallel-integration.md`. A1 is still not complete: the strict never-activated Background `Coordinates` success/frontmost-invariance check and session-host TCC attribution were not run. Do not treat the checked implementation bullets as native acceptance.
+> **Integration status (2026-09-15):** The four current lane deltas and the exact desktop-free/release gates are applied to checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` and evidenced in `docs/verification/2026-09-15-parallel-integration.md`. A1 is still not complete: the strict never-activated Background `Coordinates` success/frontmost-invariance check and session-host TCC attribution were not run. Do not treat the checked implementation bullets as native acceptance.
 
 ---
 
