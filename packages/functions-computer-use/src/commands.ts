@@ -217,7 +217,10 @@ async function runReal(
       `computer-use requires macOS arm64 (this machine: ${process.platform} ${process.arch})`
     );
   }
-  const session = createSession({ deadlineAt: Date.now() + COMMAND_DEADLINE_MS });
+  const session = createSession({
+    deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
+    ...("outDir" in request && request.outDir !== undefined ? { artifactsDir: request.outDir } : {})
+  });
   try {
     switch (request.kind) {
       case "apps": {

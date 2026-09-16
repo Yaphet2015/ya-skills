@@ -153,18 +153,64 @@ interface InternalOptions extends SessionOptions {
   cleanupDeadlineMs?: number;
 }
 
+const PREDISPATCH_TOOL_ERROR_CODES = new Set([
+  "stale_element_token",
+  "window_target_not_found",
+  "px_capture_unavailable"
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : undefined;
+}
+
+function driverErrorTag(error: unknown): string | undefined {
+  const root = asRecord(error);
+  if (root === undefined) return undefined;
+  if (typeof root.tag === "string") return root.tag;
+  const nested = asRecord(root.tag);
+  return typeof nested?.tag === "string" ? nested.tag : undefined;
+}
+
+function driverErrorCode(error: unknown): string | undefined {
+  const root = asRecord(error);
+  if (root === undefined) return undefined;
+  const inner = asRecord(root.inner);
+  if (typeof inner?.errorCode === "string") return inner.errorCode;
+  return typeof root.errorCode === "string" ? root.errorCode : undefined;
+}
+
+function isKnownDriverRefusal(error: unknown): boolean {
+  const root = asRecord(error);
+  if (root === undefined) return false;
+  const name = typeof root.name === "string" ? root.name : "";
+  const tag = driverErrorTag(error);
+  // InvalidArguments is rejected while constructing the request, before the
+  // native input boundary. A Tool class name alone is not enough: the SDK can
+  // use DriverError.Tool after an action has already entered the app.
+  if (tag === "InvalidArguments" || name === "DriverError.InvalidArguments") return true;
+  return PREDISPATCH_TOOL_ERROR_CODES.has(driverErrorCode(error) ?? "");
+}
+
+function isAbortError(error: unknown): boolean {
+  return asRecord(error)?.name === "AbortError";
+}
+
 function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && /timed out/.test(error.message);
 }
 
-/** Known, explicitly-refused driver outcomes (nothing was delivered): the
- * driver rejected the request BEFORE synthesizing input. Anything else that
- * escapes a native call mid-flight is treated as unknown delivery (A4). */
-function isKnownDriverRefusal(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  const e = error as { name?: unknown; message?: unknown; tag?: unknown };
-  const signature = `${String(e.name ?? "")} ${String(e.message ?? "")} ${String((e as { tag?: { tag?: unknown } }).tag?.tag ?? "")}`;
-  return /DriverError\.(Tool|InvalidArguments)/.test(signature);
+function driverErrorDiagnostic(error: unknown): string {
+  const base = error instanceof Error ? error.message : String(error);
+  const root = asRecord(error);
+  const tag = driverErrorTag(error);
+  const name = typeof root?.name === "string" ? root.name : "";
+  if (tag !== "Tool" && name !== "DriverError.Tool") return base;
+  const code = driverErrorCode(error);
+  // SDK messages can contain application content. The code is enough to
+  // diagnose delivery classification without copying the whole inner error.
+  return code !== undefined && /^[a-z0-9_]+$/i.test(code)
+    ? `${base} (errorCode=${code})`
+    : base;
 }
 
 function normalizeObserveCallOptions(callOptions?: ObserveCallOptions | AbortSignal): ObserveCallOptions {
@@ -365,7 +411,7 @@ class SessionImpl implements ComputerSession {
   }
 
   private wrapAborted(error: unknown): unknown {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (isAbortError(error)) {
       return new ComputerError("aborted", "the operation was aborted");
     }
     return error;
@@ -993,14 +1039,17 @@ class SessionImpl implements ComputerSession {
         }
         const mapped = this.wrapAborted(error);
         if (mapped instanceof ComputerError) {
-          await finish("not_delivered");
-          throw mapped;
+          // Once fn() has been invoked, an AbortError or other facade error
+          // cannot prove that the native input was never delivered.
+          this.poisoned = true;
+          await finish("unknown");
+          throw new ComputerError(mapped.code, mapped.message, "unknown");
         }
         if (isKnownDriverRefusal(error)) {
           await finish("not_delivered");
           throw new ComputerError(
             "action_refused",
-            `${kind} was refused by the driver: ${error instanceof Error ? error.message : String(error)}`,
+            `${kind} was refused by the driver: ${driverErrorDiagnostic(error)}`,
             "not_delivered"
           );
         }
@@ -1011,7 +1060,7 @@ class SessionImpl implements ComputerSession {
         await finish("unknown");
         throw new ComputerError(
           "action_failed",
-          `${kind} failed with an unclassified native error: ${error instanceof Error ? error.message : String(error)}`,
+          `${kind} failed with an unclassified native error: ${driverErrorDiagnostic(error)}`,
           "unknown"
         );
       }

@@ -40,7 +40,9 @@ The agent-facing usage guide lives in the skill itself
 
 Screenshots and failure dumps default to
 `~/Library/Caches/ya-skills/computer-use/` (dir `0700`, files `0600`).
-Override per-run with `--out-dir`. Nothing is written into the skill install
+Override per-run with `--out-dir`; pass the same directory to `observe` and
+the subsequent coordinate `act` so both commands use the same observation store.
+Nothing is written into the skill install
 directory, the yk install prefix, or your project.
 
 ## Output contract
@@ -62,6 +64,9 @@ directory, the yk install prefix, or your project.
 - Observations are single-use evidence for visual clicks: any delivered
   input invalidates them (60s TTL, geometry + PNG-hash verification across
   commands). `observationId` values are UUIDs.
+- Native SDK errors are `not_delivered` only when a structured code proves
+  rejection before input dispatch. Unclassified `DriverError.Tool` failures and
+  cancellation after dispatch are `unknown`; they stop further session input.
 - Sessions hold an application-level target lease: a second session (or a
   single-step act) on the same app pid is refused while the lease is alive.
   Unknown native delivery marks the session `unusable` and KEEPS the lease —

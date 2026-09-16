@@ -22,7 +22,7 @@ async function makeSession(backend: Partial<ReturnType<typeof fakeBackendFactory
   } as Parameters<typeof fakeBackendFactory>[0];
   const session = createSessionWithBackend(
     { load: async () => ({}), create: fakeBackendFactory(backendWithObserve) },
-    { observationStore: store }
+    { artifactsDir: root, observationStore: store }
   );
   // Persist a valid observation to click against.
   const raw = makeNativeObservation();
@@ -133,7 +133,7 @@ describe("Computer.clickPoint (evidence-bound delivery)", () => {
     }
   });
 
-  test("a background refusal maps to not_delivered; no foreground retry ever", async () => {
+  test("an unstructured Tool error is unknown and cannot be replayed", async () => {
     let calls = 0;
     const events: string[] = [];
     const store = createObservationStore(await mkdtemp(join(tmpdir(), "cu-ref-")));
@@ -161,16 +161,16 @@ describe("Computer.clickPoint (evidence-bound delivery)", () => {
           }
         })
       },
-      { observationStore: store, onAction: (e) => events.push(`${e.phase}:${e.kind}:${e.outcome ?? ""}`) }
+      { artifactsDir: imageDir2, observationStore: store, onAction: (e) => events.push(`${e.phase}:${e.kind}:${e.outcome ?? ""}`) }
     );
     const refusal = await session.computer
       .clickPoint(target, { observationId: observation.id, x: 640, y: 400 })
       .then(() => null, (e: unknown) => e);
     expect(refusal).toBeInstanceOf(ComputerError);
-    expect((refusal as ComputerError).code).toBe("action_refused");
-    expect((refusal as ComputerError).actionOutcome).toBe("not_delivered");
-    expect(calls).toBe(1); // refused once, never retried in the foreground
-    expect(events).toContain("finished:click_point:not_delivered");
+    expect((refusal as ComputerError).code).toBe("action_failed");
+    expect((refusal as ComputerError).actionOutcome).toBe("unknown");
+    expect(calls).toBe(1); // failed once, never retried in the foreground
+    expect(events).toContain("finished:click_point:unknown");
     await session.close();
   });
 

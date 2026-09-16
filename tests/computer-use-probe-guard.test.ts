@@ -12,7 +12,8 @@ import {
   driverMustStart,
   inputAuthorized,
   parseProbeArgs,
-  projectWindowState
+  projectWindowState,
+  projectDriverError
 } from "../scripts/probes/computer-use-agentic.js";
 
 describe("probe arg guard (parseProbeArgs)", () => {
@@ -84,6 +85,17 @@ describe("probe arg guard (parseProbeArgs)", () => {
 });
 
 describe("probe report projection (privacy allowlist)", () => {
+  test("driver errors retain their structured code without copying inner content", () => {
+    const error = Object.assign(new Error("DriverError.Tool"), {
+      tag: "Tool",
+      inner: { errorCode: "px_capture_unavailable", message: "private application content", arbitrary: "private extra field" }
+    });
+    const report = projectDriverError(error);
+    expect(report).toEqual({ raw: "Error: DriverError.Tool", errorCode: "px_capture_unavailable" });
+    expect(JSON.stringify(report)).not.toContain("private");
+    expect(projectDriverError(new Error("unclassified"))).toEqual({ raw: "Error: unclassified" });
+  });
+
   test("projects geometry, scale, pixel size, and frame validity only", () => {
     const report = projectWindowState({
       pid: 1,

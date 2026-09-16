@@ -185,7 +185,7 @@ export interface ProbeReport {
     };
   };
   backgroundClick?: { status: string; detail?: unknown };
-  driverError?: { raw: string };
+  driverError?: { raw: string; errorCode?: string };
 }
 
 // Allowlist projection: geometry, scale, pixel size, frame validity, AX
@@ -213,6 +213,19 @@ export function projectWindowState(state: WindowStateLike): NonNullable<ProbeRep
       truncationReason: state.truncationReason
     }
   };
+}
+
+// Keep the structured SDK code: DriverError.Tool can also be raised after
+// input entered the application. Do not infer delivery from the class name,
+// and do not copy arbitrary inner content into a probe report.
+export function projectDriverError(error: unknown): { raw: string; errorCode?: string } {
+  const report: { raw: string; errorCode?: string } = { raw: String(error) };
+  if (typeof error !== "object" || error === null) return report;
+  const inner = (error as { inner?: unknown }).inner;
+  if (typeof inner !== "object" || inner === null) return report;
+  const code = (inner as { errorCode?: unknown }).errorCode;
+  if (typeof code === "string" && /^[a-z0-9_]+$/i.test(code)) report.errorCode = code;
+  return report;
 }
 
 function emit(report: ProbeReport): void {
@@ -292,15 +305,15 @@ async function runTarget(
         const result = await driver.click(input);
         report.backgroundClick = { status: "returned", detail: result };
       } catch (error) {
-        // Raw driver refusal recorded; no foreground retry, ever.
+        // Preserve the error without claiming that input was never delivered.
         report.backgroundClick = {
-          status: "driver-refused",
-          detail: error instanceof Error ? `${error}` : String(error)
+          status: "driver-error",
+          detail: projectDriverError(error)
         };
       }
     }
   } catch (error) {
-    report.driverError = { raw: error instanceof Error ? `${error}` : String(error) };
+    report.driverError = projectDriverError(error);
     process.exitCode = 5;
   } finally {
     try {

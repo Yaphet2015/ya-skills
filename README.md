@@ -75,6 +75,10 @@ yk pbench capture --source codex --yes   # run a domain command
 
 Browse the full catalog at any time with `yk list`.
 
+For computer-use coordinate actions, pass the same `--out-dir` to `observe` and
+`act`. Native failures with uncertain delivery return `unknown` and stop further
+input in that session. See [computer-use](docs/computer-use.md).
+
 ## 📑 Table of Contents
 
 - [What is ya-skills?](#what-is-ya-skills)
