@@ -1,0 +1,6 @@
+$ bun scripts/package-release.ts --version "0.22.0"
+generated /Users/phaethon/workspace/personal/worktrees/computer-use-takeover-20260916/skills/computer-use/references/api.d.ts (24 declarations)
+generated /Users/phaethon/workspace/personal/worktrees/computer-use-takeover-20260916/skills/computer-e2e/references/api.d.ts (31 declarations)
+   [7ms]  bundle  69 modules
+  [88ms] compile  dist/yk
+packaged ya-skills-v0.22.0-macos-arm64.tar.gz from /Users/phaethon/workspace/personal/worktrees/computer-use-takeover-20260916/dist/release/ya-skills
