@@ -159,6 +159,12 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
         );
       }
       wakeAxOnce(target.pid, woken, callOptions);
+      // @ubjs/core 0.31.0 dereferences asyncOpts.signal whenever the second
+      // argument is present. A deadline is enforced by the session wrapper;
+      // pass an SDK async-options object only when there is an actual signal.
+      const driverCallOptions = callOptions?.signal === undefined
+        ? undefined
+        : { signal: callOptions.signal };
       const state = (await driver.getWindowState(
         sdk.GetWindowStateInput.new({
           pid: target.pid,
@@ -167,7 +173,7 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
           includeScreenshot: options.screenshot,
           ...(options.maxDimension !== undefined ? { maxDimension: options.maxDimension } : {})
         }) as never,
-        callOptions
+        driverCallOptions
       )) as NativeObservation;
       if (callOptions?.signal?.aborted) {
         throw new ComputerError("aborted", "the observation was aborted");

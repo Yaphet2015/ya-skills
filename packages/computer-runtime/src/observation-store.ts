@@ -154,8 +154,26 @@ export function frameMatchesObservation(
 export type ProcessRunner = (
   command: string,
   args: string[],
-  options: { timeoutMs: number; signal?: AbortSignal }
+  options: { timeoutMs: number; signal?: AbortSignal; deadlineAt?: number }
 ) => Promise<{ stdout: string; stderr: string; code: number | null }>;
+
+type ResizeControlOptions = { signal?: AbortSignal; deadlineAt?: number };
+
+function assertResizeAllowed(options: ResizeControlOptions): void {
+  if (options.signal?.aborted) throw new Error("screenshot resize was aborted");
+  if (options.deadlineAt !== undefined && Date.now() >= options.deadlineAt) {
+    throw new Error("screenshot resize timed out: request deadline expired");
+  }
+}
+
+function timeoutWithinDeadline(capMs: number, deadlineAt?: number): number {
+  if (deadlineAt === undefined) return capMs;
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) {
+    throw new Error("screenshot resize timed out: request deadline expired");
+  }
+  return Math.max(1, Math.min(capMs, remaining));
+}
 
 const DEFAULT_RUNNER: ProcessRunner = async (command, args, options) => {
   // Bun 1.3.14's Node child_process pipe setup can intermittently lose a
@@ -163,6 +181,7 @@ const DEFAULT_RUNNER: ProcessRunner = async (command, args, options) => {
   // Bun's native subprocess API when available; Node-built callers retain
   // the equivalent fallback below.
   if (typeof Bun !== "undefined") {
+    if (options.signal?.aborted) throw new Error("sips was aborted");
     const child = Bun.spawn([command, ...args], { stdout: "pipe", stderr: "pipe" });
     let timer: ReturnType<typeof setTimeout> | undefined;
     let aborted = false;
@@ -184,7 +203,10 @@ const DEFAULT_RUNNER: ProcessRunner = async (command, args, options) => {
       }, options.timeoutMs);
     });
     try {
-      if (options.signal?.aborted) throw new Error("sips was aborted");
+      if (options.signal?.aborted) {
+        kill();
+        throw new Error("sips was aborted");
+      }
       return await Promise.race([result, timeout]);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
@@ -205,6 +227,7 @@ const DEFAULT_RUNNER: ProcessRunner = async (command, args, options) => {
     }, options.timeoutMs);
     const onAbort = () => child.kill("SIGKILL");
     options.signal?.addEventListener("abort", onAbort, { once: true });
+    if (options.signal?.aborted) onAbort();
     child.on("error", (error) => {
       clearTimeout(timer);
       reject(error);
@@ -232,26 +255,42 @@ export interface ResizeResult {
  * failure: the original is never silently returned as the "scaled" image. */
 async function runSips(
   args: string[],
-  options: { timeoutMs: number; signal?: AbortSignal },
+  options: { timeoutMs: number; signal?: AbortSignal; deadlineAt?: number },
   runner: ProcessRunner
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   let last: { stdout: string; stderr: string; code: number | null } | undefined;
   let thrown: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
+    const control = { signal: options.signal, deadlineAt: options.deadlineAt };
+    assertResizeAllowed(control);
+    const runOptions = {
+      ...options,
+      timeoutMs: timeoutWithinDeadline(options.timeoutMs, options.deadlineAt)
+    };
     try {
-      const result = await runner("/usr/bin/sips", args, options);
+      const result = await runner("/usr/bin/sips", args, runOptions);
+      // A runner can be injected by tests or a platform wrapper and may not
+      // honor either control itself. Check after every child completion before
+      // accepting bytes or scheduling another retry.
+      assertResizeAllowed(control);
       last = result;
       // A non-zero exit with a concrete diagnostic is a real image error, not
       // a transient process-wiring issue. Retry only empty successful output
       // (the Bun 1.3.14 child-pipe race observed in parallel suites).
       if (result.code !== 0 || result.stdout.trim() !== "") return result;
     } catch (error) {
+      // Preserve request controls even when a child reports a generic error
+      // after being killed. This lets the session classify cancellation as an
+      // interruption rather than as an artifact failure.
+      assertResizeAllowed(control);
       thrown = error;
       const code = typeof error === "object" && error !== null ? (error as NodeJS.ErrnoException).code : undefined;
       if (code !== "ENOENT" || attempt === 2) throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    const waitMs = timeoutWithinDeadline(25, options.deadlineAt);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
+  assertResizeAllowed({ signal: options.signal, deadlineAt: options.deadlineAt });
   if (thrown !== undefined) throw thrown;
   return last ?? { stdout: "", stderr: "", code: null };
 }
@@ -260,15 +299,20 @@ export async function resizeScreenshot(
   originalPath: string,
   maxDimension: number,
   signal?: AbortSignal,
-  runner: ProcessRunner = DEFAULT_RUNNER
+  runner: ProcessRunner = DEFAULT_RUNNER,
+  deadlineAt?: number
 ): Promise<ResizeResult> {
   if (!Number.isFinite(maxDimension) || maxDimension <= 0) {
     throw new Error(`maxDimension must be a positive finite number (got: ${maxDimension})`);
   }
+  const controls = { signal, deadlineAt };
+  assertResizeAllowed(controls);
   const info = await runSips(["-g", "pixelWidth", "-g", "pixelHeight", originalPath], {
     timeoutMs: 5_000,
-    signal
+    signal,
+    deadlineAt
   }, runner);
+  assertResizeAllowed(controls);
   if (info.code !== 0) {
     throw new Error(`sips could not read ${originalPath}: ${info.stderr.trim()}`);
   }
@@ -281,6 +325,7 @@ export async function resizeScreenshot(
   // Existing permissive source paths are repaired before they can be returned
   // or handed to sips; a chmod/stat error is deliberately fatal.
   if (existsSync(originalPath)) ensurePrivateFile(originalPath);
+  assertResizeAllowed(controls);
   const longest = Math.max(width, height);
   if (longest <= maxDimension) {
     // Already within the limit: no derived image needed. The source was
@@ -290,16 +335,19 @@ export async function resizeScreenshot(
   const outputPath = originalPath.replace(/\.png$/i, "") + `-${maxDimension}.png`;
   const resized = await runSips(
     ["-Z", String(maxDimension), originalPath, "--out", outputPath],
-    { timeoutMs: 10_000, signal },
+    { timeoutMs: 10_000, signal, deadlineAt },
     runner
   );
+  assertResizeAllowed(controls);
   if (resized.code !== 0) {
     throw new Error(`sips resize failed: ${resized.stderr.trim()}`);
   }
   const verify = await runSips(["-g", "pixelWidth", "-g", "pixelHeight", outputPath], {
     timeoutMs: 5_000,
-    signal
+    signal,
+    deadlineAt
   }, runner);
+  assertResizeAllowed(controls);
   if (verify.code !== 0) {
     throw new Error(`sips could not verify ${outputPath}: ${verify.stderr.trim()}`);
   }
@@ -316,5 +364,6 @@ export async function resizeScreenshot(
   // would not fix it. Require the derived file to be private; any chmod/stat
   // failure is evidence-persistence failure, never a best-effort warning.
   if (existsSync(outputPath)) ensurePrivateFile(outputPath);
+  assertResizeAllowed(controls);
   return { path: outputPath, width: outWidth, height: outHeight };
 }

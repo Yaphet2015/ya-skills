@@ -27,7 +27,13 @@ import { normalizeElements, projectObservation } from "./observe.js";
 import { artifactPath, ensureOutDir, ensurePrivateFile, saveScreenshot } from "./artifacts.js";
 import { copyFileSync, statSync } from "node:fs";
 import { mapImagePointToDriverPixels } from "./coordinates.js";
-import { frameMatchesObservation, pngSha256, type ObservationStore } from "./observation-store.js";
+import {
+  frameMatchesObservation,
+  pngSha256,
+  resizeScreenshot,
+  type ObservationStore,
+  type ResizeResult
+} from "./observation-store.js";
 import { validateBatch, runBatch, DEFAULT_BATCH_TIMEOUT_MS } from "./batch.js";
 import { acquireTargetLease, LeaseError, type LeaseHandle, type LeaseOwner } from "./target-lease.js";
 import { randomUUID } from "node:crypto";
@@ -117,6 +123,12 @@ export interface SessionOptions {
   deadlineAt?: number;
   artifactsDir?: string;
   observationStore?: ObservationStore;
+  /** Internal test seam for delaying or instrumenting same-frame derivation. */
+  screenshotResizer?: (
+    originalPath: string,
+    maxDimension: number,
+    options: { signal?: AbortSignal; deadlineAt: number }
+  ) => Promise<ResizeResult>;
   /** Shared target-lease enforcement for mutation entry paths. */
   leases?: MutationLeases;
   onAction?: (event: {
@@ -160,6 +172,34 @@ function normalizeObserveCallOptions(callOptions?: ObserveCallOptions | AbortSig
     return { signal: callOptions as AbortSignal };
   }
   return (callOptions ?? {}) as ObserveCallOptions;
+}
+
+interface CombinedAbortSignal {
+  signal?: AbortSignal;
+  dispose(): void;
+}
+
+/** Combine session, batch, and per-call cancellation without mutating any
+ * caller-owned signal. A direct observe signal must not mask a later session
+ * shutdown, because post-read work can still publish an observation. */
+function combineAbortSignals(signals: Array<AbortSignal | undefined>): CombinedAbortSignal {
+  const unique = [...new Set(signals.filter((signal): signal is AbortSignal => signal !== undefined))];
+  if (unique.length === 0) return { dispose() {} };
+  if (unique.length === 1) return { signal: unique[0], dispose() {} };
+
+  const controller = new AbortController();
+  const listeners = unique.map((signal) => {
+    const onAbort = () => controller.abort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    return { signal, onAbort };
+  });
+  return {
+    signal: controller.signal,
+    dispose() {
+      for (const { signal, onAbort } of listeners) signal.removeEventListener("abort", onAbort);
+    }
+  };
 }
 
 function withDeadline<T>(label: string, promise: Promise<T>, deadlineMs: number, signal?: AbortSignal): Promise<T> {
@@ -467,6 +507,38 @@ class SessionImpl implements ComputerSession {
 
   // ---- observe: independent channels, metadata injection, image persist ---
 
+  private observationControlError(
+    deadlineAt: number,
+    operationSignal: AbortSignal | undefined,
+    phase: string
+  ): ComputerError | undefined {
+    // Check every signal source. A direct call can provide its own signal;
+    // batch and session signals still must invalidate post-read publishing.
+    if (
+      operationSignal?.aborted ||
+      this.batchSignal?.aborted ||
+      this.options.signal?.aborted
+    ) {
+      return new ComputerError("aborted", `the observation was aborted ${phase}`);
+    }
+    if (this.closed) {
+      return new ComputerError("session_closed", `the session closed ${phase}`);
+    }
+    if (Date.now() >= deadlineAt) {
+      return new ComputerError("command_timeout", `the observation budget expired ${phase}`);
+    }
+    return undefined;
+  }
+
+  private assertObservationAllowed(
+    deadlineAt: number,
+    operationSignal: AbortSignal | undefined,
+    phase: string
+  ): void {
+    const controlError = this.observationControlError(deadlineAt, operationSignal, phase);
+    if (controlError) throw controlError;
+  }
+
   private stampObservation(raw: unknown): NativeObservationLike {
     return {
       ...(raw as object),
@@ -521,7 +593,6 @@ class SessionImpl implements ComputerSession {
     rawCallOptions?: ObserveCallOptions | AbortSignal
   ): Promise<Observation> {
     const callOptions = normalizeObserveCallOptions(rawCallOptions);
-    const operationSignal = callOptions.signal ?? this.batchSignal ?? this.options.signal;
     const mode = opts?.mode ?? "auto";
     if (mode !== "auto" && mode !== "ax" && mode !== "image" && mode !== "both") {
       throw new ComputerError("invalid_request", `unknown observation mode: ${String(mode)}`);
@@ -536,60 +607,106 @@ class SessionImpl implements ComputerSession {
         (opts.selector.role !== undefined && (typeof opts.selector.role !== "string" || opts.selector.role.length === 0)))) {
       throw new ComputerError("invalid_request", "observation selector is invalid");
     }
-    let raw: NativeObservationLike;
-    let requested: { accessibility: boolean; screenshot: boolean };
-    if (mode === "ax") {
-      requested = { accessibility: true, screenshot: false };
-      raw = await this.readObservation(target, requested, callOptions);
-    } else if (mode === "image" || mode === "both") {
-      requested = { accessibility: mode === "both", screenshot: true };
-      raw = await this.readObservation(target, requested, callOptions);
-    } else {
-      // auto: AX first; only take a screenshot when AX is insufficient. The
-      // second frame (with its own metadata) becomes the latest observation.
-      // Insufficient means incomplete, degraded/truncated, OR an empty tree:
-      // a complete-but-empty AX view cannot suppress the visual fallback.
-      const axOnly = await this.readObservation(target, { accessibility: true, screenshot: false }, callOptions);
-      const axUsable =
-        axOnly.elementsComplete === true &&
-        axOnly.degraded !== true &&
-        axOnly.truncated !== true &&
-        normalizeElements(axOnly.elements).length > 0;
-      if (axUsable && !opts?.maxDimension) {
+
+    // Reserve one operation admission for the complete observe lifecycle. The
+    // nested native reads have their own reservations, but this outer one also
+    // covers synchronous image persistence and asynchronous derivation/store
+    // work so close() cannot clean the backend during final publication.
+    const deadlineAt = Math.min(this.beginOp(), callOptions.deadlineAt ?? Infinity);
+    const combinedSignal = combineAbortSignals([
+      callOptions.signal,
+      this.batchSignal ?? undefined,
+      this.options.signal
+    ]);
+    const operationSignal = combinedSignal.signal;
+    const nativeCallOptions: ObserveCallOptions = {
+      ...(operationSignal !== undefined ? { signal: operationSignal } : {}),
+      deadlineAt
+    };
+    try {
+      this.assertObservationAllowed(deadlineAt, operationSignal, "before native read");
+
+      let raw: NativeObservationLike;
+      let requested: { accessibility: boolean; screenshot: boolean };
+      if (mode === "ax") {
         requested = { accessibility: true, screenshot: false };
-        raw = axOnly;
+        raw = await this.readObservation(target, requested, nativeCallOptions);
+      } else if (mode === "image" || mode === "both") {
+        requested = { accessibility: mode === "both", screenshot: true };
+        raw = await this.readObservation(target, requested, nativeCallOptions);
       } else {
-        requested = { accessibility: true, screenshot: true };
-        raw = await this.readObservation(target, requested, callOptions);
-      }
-    }
-    const stamped = this.stampObservation(raw);
-    const view = projectObservation(stamped, opts ?? {}, requested);
-    if (view.image.status === "usable" || view.image.status === "degraded") {
-      const path = this.persistImage(stamped);
-      if (path === undefined) {
-        throw new ComputerError(
-          "artifact_write_failed",
-          "the driver reported an image channel but supplied no usable image artifact"
+        // auto: AX first; only take a screenshot when AX is insufficient. The
+        // second frame (with its own metadata) becomes the latest observation.
+        // Insufficient means incomplete, degraded/truncated, OR an empty tree:
+        // a complete-but-empty AX view cannot suppress the visual fallback.
+        const axOnly = await this.readObservation(
+          target,
+          { accessibility: true, screenshot: false },
+          nativeCallOptions
         );
+        const axUsable =
+          axOnly.elementsComplete === true &&
+          axOnly.degraded !== true &&
+          axOnly.truncated !== true &&
+          normalizeElements(axOnly.elements).length > 0;
+        if (axUsable && !opts?.maxDimension) {
+          requested = { accessibility: true, screenshot: false };
+          raw = axOnly;
+        } else {
+          requested = { accessibility: true, screenshot: true };
+          raw = await this.readObservation(target, requested, nativeCallOptions);
+        }
       }
-      view.image = { ...view.image, originalPath: path, ...(view.image.geometry ? { path } : {}) };
-      if (view.image.geometry && opts?.maxDimension !== undefined) {
+
+      this.assertObservationAllowed(deadlineAt, operationSignal, "after native read");
+      const stamped = this.stampObservation(raw);
+      const view = projectObservation(stamped, opts ?? {}, requested);
+      this.assertObservationAllowed(deadlineAt, operationSignal, "after projection");
+
+      if (view.image.status === "usable" || view.image.status === "degraded") {
+        let path: string | undefined;
+        try {
+          path = this.persistImage(stamped);
+        } catch (error) {
+          const controlError = this.observationControlError(deadlineAt, operationSignal, "while saving the image");
+          if (controlError) throw controlError;
+          throw error;
+        }
+        this.assertObservationAllowed(deadlineAt, operationSignal, "after image persistence");
+        if (path === undefined) {
+          throw new ComputerError(
+            "artifact_write_failed",
+            "the driver reported an image channel but supplied no usable image artifact"
+          );
+        }
+        view.image = { ...view.image, originalPath: path, ...(view.image.geometry ? { path } : {}) };
+        if (view.image.geometry && opts?.maxDimension !== undefined) {
           // Explicit same-frame derived image via system sips; the original
-          // PNG stays on disk as evidence. Never upscaling. A derivation
-          // failure fails the observe loudly — the caller asked for a scaled
-          // image and must learn it was not produced (the original PNG is
-          // still on disk as evidence).
-          const { resizeScreenshot } = await import("./observation-store.js");
-          let resized: Awaited<ReturnType<typeof resizeScreenshot>>;
+          // PNG stays on disk as evidence. Never upscale. The derivation uses
+          // only the remaining request budget for every child process.
+          let resized: ResizeResult;
           try {
-            resized = await resizeScreenshot(path, opts.maxDimension, operationSignal);
+            const resizePromise = this.options.screenshotResizer
+              ? this.options.screenshotResizer(path, opts.maxDimension, {
+                signal: operationSignal,
+                deadlineAt
+              })
+              : resizeScreenshot(path, opts.maxDimension, operationSignal, undefined, deadlineAt);
+            resized = await withDeadline(
+              "screenshot derivation",
+              resizePromise,
+              Math.max(deadlineAt - Date.now(), 1),
+              operationSignal
+            );
           } catch (error) {
+            const controlError = this.observationControlError(deadlineAt, operationSignal, "during image derivation");
+            if (controlError) throw controlError;
             throw new ComputerError(
               "artifact_derivation_failed",
               `the requested screenshot resize failed: ${error instanceof Error ? error.message : String(error)}`
             );
           }
+          this.assertObservationAllowed(deadlineAt, operationSignal, "after image derivation");
           if (resized.path !== path) {
             view.image = {
               ...view.image,
@@ -603,20 +720,39 @@ class SessionImpl implements ComputerSession {
           }
         }
       }
-    if (this.options.observationStore) {
-      try {
-        await this.options.observationStore.save(view);
-      } catch (error) {
-        // The click credential was not persisted: without the store record
-        // this observation can never back a visual click, so the observe
-        // fails loud instead of returning an unusable "success".
-        throw new ComputerError(
-          "observation_store_failed",
-          `persisting the observation failed: ${error instanceof Error ? error.message : String(error)}`
-        );
+
+      this.assertObservationAllowed(deadlineAt, operationSignal, "before observation store");
+      if (this.options.observationStore) {
+        try {
+          await withDeadline(
+            "observation store save",
+            this.options.observationStore.save(view),
+            Math.max(deadlineAt - Date.now(), 1),
+            operationSignal
+          );
+        } catch (error) {
+          const controlError = this.observationControlError(deadlineAt, operationSignal, "while saving the observation");
+          if (controlError) throw controlError;
+          if (isTimeoutError(error)) {
+            throw new ComputerError("command_timeout", String((error as Error).message));
+          }
+          throw new ComputerError(
+            "observation_store_failed",
+            `persisting the observation failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+        this.assertObservationAllowed(deadlineAt, operationSignal, "after observation store");
       }
+
+      // This is the publication boundary consumed by host/session callers.
+      // Recheck after every await so a request cancelled while its evidence was
+      // being saved cannot be recorded as a completed observation.
+      this.assertObservationAllowed(deadlineAt, operationSignal, "before publish");
+      return view;
+    } finally {
+      combinedSignal.dispose();
+      this.endOp();
     }
-    return view;
   }
 
   // ---- clickPoint: evidence-bound visual click (A4) -----------------------
