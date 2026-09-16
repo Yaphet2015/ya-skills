@@ -51,7 +51,11 @@ import {
   type StopResult
 } from "./process.js";
 import { buildDriverSession, type DriverMethod, type DriverSessionLike } from "./driver-worker.js";
-import { execStateHash, loadExecState, loadExecStateVersion } from "./exec-state.js";
+import {
+  execStateHash,
+  loadExecState,
+  loadExecStateVersion
+} from "./exec-state.js";
 
 export const MAX_IDLE_TIMEOUT_MS = 120_000;
 export const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
@@ -819,7 +823,10 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     return true;
   };
 
-  const validateRecoveredExecState = (record: Awaited<ReturnType<RequestJournal["read"]>>): boolean => {
+  const validateRecoveredExecState = (
+    record: Awaited<ReturnType<RequestJournal["read"]>>,
+    expectedRequestId?: string
+  ): boolean => {
     const value = record.result as {
       status?: unknown;
       stateCommitted?: unknown;
@@ -831,6 +838,9 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     if (intent === undefined) return value?.stateCommitted !== true;
     const payload = intent.payload;
     if (
+      typeof payload.requestId !== "string" ||
+      payload.requestId.length === 0 ||
+      (expectedRequestId !== undefined && payload.requestId !== expectedRequestId) ||
       typeof payload.expectedVersion !== "number" ||
       !Number.isSafeInteger(payload.expectedVersion) ||
       typeof payload.version !== "number" ||
@@ -863,8 +873,8 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       if (explicitlyAbandoned) {
         // Prove that the proposed version did not land. The normal case is an
         // unchanged head with no history file. If a later request consumed
-        // the version, a different hash is also proof that this intent did
-        // not commit. A matching/corrupt/unverifiable snapshot stays blocked.
+        // the version, its durable request id proves that this intent did not
+        // commit even when both requests produced identical JSON content.
         if (current.version < payload.expectedVersion) return false;
         try {
           const snapshot = loadExecStateVersion(stateDir, payload.version);
@@ -873,16 +883,18 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           // session blocked rather than letting the next commit collide with
           // unverifiable history.
           if (current.version === payload.expectedVersion) return false;
-          return snapshot.hash !== payload.stateHash;
+          return snapshot.requestId !== undefined && snapshot.requestId !== payload.requestId;
         } catch (error) {
           return current.version === payload.expectedVersion && isMissingStateHistory(error);
         }
       }
       // For committed and crash-uncertain intents, only a matching historical
-      // snapshot proves that the atomic rename landed. This preserves the
-      // conservative unknown-crash recovery rule and historical replies.
+      // snapshot with the same durable request owner proves that the atomic
+      // rename landed. Content hashes detect corruption; they do not establish
+      // which request performed an identical commit.
       if (current.version < payload.version) return false;
       const snapshot = loadExecStateVersion(stateDir, payload.version);
+      if (snapshot.requestId !== payload.requestId) return false;
       if (snapshot.hash !== payload.stateHash) return false;
       if (value?.stateCommitted === true) {
         return finished !== undefined &&
@@ -909,7 +921,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       if (record.status === "running" && requestId !== activeRequestId) {
         throw new Error(`request ${requestId} is still running; recovery ownership is not proven`);
       }
-      if (record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record)) {
+      if (record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record, requestId)) {
         throw new Error(`request ${requestId} has an unverifiable state commit history`);
       }
     }
@@ -963,7 +975,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         // duplicate is a status query, never a second dispatch.
         return { schemaVersion: 1, requestId: request.requestId, status: "running" };
       }
-      if (request.operation.kind === "exec" && record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record)) {
+      if (request.operation.kind === "exec" && record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record, request.requestId)) {
         state.value = "unusable";
         return {
           schemaVersion: 1,
@@ -976,7 +988,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         // Durable recovery of any terminal result (F8): the events file is
         // the SSOT — a recorded outcome is returned, never rerun. A committed
         // exec state must also agree with its intent/version/hash linkage.
-        if (request.operation.kind === "exec" && !validateRecoveredExecState(record)) {
+        if (request.operation.kind === "exec" && !validateRecoveredExecState(record, request.requestId)) {
           state.value = "unusable";
           return {
             schemaVersion: 1,
@@ -1234,6 +1246,17 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       const method: DriverMethod = request.operation.kind;
       const args = { options: request.operation.options, deadlineAt: requestDeadlineAt };
       const result = await driver.call(method, args as Record<string, unknown>, requestAbort.signal);
+      // A persistent driver may finish an observe after it noticed (or
+      // ignored) cancellation. Recheck at the publication seam so a late
+      // result cannot be recorded as a successful direct observation.
+      if (requestAbort.signal.aborted || Date.now() >= requestDeadlineAt) {
+        throw new ComputerError(
+          requestAbort.signal.aborted ? "request_cancelled" : "command_timeout",
+          requestAbort.signal.aborted
+            ? "the observation was cancelled before completion was published"
+            : "the observation deadline expired before completion was published"
+        );
+      }
       const status: SessionReply["status"] = "completed";
       const durable = await recordOutcome(request.requestId, { status, result: result ?? null });
       if (!durable) {

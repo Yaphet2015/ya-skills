@@ -81,6 +81,165 @@ describe("integration state commit and JSON codec boundaries", () => {
     }
   }, 30_000);
 
+  test("an identical later commit belongs to its own request during recovery", async () => {
+    let intentPersisted = false;
+    let hostSocketPath = "";
+    let sessionId = "";
+    const host = await startIntegrationStateHost({
+      idleTimeoutMs: 60_000,
+      onStateCommitIntent: async (id) => {
+        if (intentPersisted) return;
+        intentPersisted = true;
+        const cancel = await sendControl(
+          hostSocketPath,
+          { kind: "cancel", schemaVersion: 1, sessionId, requestId: id } as never,
+          5_000
+        );
+        expect(cancel.info?.state).toMatch(/running|idle|stopping/);
+      }
+    });
+    hostSocketPath = host.socketPath;
+    sessionId = host.sessionId;
+    try {
+      const cancelled = await host.exec({
+        code: "state.n = 1; return 1;",
+        timeoutMs: 5_000,
+        maxActions: 1
+      });
+      expect(cancelled.reply.status).toBe("interrupted");
+      const sameContent = await host.exec({
+        code: "state.n = 1; return state.n;",
+        timeoutMs: 5_000,
+        maxActions: 1
+      });
+      expect(sameContent.reply.status).toBe("completed");
+      expect(sameContent.result.stateCommitted).toBe(true);
+
+      const next = await host.exec({ code: "return state.n;", timeoutMs: 5_000, maxActions: 1 });
+      expect(next.reply.status).toBe("completed");
+      expect(next.result.value).toBe(1);
+    } finally {
+      await host.close().catch(() => undefined);
+      await host.cleanup();
+    }
+  }, 30_000);
+
+  test("an identical later no-op commit does not poison recovery", async () => {
+    let intentPersisted = false;
+    let hostSocketPath = "";
+    let sessionId = "";
+    const host = await startIntegrationStateHost({
+      idleTimeoutMs: 60_000,
+      onStateCommitIntent: async (id) => {
+        if (intentPersisted) return;
+        intentPersisted = true;
+        await sendControl(
+          hostSocketPath,
+          { kind: "cancel", schemaVersion: 1, sessionId, requestId: id } as never,
+          5_000
+        );
+      }
+    });
+    hostSocketPath = host.socketPath;
+    sessionId = host.sessionId;
+    try {
+      const cancelled = await host.exec({ code: "return null;", timeoutMs: 5_000, maxActions: 1 });
+      expect(cancelled.reply.status).toBe("interrupted");
+      const sameContent = await host.exec({ code: "return null;", timeoutMs: 5_000, maxActions: 1 });
+      expect(sameContent.reply.status).toBe("completed");
+      expect(sameContent.result.stateCommitted).toBe(true);
+      const next = await host.exec({ code: "return null;", timeoutMs: 5_000, maxActions: 1 });
+      expect(next.reply.status).toBe("completed");
+    } finally {
+      await host.close().catch(() => undefined);
+      await host.cleanup();
+    }
+  }, 30_000);
+
+  test("an uncertain commit without durable ownership remains blocked", async () => {
+    const host = await startIntegrationStateHost({ idleTimeoutMs: 60_000 });
+    try {
+      const { createRequestJournal } = await import("@ya-skills/computer-runtime");
+      const stateDir = join(host.root, host.sessionId, "state");
+      const requestsDir = join(host.root, host.sessionId, "requests");
+      const journal = createRequestJournal(requestsDir);
+      const value = { same: true };
+      // This simulates a legacy or crash-ambiguous rename with no request
+      // linkage. Matching content alone cannot establish ownership.
+      const { commitExecState } = await import("../packages/computer-session/src/exec-state.js");
+      commitExecState(stateDir, 0, value);
+      await journal.claim("uncertain-owner", "uncertain-owner-hash");
+      await journal.append("uncertain-owner", {
+        seq: 0,
+        time: Date.now(),
+        type: "request_started",
+        payload: { kind: "exec" }
+      });
+      await journal.append("uncertain-owner", {
+        seq: 1,
+        time: Date.now(),
+        type: "state_commit_intent",
+        payload: {
+          requestId: "uncertain-owner",
+          expectedVersion: 0,
+          version: 1,
+          stateHash: execStateHash(value)
+        }
+      });
+      await journal.append("uncertain-owner", {
+        seq: 2,
+        time: Date.now(),
+        type: "request_finished",
+        payload: {
+          status: "unknown",
+          result: {
+            status: "unknown",
+            stateVersion: 0,
+            stateCommitted: false,
+            actions: [],
+            observations: [],
+            logs: []
+          },
+          stateCommitDisposition: "uncertain"
+        }
+      });
+      const next = await host.batch({ actions: [{ kind: "key", key: "Return" }] });
+      expect(next.status).toBe("failed");
+      expect(next.error?.code).toBe("state_recovery_mismatch");
+    } finally {
+      await host.close().catch(() => undefined);
+      await host.cleanup();
+    }
+  }, 30_000);
+
+  test("JSON own __proto__ keys survive worker, commit, load, and the next exec", async () => {
+    const host = await startIntegrationStateHost({ idleTimeoutMs: 60_000 });
+    try {
+      const first = await host.exec({
+        code: "state.data = JSON.parse('{\"__proto__\":7,\"keep\":1}'); return null;",
+        timeoutMs: 5_000,
+        maxActions: 1
+      });
+      expect(first.reply.status).toBe("completed");
+      expect(first.result.stateCommitted).toBe(true);
+      const loaded = loadExecState(join(host.root, host.sessionId, "state")).value.data as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(loaded, "__proto__")).toBe(true);
+      expect(loaded.__proto__).toBe(7);
+      expect(loaded.keep).toBe(1);
+
+      const next = await host.exec({
+        code: "return { own: Object.prototype.hasOwnProperty.call(state.data, '__proto__'), value: state.data.__proto__, keep: state.data.keep };",
+        timeoutMs: 5_000,
+        maxActions: 1
+      });
+      expect(next.reply.status).toBe("completed");
+      expect(next.result.value).toEqual({ own: true, value: 7, keep: 1 });
+    } finally {
+      await host.close().catch(() => undefined);
+      await host.cleanup();
+    }
+  }, 30_000);
+
   test("an intent with an unknown terminal outcome still blocks recovery without a commit proof", async () => {
     const host = await startIntegrationStateHost({ idleTimeoutMs: 60_000 });
     try {

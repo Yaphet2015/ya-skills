@@ -273,14 +273,19 @@ describe("core lifecycle lane: hosted deadlines and durable state", () => {
     const journal = createRequestJournal(requestsDir);
     try {
       const value = { recovered: true };
-      commitExecState(stateDir, 0, value);
+      commitExecState(stateDir, 0, value, "crashed-exec");
       await journal.claim("crashed-exec", "crash-hash");
       await journal.append("crashed-exec", { seq: 0, time: Date.now(), type: "request_started", payload: { kind: "exec" } });
       await journal.append("crashed-exec", {
         seq: 1,
         time: Date.now(),
         type: "state_commit_intent",
-        payload: { expectedVersion: 0, version: 1, stateHash: execStateHash(value) }
+        payload: {
+          requestId: "crashed-exec",
+          expectedVersion: 0,
+          version: 1,
+          stateHash: execStateHash(value)
+        }
       });
       await writeFile(join(requestsDir, "crashed-exec", "writer.json"), JSON.stringify({ pid: 4_000_123, time: Date.now() }));
       const reply = await host.batch({ actions: [{ kind: "key", key: "A" }] });

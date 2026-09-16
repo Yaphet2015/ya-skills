@@ -1346,7 +1346,7 @@ export async function runExec(
             : { code: "execution_timeout", message: "the execution budget expired during state commit" };
           pendingCommit = null;
         } else {
-          stateVersion = commitExecState(deps.stateDir, stateBefore.version, pendingCommit.state);
+          stateVersion = commitExecState(deps.stateDir, stateBefore.version, pendingCommit.state, requestId);
           result.stateVersion = stateVersion;
           result.stateCommitted = true;
           result.stateHash = hash;

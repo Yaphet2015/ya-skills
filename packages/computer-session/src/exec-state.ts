@@ -19,6 +19,8 @@ export interface ExecStateFile {
   value: Record<string, JsonValue>;
   /** Hash makes a state file self-checking during journal recovery. */
   hash?: string;
+  /** Durable owner of this committed version, when written by a hosted exec. */
+  requestId?: string;
 }
 
 const HISTORY_DIR = "history";
@@ -40,7 +42,9 @@ function readStateFile(file: string): ExecStateFile {
     parsed.version < 0 ||
     typeof parsed.value !== "object" ||
     parsed.value === null ||
-    Array.isArray(parsed.value)
+    Array.isArray(parsed.value) ||
+    (parsed.requestId !== undefined &&
+      (typeof parsed.requestId !== "string" || parsed.requestId.length === 0))
   ) {
     throw new Error(`corrupt state file ${file} — refusing to guess; the session must be reset explicitly`);
   }
@@ -77,7 +81,7 @@ export function loadExecState(directory: string): { version: number; value: Reco
 export function loadExecStateVersion(
   directory: string,
   version: number
-): { version: number; value: Record<string, JsonValue>; hash: string } {
+): { version: number; value: Record<string, JsonValue>; hash: string; requestId?: string } {
   if (!Number.isSafeInteger(version) || version < 0) {
     throw new Error(`invalid state version ${version}`);
   }
@@ -93,14 +97,20 @@ export function loadExecStateVersion(
   if (parsed.version !== version) {
     throw new Error(`state history version mismatch: requested ${version}, found ${parsed.version}`);
   }
-  return { version, value: parsed.value, hash: execStateHash(parsed.value) };
+  return {
+    version,
+    value: parsed.value,
+    hash: execStateHash(parsed.value),
+    ...(parsed.requestId !== undefined ? { requestId: parsed.requestId } : {})
+  };
 }
 
 /** Commit with optimistic version check: only the expected writer wins. */
 export function commitExecState(
   directory: string,
   expectedVersion: number,
-  value: Record<string, JsonValue>
+  value: Record<string, JsonValue>,
+  requestId?: string
 ): number {
   // State is an object contract, not an arbitrary JsonValue. Validate both
   // shape and contents before creating or replacing any state file so a
@@ -110,6 +120,10 @@ export function commitExecState(
     throw new Error("exec state must be a plain JSON object");
   }
   validateJsonValue(value, EXEC_MAX_STATE_BYTES);
+  if (requestId !== undefined && (typeof requestId !== "string" || requestId.length === 0)) {
+    throw new Error("state commit requestId must be a non-empty string");
+  }
+  const hash = execStateHash(value);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const current = loadExecState(directory);
   if (current.version !== expectedVersion) {
@@ -117,7 +131,12 @@ export function commitExecState(
       `state version conflict: expected ${expectedVersion}, found ${current.version} — concurrent writers are impossible; the session state is inconsistent`
     );
   }
-  const next: ExecStateFile = { version: expectedVersion + 1, value, hash: execStateHash(value) };
+  const next: ExecStateFile = {
+    version: expectedVersion + 1,
+    value,
+    hash,
+    ...(requestId !== undefined ? { requestId } : {})
+  };
   const file = statePath(directory);
   const history = join(directory, HISTORY_DIR);
   mkdirSync(history, { recursive: true, mode: 0o700 });
@@ -127,7 +146,11 @@ export function commitExecState(
   // and refuses new admission instead of guessing whether the commit landed.
   if (existsSync(historyFile)) {
     const existing = readStateFile(historyFile);
-    if (existing.version !== next.version || execStateHash(existing.value) !== next.hash) {
+    if (
+      existing.version !== next.version ||
+      execStateHash(existing.value) !== next.hash ||
+      existing.requestId !== next.requestId
+    ) {
       throw new Error(`state history version ${next.version} already contains a different commit`);
     }
   } else {

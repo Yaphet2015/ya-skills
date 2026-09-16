@@ -83,7 +83,15 @@ export function validateJsonValue(
           }
           const output: { [key: string]: JsonValue } = {};
           for (const [key, entry] of Object.entries(node as Record<string, unknown>)) {
-            output[key] = walk(entry, `${path}.${key}`, depth + 1);
+            // Assignment to an ordinary object treats "__proto__" as the
+            // legacy prototype setter. Define an own data property so every
+            // valid JSON key survives normalization and state commit.
+            Object.defineProperty(output, key, {
+              value: walk(entry, `${path}.${key}`, depth + 1),
+              enumerable: true,
+              configurable: true,
+              writable: true
+            });
           }
           return output;
         } finally {
