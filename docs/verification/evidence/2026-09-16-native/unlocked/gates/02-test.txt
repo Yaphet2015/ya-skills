@@ -1,0 +1,827 @@
+$ bun test
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-e2e-cli.test.ts:
+(pass) parseE2EArgs run > files, params, out-dir, timeout, require-version parse cleanly [0.22ms]
+(pass) parseE2EArgs run > defaults: out-dir .computer-e2e/runs, timeout 900000, no params [0.03ms]
+(pass) parseE2EArgs run > run without files is an input error [0.29ms]
+(pass) parseE2EArgs run > duplicate param keys are rejected [0.08ms]
+(pass) parseE2EArgs run > params need key=value and a non-empty key [0.03ms]
+(pass) parseE2EArgs run > unknown flags are rejected before anything runs [0.02ms]
+(pass) parseE2EArgs run > single-value flags given twice are rejected [0.03ms]
+(pass) parseE2EArgs run > the budget must be a positive integer [0.03ms]
+(pass) parseE2EArgs run > missing values are input errors, not consumed positionals [0.02ms]
+(pass) parseE2EArgs run > flags after -- are still flags; bare dash tokens are files (shell expanded globs arrive as paths) [0.01ms]
+(pass) parseE2EArgs history/report > history defaults and --limit [0.02ms]
+(pass) parseE2EArgs history/report > history rejects positionals and bad limits [0.02ms]
+(pass) parseE2EArgs history/report > report takes exactly one run directory [0.03ms]
+(pass) parseE2EArgs history/report > unknown actions are rejected
+(pass) api.d.ts generation > regenerating produces exactly the committed reference (no drift, no workspace mutation) [14.33ms]
+(pass) release pipelines > gates run in the fixed order (asserted by position, not just presence) [2.03ms]
+
+tests/video-transcript.test.ts:
+(pass) video-transcript script parses WebVTT captions and removes rolling overlap [54.52ms]
+(pass) video-transcript script writes Markdown output files [37.83ms]
+
+tests/computer-target-lease.test.ts:
+(pass) target lease (B3) > a live owner blocks a second acquirer (same-process simulates app-level lock) [8.84ms]
+(pass) target lease (B3) > session and one-shot lease users share the same app-level ownership [8.82ms]
+(pass) target lease (B3) > a semantically corrupt lease is blocked instead of overwritten [2.24ms]
+(pass) target lease (B3) > a dead owner's lease is reclaimed [8.50ms]
+(pass) target lease (B3) > an alive-but-identity-changed holder reports owner_identity_unknown instead of stealing [5.65ms]
+(pass) target lease (B3) > releasing someone else's lease is a no-op [4.49ms]
+(pass) target lease (B3) > two real processes cannot both hold the app lease [107.75ms]
+
+tests/computer-runtime.test.ts:
+(pass) clickUnique (exactly-one delivery) > ambiguity never delivers [0.20ms]
+(pass) clickUnique (exactly-one delivery) > zero matches refuses with the description [0.05ms]
+(pass) clickUnique (exactly-one delivery) > a match without an elementToken fails instead of clicking undefined [0.04ms]
+(pass) clickUnique (exactly-one delivery) > two stale-token refusals stop after exactly two deliveries [0.08ms]
+(pass) clickUnique (exactly-one delivery) > non-stale errors stop immediately without retry [0.05ms]
+(pass) clickUnique (exactly-one delivery) > a stale refusal in prose (string message, errorCode field absent) is NOT stale [0.05ms]
+(pass) element normalization and privacy > numeric values become strings, nullish stays absent [0.05ms]
+(pass) element normalization and privacy > password field values are dropped from every output path [0.06ms]
+(pass) waitForElements > resolves once a fresh snapshot satisfies the predicate [0.16ms]
+(pass) waitForElements > only degraded_snapshot is a transient miss; other errors throw immediately [0.07ms]
+(pass) waitForElements > degraded snapshots are retried until the deadline, then rethrown [29.26ms]
+(pass) waitForElements > default poll interval is 500ms [0.05ms]
+(pass) waitForElements > a 60s wait may succeed at t=40s (waitFor is not capped at one 30s op) [0.27ms]
+(pass) waitForElements > timeout uses the injected clock and reports the description [0.12ms]
+(pass) session facade (fake backend) > type/key/scroll ToolResult.isError becomes action_refused and reports not_delivered [1.63ms]
+(pass) session facade (fake backend) > successful actions report delivered and clean results pass through [0.08ms]
+(pass) session facade (fake backend) > click resolves exactly one match through the backend token [0.19ms]
+(pass) session facade (fake backend) > ambiguous click matches never reach the backend click [0.07ms]
+(pass) session facade (fake backend) > windows and snapshot delegate to the backend unchanged [0.10ms]
+(pass) session facade (fake backend) > selectWindow ambiguity stays an error through the shared layer [0.07ms]
+
+tests/computer-observation-store.test.ts:
+(pass) ObservationStore > save + cross-process get round-trips metadata [1.28ms]
+(pass) ObservationStore > non-UUID ids and traversal attempts are rejected [0.33ms]
+(pass) ObservationStore > invalidate marks only the target's observations dead [1.16ms]
+(pass) ObservationStore > missing image file makes an observation unusable [0.48ms]
+(pass) ObservationStore > corrupt metadata JSON fails loud instead of returning junk [0.43ms]
+(pass) ObservationStore > metadata files are user-private (0600) [0.35ms]
+(pass) frameMatchesObservation (cross-command freshness) > identical geometry + identical PNG bytes match [0.24ms]
+(pass) frameMatchesObservation (cross-command freshness) > window move/resize refuses old coordinates [0.15ms]
+(pass) frameMatchesObservation (cross-command freshness) > identical geometry but re-encoded pixels conservatively refuses [0.44ms]
+
+tests/computer-use-out-dir-persistence.test.ts:
+(pass) computer-use one-shot observation artifacts > act reads an observation saved by observe in the same --out-dir [3.21ms]
+
+tests/computer-lane-runtime-freshness.test.ts:
+(pass) runtime lane same-epoch freshness > a naturally observed observation can click after same-epoch fresh-frame validation [1.53ms]
+
+tests/computer-integration-release-loop.test.ts:
+(pass) release integration loop proof helpers > accepts only a body-level readiness frame with the reported child pid [0.07ms]
+(pass) release integration loop proof helpers > proves an owned TERM-ignoring descendant survives TERM before KILL escalation [445.31ms]
+
+tests/computer-conditions.test.ts:
+(pass) evaluateCondition > element_exists matches by exact label [0.67ms]
+(pass) evaluateCondition > element_value requires exactly one match and the exact value [0.20ms]
+(pass) evaluateCondition > degraded or truncated AX never satisfies element conditions [0.07ms]
+(pass) evaluateCondition > window_exists is true when any channel answered [0.04ms]
+(pass) evaluateCondition > focused_element throws unsupported_condition — selected is not focus [0.14ms]
+
+tests/computer-lane-runtime-artifacts.test.ts:
+(pass) runtime lane screenshot privacy > saveScreenshot enforces 0600 on the created artifact [1.47ms]
+(pass) runtime lane screenshot privacy > existing permissive observation images are repaired before store use [2.63ms]
+(pass) runtime lane screenshot privacy > copied screenshot paths are private even when the source is permissive [4.08ms]
+(pass) runtime lane screenshot privacy > resize repairs an existing permissive source and derived path [3.67ms]
+(pass) runtime lane screenshot privacy > privacy validation fails loudly for a non-file path [0.54ms]
+
+tests/computer-integration-native-observation.test.ts:
+(pass) native observation deadline/cancellation propagation > per-call observe signal reaches the backend and aborts its wait [1.20ms]
+(pass) native observation deadline/cancellation propagation > per-call absolute deadline reaches the backend and bounds observation [22.47ms]
+
+tests/computer-use-native.test.ts:
+(skip) compiled yk native (opt-in via YK_CU_NATIVE_TESTS=1) > loads the SDK sidecar in-process from a hostile cwd and reads real apps
+
+tests/computer-observation.test.ts:
+(pass) projectObservation (channel projection) > degraded AX does not degrade the image channel [0.12ms]
+(pass) projectObservation (channel projection) > elementsComplete !== true is never reported complete [0.04ms]
+(pass) projectObservation (channel projection) > missing screenshot data with includeScreenshot semantics is not usable [0.03ms]
+(pass) projectObservation (channel projection) > frameValid=false demotes the image to degraded [0.02ms]
+(pass) projectObservation (channel projection) > geometry is only present when the screenshot channel is usable [0.03ms]
+(pass) projectObservation (channel projection) > selector filtering preserves total/returned and reports incompleteness [0.09ms]
+(pass) projectObservation (channel projection) > zero selector matches does not mean the window is empty [0.03ms]
+(pass) projectObservation (channel projection) > truncated AX is reported as truncated with reason [0.02ms]
+(pass) Computer.observe (mode control) > ax mode never requests a screenshot [0.55ms]
+(pass) Computer.observe (mode control) > auto mode with usable AX does not request a screenshot [0.16ms]
+(pass) Computer.observe (mode control) > auto mode with insufficient AX takes a second frame with the screenshot [1.17ms]
+(pass) Computer.observe (mode control) > image mode ignores AX failures entirely [0.44ms]
+(pass) Computer.observe (mode control) > permission errors still throw in every mode [0.32ms]
+(pass) Computer.observe (mode control) > observations carry identity metadata and are persisted for later clicks [1.07ms]
+
+tests/pbench-exports.test.ts:
+(pass) pbench keeps its public package interface stable [0.03ms]
+
+tests/pbench-commands.test.ts:
+(pass) commands delegate manual runs with normalized options [0.62ms]
+(pass) commands default reports to Markdown and preserve explicit JSON [0.38ms]
+
+tests/computer-exec-terminal.test.ts:
+(pass) exec terminal reduction > drains a multi-block terminal frame after the worker exits [84.85ms]
+(pass) exec terminal reduction > does not treat an unterminated terminal tail as completion [62.22ms]
+(pass) exec terminal reduction > fails closed when the control spool shrinks before EOF [164.59ms]
+(pass) exec terminal reduction > terminal receipt closes admission for every queued independent RPC [65.87ms]
+(pass) exec terminal reduction > keeps a dispatched RPC result and rejects only later queued work [269.07ms]
+(pass) exec terminal reduction > keeps an unawaited observe terminal reply decodable [73.40ms]
+(pass) exec terminal reduction > does not turn an observe failure into an invalid action receipt [64.20ms]
+
+tests/pbench-adapters.test.ts:
+(pass) Codex and Claude sources normalize agent-specific transcripts [1.64ms]
+(pass) Codex and Claude runners honor launch inputs and normalize summaries [1588.28ms]
+
+tests/computer-e2e-release.test.ts:
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > release artifacts must exist when YK_RELEASE_TESTS=1 [0.06ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > install + run + history + report through the compiled yk [382.39ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > external TS relative imports work; hostile package.json does not stop the run [94.88ms]
+
+tests/pbench-authoring.test.ts:
+(pass) authoring captures through an injected registered session source [154.47ms]
+
+tests/computer-integration-e2e-cancellation.test.ts:
+(pass) computer-e2e integration cancellation > preserves an already-aborted caller signal without dispatch [1.25ms]
+(pass) computer-e2e integration cancellation > combines caller cancellation during the first action and blocks later dispatch in afterAll [355.51ms]
+
+tests/computer-lane-protocol-schema.test.ts:
+(pass) protocol lane deep schema validation > validates every declared observation field and nested geometry [1.75ms]
+(pass) protocol lane deep schema validation > restores only declared target ids and preserves arbitrary nested ids [0.93ms]
+(pass) protocol lane deep schema validation > validates exec receipts, logs, finite counters, and observations [6.08ms]
+(pass) protocol lane deep schema validation > validates batch receipt and optional final observation shapes [0.98ms]
+(pass) protocol lane request and control boundaries > validates nested request actions without changing the operation contract [1.06ms]
+(pass) protocol lane request and control boundaries > keeps SessionInfo ids as decimal strings and validates its nested wire shape [0.42ms]
+
+tests/catalog.test.ts:
+(pass) loads valid skill manifests from a local catalog [10.20ms]
+(pass) fails loudly when a skill manifest name does not match its directory [1.56ms]
+(pass) resolves dependencies before requested skills [2.26ms]
+(pass) fails loudly when dependencies contain a cycle [2.06ms]
+(pass) root catalog exposes pbench as a thin capture and replay router [4.56ms]
+(pass) root catalog does not expose the internal pbench runner [1.30ms]
+(pass) root catalog exposes the video-transcript skill [1.26ms]
+(pass) root catalog exposes the design-grill skill [1.15ms]
+(pass) root catalog exposes the eli10 skill [1.12ms]
+(pass) root catalog exposes the validator skill [0.94ms]
+(pass) root catalog exposes the a-share-data skill [0.97ms]
+(pass) root catalog exposes the svg-icons skill without CLI functions [0.89ms]
+(pass) root catalog skill descriptions stay short enough to scan and route [1.07ms]
+(pass) root catalog exposes the show-pr skill as manual-only [1.23ms]
+(pass) show-pr tools validate and build offline [73.39ms]
+(pass) show-pr tools fail loudly without explicit paths [75.70ms]
+(pass) show-pr report embeds evidence and renders mermaid from the example document [50.81ms]
+(pass) show-pr report omits the mermaid bundle when the document has no mermaid [29.86ms]
+(pass) show-pr validator rejects missing evidence files and unlisted design choices [160.64ms]
+(pass) root catalog does not expose demo-only skills [1.11ms]
+(pass) yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs [26.01ms]
+(pass) root catalog exposes the computer-use skill with its command functions [1.26ms]
+(pass) root catalog exposes the computer-e2e skill, installable with all references [3.16ms]
+
+tests/computer-batch.test.ts:
+(pass) validateBatch (full pre-validation, no driver side effects) > the third step being invalid rejects the whole batch [0.05ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > default limit is 5 actions; explicit maxActions raises to the cap of 20 [0.07ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[]} is rejected with %s [0.01ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"explode"}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"type","text":""}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"key","key":"Return","modifiers":[5]}]} is rejected with %s [0.02ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"scroll","spec":{"direction":"sideways","amount":1,"x":0,"y":0}}]} is rejected with %s [0.03ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"wait","condition":{"kind":"window_exists"},"timeoutMs":0}]} is rejected with %s [0.01ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"click_point","point":{"observationId":"nope","x":1,"y":1}}]} is rejected with %s [0.02ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"click_point","point":{"observationId":"01234567-89ab-cdef-0123-456789abcdef","x":-1,"y":1}}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"key","key":"A"}],"timeoutMs":999999} is rejected with %s
+(pass) runBatch (serial execution with partial receipts) > the plan's reference case: unknown delivery stops the batch, no replay [0.31ms]
+(pass) runBatch (serial execution with partial receipts) > a known refusal fails the batch but keeps earlier receipts [0.07ms]
+(pass) runBatch (serial execution with partial receipts) > two normal steps produce exactly ONE final observation [0.10ms]
+(pass) runBatch (serial execution with partial receipts) > click's internal AX lookup is not counted as an LLM observation [0.04ms]
+(pass) runBatch (serial execution with partial receipts) > a failed final observation keeps delivered receipts [0.05ms]
+(pass) runBatch (serial execution with partial receipts) > cancellation during final observation interrupts without claiming completion [0.11ms]
+(pass) runBatch (serial execution with partial receipts) > wait polls local AX until the condition is met, without LLM turns [0.15ms]
+(pass) runBatch (serial execution with partial receipts) > wait timing out fails the batch with condition_timeout [0.05ms]
+(pass) runBatch (serial execution with partial receipts) > focused_element before-conditions fail with unsupported_condition, nothing delivered [0.09ms]
+(pass) runBatch (serial execution with partial receipts) > a satisfied before-condition lets the step run [0.06ms]
+(pass) runBatch (serial execution with partial receipts) > the overall deadline interrupts before later steps [0.06ms]
+(pass) runBatch (serial execution with partial receipts) > aborting the signal stops before the next step [0.03ms]
+(pass) runBatch (serial execution with partial receipts) > click_point steps flow through computer.clickPoint [0.05ms]
+(pass) batch request typing through JSON (wire shape) > a request parsed from JSON validates identically [0.07ms]
+
+tests/install.test.ts:
+(pass) installs requested skills and dependencies into every detected target [2.73ms]
+(pass) overwrites an already installed skill with the catalog version [1.38ms]
+(pass) removes leftover files when overwriting an installed skill [1.36ms]
+(pass) uninstalls requested skills from every existing target without removing dependencies [2.71ms]
+(pass) fails loudly when uninstalling a skill that is not installed [0.56ms]
+
+tests/computer-integration-cli-boundaries.test.ts:
+(pass) public session CLI request envelopes > session batch uses the real encoder/client and keeps CLI metadata outside operation [2.55ms]
+(pass) public session CLI request envelopes > session act routes through the strict batch operation envelope [1.79ms]
+(pass) standalone batch final observation terminal truth > command_timeout during final observation is interrupted, not completed [6.18ms]
+(pass) standalone batch final observation terminal truth > cancellation during final observation is interrupted with delivered receipts [3.89ms]
+(pass) standalone batch final observation terminal truth > a successful final observation that crosses the deadline is still interrupted [147.03ms]
+
+tests/computer-lane-core-lifecycle.test.ts:
+(pass) core lifecycle lane: exec admission and receipts > exec inner batch stops after its absolute deadline and retains not_run receipts [275.31ms]
+(pass) core lifecycle lane: exec admission and receipts > an unawaited inner batch cannot dispatch its later steps [233.31ms]
+(pass) core lifecycle lane: exec admission and receipts > aggregate overflow preserves unknown severity and the dispatched receipt [224.65ms]
+(pass) core lifecycle lane: exec admission and receipts > batch observations share the exec observation cap [324.29ms]
+(pass) core lifecycle lane: exec admission and receipts > mixed single and batch failures retain one run-level receipt per action [116.99ms]
+(pass) core lifecycle lane: exec admission and receipts > cancellation during final observation prevents state commit [869.64ms]
+(pass) core lifecycle lane: hosted deadlines and durable state > hosted batches keep one deadline across journal, actions, and final admission [179.32ms]
+(pass) core lifecycle lane: hosted deadlines and durable state > historical exec replies remain verifiable after the state head advances [143.68ms]
+(pass) core lifecycle lane: hosted deadlines and durable state > a crash after state rename is reconciled before the next admission [14.35ms]
+(pass) core lifecycle lane: lease and host process boundaries > a separate driver crash after the first known result preserves unknown and not_run receipts [183.15ms]
+(pass) core lifecycle lane: lease and host process boundaries > a failed cleanup group blocks reclamation after its dead leader and host [5.82ms]
+(pass) core lifecycle lane: lease and host process boundaries > an unusable host closes its listener/path when explicitly finalized [9.47ms]
+(pass) core lifecycle lane: lease and host process boundaries > standalone opener returns while its detached host remains usable [185.31ms]
+
+tests/computer-integration-e2e-spool.test.ts:
+(pass) computer-e2e integration spool drain > drains a newline-aligned burst larger than two chunks through the production reader [26.19ms]
+(pass) computer-e2e integration spool drain > drains a partial-frame boundary without false truncation or lost cleanup [19.57ms]
+(pass) computer-e2e integration spool drain > retains the worker-exit burst at a newline-aligned boundary [350.19ms]
+(pass) computer-e2e integration spool drain > retains the worker-exit burst at a partial-frame-boundary boundary [320.72ms]
+
+tests/computer-use-act.test.ts:
+(pass) window selection > ambiguity cannot send an action to a different document [0.10ms]
+(pass) window selection > no windows is an explicit error, not a silent success [0.03ms]
+(pass) window selection > requested window id must exist [0.03ms]
+(pass) window selection > a single window resolves without --window
+(pass) element privacy > password values are stripped from every output path [0.05ms]
+(pass) normalizeText > collapses whitespace for stable matching [0.02ms]
+(pass) act error envelopes > a timeout on act reports actionOutcome unknown and forbids replay [0.23ms]
+(pass) act error envelopes > a timeout on perceive stays a plain timeout, not an act-outcome error [0.07ms]
+(pass) act error envelopes > non-timeout act errors pass through untouched [0.05ms]
+(pass) artifact output rules > default cache dir is user-scoped, files private, relative --out-dir becomes absolute [0.63ms]
+
+tests/computer-exec-state.test.ts:
+(pass) validateJsonValue > accepts plain JSON trees [0.05ms]
+(pass) validateJsonValue > rejects %s state leaves [0.10ms]
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > allows repeated acyclic references while still rejecting cycles [0.03ms]
+(pass) validateJsonValue > rejects circular references instead of hanging [0.01ms]
+(pass) validateJsonValue > enforces the byte budget [0.04ms]
+(pass) validateJsonValue > does not silently drop undefined fields (stringify would) [0.01ms]
+(pass) state file commit/load > versions advance; stale writers conflict [1.05ms]
+(pass) state file commit/load > corrupt state files fail loud [0.65ms]
+(pass) state through the host (C2) > the plan's reference case: failed commits do not advance state [181.24ms]
+(pass) state through the host (C2) > repeated request ids do not re-run state increments [121.58ms]
+(pass) state through the host (C2) > non-JSON state from a script is refused, not committed [62.50ms]
+
+tests/svg-icons-compiler.test.ts:
+(pass) compileToSvg draws a 24-grid line with the family stroke [2.53ms]
+(pass) compileToSvg rejects a third ink [0.10ms]
+(pass) compileToSvg splits two inks onto separate colored paths [0.07ms]
+(pass) compileToSvg paints a used glyph with ink 2 [0.11ms]
+(pass) compileToSvg rejects points outside the safe area [0.26ms]
+(pass) compiler source does not mention regen-icons [0.10ms]
+(pass) vendored library includes 225 drawings and compiles folder [18.99ms]
+(pass) cli --emit writes svg using the skill library directory [16.22ms]
+
+tests/computer-lane-e2e-supervisor.test.ts:
+(pass) computer-e2e lane supervisor ownership > missing owner is bounded and reported as uncertain [41.18ms]
+(pass) computer-e2e lane supervisor ownership > corrupt owner is bounded and reported as uncertain [41.07ms]
+(pass) computer-e2e lane supervisor ownership > a structurally invalid owner is also uncertain, not reclaimable [41.74ms]
+(pass) computer-e2e lane supervisor ownership > abort stops lock acquisition without deleting a live owner's lock [27.77ms]
+(pass) computer-e2e lane incremental fd3 spool > reads only the appended bounded chunk and preserves split UTF-8 frames [0.81ms]
+(pass) computer-e2e lane incremental fd3 spool > fails explicitly for a partial tail, truncation, and rotation [1.12ms]
+(pass) computer-e2e lane incremental fd3 spool > enforces the per-frame byte limit and malformed UTF-8 boundary [32.94ms]
+
+tests/pbench-replay.test.ts:
+(pass) replay rejects unknown runners before creating run state [0.73ms]
+(pass) manual replay delegates case validation through its lifecycle boundary [0.55ms]
+
+tests/computer-e2e-supervisor.test.ts:
+(pass) supervise (real child processes, no desktop) > a sync-hanging worker is hard-killed with its process group and never passes [97.42ms]
+(pass) supervise (real child processes, no desktop) > an async-hanging case is interrupted, recorded, and the worker is reaped [510.65ms]
+(pass) supervise (real child processes, no desktop) > passing and declared-skip cases give exit 2 with truthful counts and files [108.38ms]
+(pass) supervise (real child processes, no desktop) > an all-passing external suite exits 0 and its sdk metadata stays null [99.96ms]
+(pass) supervise (real child processes, no desktop) > stdout lies are not events: the fake run_finished line changes nothing [94.52ms]
+(pass) supervise (real child processes, no desktop) > a load error still produces a run directory and a failed report [93.99ms]
+(pass) supervise (real child processes, no desktop) > a failure stops later files from executing [122.63ms]
+(pass) supervise (real child processes, no desktop) > a same-group grandchild dies with the killed worker [454.89ms]
+(pass) supervise (real child processes, no desktop) > require-version mismatch is refused before any run directory exists [0.71ms]
+(pass) signal-driven stops (B2) > an aborted stopSignal SIGTERMs the RUNNING worker group; the summary is incomplete [759.40ms]
+(pass) cleanup failure honesty (B1) > a session cleanup failure cannot reduce to passed/exit 0 [106.85ms]
+(pass) zero-case honesty (N1) > events with run_finished and no cases reduce to exit 2, never 0 [0.89ms]
+(pass) terminal event honesty > run_finished payload exitCode matches the final reduction for a passing run [119.54ms]
+
+tests/computer-screenshot-scale.test.ts:
+(pass) resizeScreenshot (injected runner) > already-small images return the original without a derived file [0.16ms]
+(pass) resizeScreenshot (injected runner) > explicit resize derives a new file and verifies real dimensions [0.11ms]
+(pass) resizeScreenshot (injected runner) > a failed resize never returns the original as if it were scaled [0.09ms]
+(pass) resizeScreenshot (injected runner) > invalid derived dimensions are rejected [0.06ms]
+(pass) resizeScreenshot (injected runner) > invalid maxDimension is rejected before any spawn [0.05ms]
+(pass) resizeScreenshot (real sips, macOS only) > derives a genuinely smaller same-format PNG [48.25ms]
+
+tests/computer-request-journal.test.ts:
+(pass) RequestJournal > the first claim wins; the same id+hash replays nothing, a different hash conflicts [5.04ms]
+(pass) RequestJournal > two journal instances (like two processes) agree on ownership [4.53ms]
+(pass) RequestJournal > events append with strict sequences; a gap fails loud [5.11ms]
+(pass) RequestJournal > a started-without-finished record reads as running (crash view is the host's call) [4.73ms]
+(pass) RequestJournal > a truncated tail line fails loud, never silently succeeds [6.05ms]
+(pass) RequestJournal > invalid event types and payloads are rejected on append [6.06ms]
+(pass) RequestJournal > terminal observations with bigint window ids are serialized without losing the record [6.08ms]
+(pass) RequestJournal > reading an unknown request fails loud [0.27ms]
+(pass) canonicalRequestHash > operation content decides the hash; transport identity does not [0.06ms]
+(pass) canonicalRequestHash > bigint and string windowIds hash identically [0.02ms]
+
+tests/computer-use-api-generation.test.ts:
+(pass) computer-use api.d.ts generation (C4) > regenerating produces exactly the committed reference [21.16ms]
+(pass) computer-use api.d.ts generation (C4) > the exec surface is present; wire internals are absent [0.11ms]
+(pass) computer-use api.d.ts generation (C4) > a typed exec-script fixture compiles against the api [1757.62ms]
+(pass) computer-use api.d.ts generation (C4) > the example script exists next to the reference [0.76ms]
+
+tests/targets.test.ts:
+(pass) creates .agents/skills when a repo has no known skill target [1.04ms]
+(pass) uses existing .claude/skills target [0.42ms]
+(pass) uses existing .agents/skills target [0.37ms]
+(pass) installs to both known targets when both exist [0.83ms]
+(pass) detects existing uninstall targets without creating defaults [0.21ms]
+
+tests/computer-e2e-history.test.ts:
+(pass) reduceEvents > started-but-unfinished cases are interrupted; unstarted are not_run; no run_finished is incomplete [0.11ms]
+(pass) reduceEvents > terminal failure is failed with exit 1 [0.07ms]
+(pass) reduceEvents > explicit skips pass the run with exit 2 [0.02ms]
+(pass) reduceEvents > primary errors and cleanupErrors are reported separately [0.03ms]
+(pass) reduceEvents > an open action without its finished event is an unknown outcome, never passed [0.03ms]
+(pass) reduceEvents > artifact paths may not escape the run directory [0.08ms]
+(pass) reduceEvents > metadata accumulates runtime, application, and worker pids [0.04ms]
+(pass) reduceEvents > formatReport renders status, counts, and the incomplete warning [0.07ms]
+(pass) run directory records > two runs get independent directories with private permissions [0.91ms]
+(pass) run directory records > an empty history directory is an empty list, not an error [0.08ms]
+(pass) run directory records > a truncated tail keeps earlier events and reports incomplete [0.28ms]
+(pass) run directory records > a corrupt middle line refuses to report success [0.21ms]
+
+tests/computer-lane-runtime-admission.test.ts:
+(pass) runtime lane operation admission and close > close drains a lease-waiting mutation and final guard prevents dispatch [11.30ms]
+(pass) runtime lane operation admission and close > close waits for driver setup, then cleans the late backend exactly once [11.95ms]
+(pass) runtime lane operation admission and close > public close remains repeatable after admission has drained [0.23ms]
+
+tests/computer-use-session-cli.test.ts:
+(pass) parseRequest/session parsing (B4) > the plan's reference failures [0.19ms]
+(pass) parseRequest/session parsing (B4) > session subcommands parse strictly [0.15ms]
+(pass) parseRequest/session parsing (B4) > session-owned artifact paths cannot silently ignore --out-dir [0.04ms]
+(pass) parseRequest/session parsing (B4) > observe/batch/act accept --session without --pid [0.04ms]
+(pass) parseRequest/session parsing (B4) > session ids must be UUIDs for status/cancel/close [0.02ms]
+(pass) session command orchestration (desktop-free) > session open resolves an omitted window through a read-only selector [0.33ms]
+(pass) session command orchestration (desktop-free) > unknown sessions fail with unknown_session, no host spawn [0.28ms]
+(pass) self-spawned session host closed loop (real subprocess, fake driver) > open -> observe -> batch -> status -> close reuses one driver [376.36ms]
+
+tests/computer-lane-e2e-control.test.ts:
+(pass) computer-e2e control lane > case timeout aborts the runtime batch before its later actions [280.30ms]
+(pass) computer-e2e control lane > runSuite closes the real observation-store to point-click loop [6.13ms]
+
+tests/computer-point-click.test.ts:
+(pass) Computer.clickPoint (evidence-bound delivery) > an expired observation never reaches the driver [2.52ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > a valid observation maps through the geometry before delivery [2.96ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > same-epoch window movement refuses the old frame before delivery [2.52ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > out-of-image coordinates are refused before any driver call [2.37ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > an unstructured Tool error is unknown and cannot be replayed [3.13ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > a delivered clickPoint invalidates the observation for the next click [3.39ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > a type mutation between observe and clickPoint refuses the old observation [2.02ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > unknown observations and cross-target observations are refused [1.01ms]
+(pass) action outcome classification (A4 refinement) > a known ToolResult refusal is not_delivered; an unknown native exception is unknown [0.29ms]
+
+tests/computer-use-packaging.test.ts:
+(pass) package:release runtime assembly > assembles the sidecar runtime with every required file and no symlinks [1.40ms]
+(pass) package:release runtime assembly > compiled yk loads from a hostile package.json cwd without executing project scripts [147.40ms]
+(pass) package:release runtime assembly > compiled yk build uses the pinned external + autoload + define flags [0.23ms]
+(pass) package:release runtime assembly > package:release script is the single packaging entrypoint both workflows call [0.49ms]
+
+tests/computer-session-release.test.ts:
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > release artifacts exist and include the generated skill api
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the packaged skill references match the generated api
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > help output lists the agentic actions and executes no project scripts
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > invalid exec requests fail cleanly without native load
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the internal exec worker completes pure JS + state + log against a test RPC peer
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the compiled exec loop proves body readiness before TERM/KILL cleanup
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > same exec request-id replays nothing through a re-invoked CLI
+
+tests/computer-lane-protocol-roundtrip.test.ts:
+(pass) protocol lane wire round trips > FrameReader preserves Chinese text when every UTF-8 byte is split [0.10ms]
+(pass) protocol lane wire round trips > the real client preserves arbitrary exec return ids while restoring observation targets [2.49ms]
+
+tests/computer-runtime-action-classification.test.ts:
+(pass) native action error classification > structured Tool timeout and unknown codes are unknown and poison the session [0.45ms]
+(pass) native action error classification > a Tool class name without structured details is unknown and poisons the session [0.13ms]
+(pass) native action error classification > only explicit predispatch Tool codes remain not_delivered [0.19ms]
+(pass) native action error classification > InvalidArguments remains a predispatch refusal [0.09ms]
+(pass) native action error classification > AbortError after the native action seam is unknown and poisons the session [0.10ms]
+
+tests/functions.test.ts:
+(pass) dispatches an underlying function by domain and action [0.19ms]
+(pass) keeps a yk domain in its own package [0.03ms]
+(pass) fails loudly for unknown underlying functions [0.06ms]
+(pass) keeps pbench authoring commands in their own function package [0.04ms]
+
+tests/computer-use-runtime.test.ts:
+(pass) compiled SDK location > locates the SDK beside the real executable, not the cwd [5.26ms]
+(pass) compiled SDK location > uses the symlink-resolved executable location [6.96ms]
+(pass) compiled SDK location > rejects an executable path that resolves through a directory [0.14ms]
+(pass) platform gate > darwin arm64 is supported [0.04ms]
+(pass) platform gate > linux and x64 macs are rejected with a readable message [0.02ms]
+(pass) doctor report (session-backed) > ok when platform, sdk, same-process driver, and permissions all pass [0.31ms]
+(pass) doctor report (session-backed) > missing permissions keep doctor failing with a grant hint, never a dialog [0.07ms]
+(pass) doctor report (session-backed) > a foreign-pid driver is not same-process [0.05ms]
+(pass) doctor report (session-backed) > unsupported platform fails before any session is created [0.04ms]
+(pass) doctor report (session-backed) > missing runtime files point to reinstall, not to a dev checkout [0.12ms]
+(pass) doctor report (session-backed) > cleanup failures surface as hints without failing the report [0.06ms]
+
+tests/pbench.test.ts:
+(pass) pbench workspace handling > initializes and links a local workspace without creating a git repository [1.51ms]
+(pass) pbench case validation > rejects unsafe case-local paths before strict replay [0.85ms]
+(pass) pbench case validation > rejects case-local paths that end in parent directory traversal [0.28ms]
+(pass) pbench capture and replay flow > asks for confirmation with session and baseline details before capture [106.82ms]
+(pass) pbench capture and replay flow > capture command pre-fills private docs from session evidence without TODO authoring placeholders [191.87ms]
+(pass) pbench capture and replay flow > capture blocks strict validation only for the validator when correction history exists without failed verification evidence [186.17ms]
+(pass) pbench capture and replay flow > capture command warns when extracted replay evidence is empty [180.14ms]
+(pass) pbench capture and replay flow > generates a completion validator from a failed replayable verification command [296.62ms]
+(pass) pbench capture and replay flow > generated completion validator preserves captured repo-relative verification cwd [351.03ms]
+(pass) pbench capture and replay flow > unsafe verification cwd leaves validator unfinished and warns during capture [181.93ms]
+(pass) pbench capture and replay flow > captures a Codex session, strict-validates the baseline failure, then finalizes the case [325.16ms]
+(pass) pbench capture and replay flow > finalize rejects a bundle changed after strict validation [292.41ms]
+(pass) pbench capture and replay flow > stores capture authoring transactions under the ya-skills home cache [170.28ms]
+(pass) pbench capture and replay flow > extracts modern Codex payload messages, tool calls, and correction evidence [190.93ms]
+(pass) pbench capture and replay flow > uses session cwd and git baseline when capture is run from another repository [292.26ms]
+(pass) pbench capture and replay flow > finds a session by scanning Codex sessions when the index omits file paths [175.04ms]
+(pass) pbench capture and replay flow > resolves a session by id from its filename without reading competing session files [181.73ms]
+(pass) pbench capture and replay flow > captures a Claude Code session through the platform-agnostic source registry [187.48ms]
+(pass) pbench capture and replay flow > extracts Codex errors and approval/sandbox context as private artifacts [178.41ms]
+(pass) pbench capture and replay flow > detects Bun setup commands for Bun repositories [202.50ms]
+(pass) pbench capture and replay flow > writes public replay files and references them from the case manifest [182.59ms]
+(pass) pbench capture and replay flow > exports a public-only replay capsule without private evaluator files [175.18ms]
+(pass) pbench capture and replay flow > rejects public replay export when public files reference private evaluator paths [158.84ms]
+(pass) pbench capture and replay flow > rejects public replay export when public files reference absolute /private paths [161.48ms]
+(pass) pbench capture and replay flow > strict validation fails before replay when required replay environment is missing [172.25ms]
+(pass) pbench capture and replay flow > captures repo agent instructions and installed skill names into public replay context [186.33ms]
+(pass) pbench capture and replay flow > keeps unproven tracked changes private until replay-start authoring resolves them [145.90ms]
+(pass) pbench capture and replay flow > keeps unproven untracked files out of the public replay capsule [199.41ms]
+(pass) pbench capture and replay flow > does not capture repository-external files through untracked symlinks [154.55ms]
+(pass) pbench capture and replay flow > accepts baseline-only replay-start authoring [239.57ms]
+(pass) pbench capture and replay flow > accepts explicitly curated replay-start files [226.84ms]
+(pass) pbench capture and replay flow > rejects missing or unknown replay-start decisions [311.74ms]
+(pass) pbench capture and replay flow > writes bounded public command observations and private failure draft [140.01ms]
+(pass) pbench capture and replay flow > sanitizes private absolute paths from public command observations before replay [142.78ms]
+(pass) pbench capture and replay flow > writes key observations for failed and verification commands without skill bootstrap noise [145.82ms]
+(pass) pbench capture and replay flow > runs a finalized case with codex while keeping private evaluator paths away from the agent [1080.14ms]
+(pass) pbench capture and replay flow > runs a finalized case with the claude runner and records claude provenance [1195.09ms]
+(pass) pbench capture and replay flow > records run profile and normalized metrics/events for an automatic run [870.52ms]
+(pass) pbench capture and replay flow > captures candidate untracked file contents and redacts required env values [1090.97ms]
+(pass) pbench capture and replay flow > run --manual prepares the skill-mediated worktree [371.49ms]
+(pass) pbench capture and replay flow > installs the manual runner into the worktree's existing Claude skill target [368.10ms]
+(pass) pbench capture and replay flow > installs and removes the manual runner across both existing skill targets [449.43ms]
+(pass) pbench capture and replay flow > preserves a skill target created by setup when removing the injected runner [432.48ms]
+(pass) pbench capture and replay flow > refuses to overwrite an existing runner skill [386.26ms]
+(pass) pbench capture and replay flow > candidate artifacts exclude the injected runner skill [441.11ms]
+(pass) pbench capture and replay flow > starts a skill-mediated run with public capsule, runner skill, and one-shot finish [440.38ms]
+(pass) pbench capture and replay flow > finish consumes the attempt when validation infrastructure fails [437.97ms]
+(pass) pbench capture and replay flow > rejects a second finish while the first attempt is marked finishing [431.34ms]
+(pass) pbench capture and replay flow > treats an atomic finishing marker as a consumed attempt after a crash [398.10ms]
+(pass) pbench capture and replay flow > allows only one concurrent finish to execute private validators [570.30ms]
+(pass) pbench capture and replay flow > preserves profile and writes normalized metrics for a skill-mediated run [483.85ms]
+(pass) pbench capture and replay flow > skill finish returns minimal signal with no run-dir pointer and redacts validator step output (P1.1) [434.05ms]
+(pass) pbench capture and replay flow > codex run keeps full validator outcomes, returns a summary path, and records workspace-write isolation [1070.77ms]
+(pass) pbench capture and replay flow > records harness-agnostic isolation, attempt, priorRunIds, and contaminated provenance (P1.2) [594.43ms]
+(pass) pbench capture and replay flow > prior attempts exclude in-flight and legacy pre-feature runs [445.61ms]
+(pass) pbench capture and replay flow > report surfaces isolation, attempt, and contaminated provenance [419.52ms]
+(pass) pbench capture and replay flow > skill finish copies the access-audit log and flags sensitive reads (P1.3-lite) [500.42ms]
+(pass) pbench capture and replay flow > skill finish writes no access-audit artifact when the agent kept no log [428.10ms]
+(pass) pbench capture and replay flow > access audit flags the capture-skill source but not the runner skill it must read [419.75ms]
+(pass) pbench capture and replay flow > installs the canonical internal runner skill [334.16ms]
+(pass) pbench capture and replay flow > redacts setup-outcomes stdout/stderr in skill mode (review) [360.49ms]
+(pass) pbench capture and replay flow > fails before agent execution when required replay env is missing [295.86ms]
+(pass) pbench capture and replay flow > applies the public starting patch before a skill-mediated agent works [349.07ms]
+(pass) pbench capture and replay flow > records agent failure without running private validators [910.95ms]
+(pass) pbench capture and replay flow > records setup failure before invoking the agent [902.68ms]
+(pass) pbench capture and replay flow > records validator failure and the agent diff [1072.67ms]
+(pass) pbench capture and replay flow > redacts required environment values from persisted runner logs [1043.17ms]
+(pass) pbench capture and replay flow > defaults reports to Markdown and preserves explicit JSON output [1.78ms]
+(pass) pbench capture and replay flow > audits case quality warnings and public private-path leaks without strict replay [146.42ms]
+(pass) pbench capture and replay flow > audits every finalized case in a workspace [323.39ms]
+(pass) pbench capture and replay flow > audits an empty workspace without a cases directory [1.07ms]
+
+tests/computer-use-review-fixes.test.ts:
+(pass) review-fix regressions: host admission and cancellation > two business frames in one socket chunk reserve only one hosted batch [73.37ms]
+(pass) review-fix regressions: host admission and cancellation > a hosted batch durably acknowledges each action before the next dispatch [8.02ms]
+(pass) review-fix regressions: host admission and cancellation > cancelling a hosted multi-action batch stops undispatched actions [110.37ms]
+(pass) review-fix regressions: conservative lock recovery > a stale reclamation lock fails closed instead of unlinking a lock read earlier [7.07ms]
+(pass) review-fix regressions: journal recovery ownership > a recovery-lock loser does not append a terminal event [240.95ms]
+(pass) review-fix regressions: runtime admission > a lease wait that expires before dispatch does not call the backend [77.90ms]
+(pass) review-fix regressions: exec state, output, and delivery > a caught driver-worker loss cannot commit state or report completion [82.04ms]
+(pass) review-fix regressions: exec state, output, and delivery > a late unknown receipt reconciles an already-terminal unawaited result [61.04ms]
+(pass) review-fix regressions: exec state, output, and delivery > state remains committed factually when the final observation times out [1575.04ms]
+(pass) review-fix regressions: exec state, output, and delivery > twenty observations followed by a mutation fail instead of dropping fresh final evidence [338.51ms]
+(pass) review-fix regressions: exec state, output, and delivery > multiple individually valid observations cannot exceed the aggregate result budget [176.56ms]
+
+tests/computer-supervisor-fd-ownership.test.ts:
+(pass) supervisor leaves reused stdio descriptors owned by other files open [97.67ms]
+
+tests/computer-lane-release-packaging.test.ts:
+(skip) release lane: packaged live fake session > deduplicates a live request through a separate packaged driver process
+(skip) release lane: packaged live fake session > a symlinked packaged executable self-spawns its driver worker
+
+tests/computer-runtime-budget.test.ts:
+(pass) session budget (absolute deadline shared by load/create/work) > load 40 + create 40 + work 40 exceeds a 100ms budget and poisons the session [123.60ms]
+(pass) session budget (absolute deadline shared by load/create/work) > a timed-out read blocks a second native operation until it settles [41.42ms]
+(pass) session budget (absolute deadline shared by load/create/work) > work that fits the REMAINING budget succeeds (no per-stage reset) [90.45ms]
+(pass) session budget (absolute deadline shared by load/create/work) > a late-resolving create cleans up its backend and never starts work [95.83ms]
+(pass) session budget (absolute deadline shared by load/create/work) > close retains a target lease while a timed-out native action is still pending [74.63ms]
+(pass) session budget (absolute deadline shared by load/create/work) > close is idempotent and ordered endSession -> shutdown -> destroy [2.74ms]
+(pass) session budget (absolute deadline shared by load/create/work) > a hung endSession exceeds the cleanup budget, destroy still runs, close reports cleanup failure [53.43ms]
+(pass) session budget (absolute deadline shared by load/create/work) > operations on a closed session are refused without touching the backend [0.89ms]
+(pass) session budget (absolute deadline shared by load/create/work) > an aborted signal refuses before any load [0.40ms]
+(pass) session budget (absolute deadline shared by load/create/work) > metadata is read once within the first operation and cached [1.00ms]
+(pass) session budget (absolute deadline shared by load/create/work) > a session with no operations never creates a backend [0.33ms]
+(pass) session budget (absolute deadline shared by load/create/work) > permissions need the sdk but a metadata failure does not break the op [0.76ms]
+
+tests/homebrew-formula.test.ts:
+(pass) drops explicit formula version because brew audit infers it from the GitHub release URL [52.88ms]
+(pass) release-please updates the tap with the formula script instead of rewriting version [0.30ms]
+(pass) formula fixture installs the runtime sidecar beside the yk binary [0.26ms]
+(pass) updater rewrites only url/sha256/version-assert on the runtime-aware fixture [24.75ms]
+(pass) updater fails loudly on a formula without the runtime install shape [20.01ms]
+
+tests/computer-integration-release-workflow.test.ts:
+(pass) release integration workflow coverage > release.yml runs packaged lane coverage after package:release [0.09ms]
+(pass) release integration workflow coverage > release-please.yml runs packaged lane coverage after package:release [0.04ms]
+(pass) release integration workflow coverage > the historical verification pointer delegates mutable current counts [0.21ms]
+
+tests/computer-integration-native-action-outcome.test.ts:
+(pass) native action outcome across the production IPC boundary > structured Tool unknown poisons the session and never dispatches queued actions [58.28ms]
+(pass) native action outcome across the production IPC boundary > a self-spawned unusable host stays queryable until explicit close [196.44ms]
+
+tests/computer-use.test.ts:
+(pass) command registration > registers exactly the nine desktop operations [0.04ms]
+(pass) command registration > descriptions are single-line for help tables [0.05ms]
+(pass) parseRequest rejects before any driver exists > missing pid [0.04ms]
+(pass) parseRequest rejects before any driver exists > unknown flag [0.03ms]
+(pass) parseRequest rejects before any driver exists > non-numeric pid [0.02ms]
+(pass) parseRequest rejects before any driver exists > non-integer pid [0.01ms]
+(pass) parseRequest rejects before any driver exists > zero pid [0.02ms]
+(pass) parseRequest rejects before any driver exists > negative pid [0.01ms]
+(pass) parseRequest rejects before any driver exists > pid beyond safe integer range [0.01ms]
+(pass) parseRequest rejects before any driver exists > window id beyond safe integer range still parses as bigint [0.02ms]
+(pass) parseRequest rejects before any driver exists > window id must be digits only [0.02ms]
+(pass) parseRequest rejects before any driver exists > perceive needs no action [0.01ms]
+(pass) parseRequest rejects before any driver exists > act without an action is rejected [0.03ms]
+(pass) parseRequest rejects before any driver exists > act with two actions is rejected [0.02ms]
+(pass) parseRequest rejects before any driver exists > unknown action flag is rejected [0.01ms]
+(pass) parseRequest rejects before any driver exists > scroll requires a known direction [0.03ms]
+(pass) parseRequest rejects before any driver exists > scroll amount must be a positive integer [0.05ms]
+(pass) parseRequest rejects before any driver exists > scroll coordinates are finite numbers, negatives allowed [0.04ms]
+(pass) parseRequest rejects before any driver exists > click-text and click-contains are distinct predicates [0.03ms]
+(pass) parseRequest rejects before any driver exists > click-contains with click-role is allowed [0.02ms]
+(pass) parseRequest rejects before any driver exists > click-role without click-text/contains is rejected [0.02ms]
+(pass) parseRequest rejects before any driver exists > type with empty text is rejected [0.02ms]
+(pass) parseRequest rejects before any driver exists > type text keeps spaces and newlines [0.01ms]
+(pass) parseRequest rejects before any driver exists > type value that looks like a flag must use equals form [0.01ms]
+(pass) parseRequest rejects before any driver exists > type value must not swallow a subsequent flag [0.02ms]
+(pass) parseRequest rejects before any driver exists > key with empty text is rejected [0.02ms]
+(pass) parseRequest rejects before any driver exists > boolean flags: shot and activate [0.02ms]
+(pass) parseRequest rejects before any driver exists > apps accepts only --name filter [0.03ms]
+(pass) parseRequest rejects before any driver exists > apps --name must be a non-empty value [0.01ms]
+(pass) parseRequest rejects before any driver exists > doctor and apps take no positional args [0.03ms]
+(pass) parseRequest rejects before any driver exists > unknown top-level action is rejected [0.03ms]
+(pass) parseRequest rejects before any driver exists > out-dir accepts a directory path [0.01ms]
+(pass) parseRequest rejects before any driver exists > out-dir rejects an empty value [0.02ms]
+(pass) parseRequest rejects before any driver exists > perceive without --window is unambiguous request for auto-select [0.01ms]
+(pass) command orchestration via injected session > act delivered but post-observe failure reports actionDelivered and never re-types [0.41ms]
+(pass) command orchestration via injected session > refused actions surface action_refused without retry [0.26ms]
+(pass) command orchestration via injected session > an act timeout maps to command_timeout with unknown outcome and a no-replay nextStep [0.11ms]
+(pass) command orchestration via injected session > invalid input never creates a session [0.07ms]
+(pass) command orchestration via injected session > doctor rejects unknown flags through the same strict parser [0.07ms]
+(pass) command orchestration via injected session > windows envelope keeps bigint-safe window ids [0.07ms]
+(pass) command orchestration via injected session > perceive envelope carries pid, windowId, title, elements [0.09ms]
+
+tests/computer-session-host-regressions.test.ts:
+(pass) session host direct observe publication guards > a late direct observe result is interrupted after cancellation [8.29ms]
+
+tests/computer-api-generation.test.ts:
+(pass) api.d.ts generation (agentic surface) > regenerating produces exactly the committed reference (no drift, no workspace mutation) [16.72ms]
+(pass) api.d.ts generation (agentic surface) > the agentic surface is present: observe, batch, point click, conditions [0.08ms]
+(pass) api.d.ts generation (agentic surface) > the generated declarations compile with skipLibCheck=false and are usable [1006.39ms]
+
+tests/computer-integration-state-codec.test.ts:
+(pass) integration state commit and JSON codec boundaries > cancellation after durable intent abandons only that commit and keeps the host usable [119.23ms]
+(pass) integration state commit and JSON codec boundaries > an identical later commit belongs to its own request during recovery [176.93ms]
+(pass) integration state commit and JSON codec boundaries > an identical later no-op commit does not poison recovery [177.45ms]
+(pass) integration state commit and JSON codec boundaries > an uncertain commit without durable ownership remains blocked [10.94ms]
+(pass) integration state commit and JSON codec boundaries > JSON own __proto__ keys survive worker, commit, load, and the next exec [118.26ms]
+(pass) integration state commit and JSON codec boundaries > an intent with an unknown terminal outcome still blocks recovery without a commit proof [10.24ms]
+(pass) integration state commit and JSON codec boundaries > a real encoded exec reply preserves 130 nested arrays and advances state once [60.17ms]
+(pass) integration state commit and JSON codec boundaries > values beyond the shared depth bound fail before state commit with a decodable result [61.27ms]
+
+tests/computer-lane-runtime-cli.test.ts:
+(pass) runtime lane session control recovery > status and close recover a validated unusable session with a dead listener [0.33ms]
+(pass) runtime lane session control recovery > dead-listener fallback refuses malformed session identity [0.09ms]
+(pass) runtime lane session control recovery > a live host and dead-looking listener are not guessed closed [0.08ms]
+(pass) runtime lane session control recovery > public close is repeatable from recorded closed metadata [0.07ms]
+(pass) runtime lane session CLI budget overrides > batch overrides are forwarded through the real command routing to a peer [0.61ms]
+(pass) runtime lane Node boundary > Node invoking the internal worker selector gets unsupported_runtime before spawn [53.63ms]
+
+tests/computer-resize-cleanup.test.ts:
+(pass) resize subprocess cleanup > deadline kills a child that ignores SIGTERM and waits for exit [308.00ms]
+(pass) resize subprocess cleanup > abort kills the child before resize rejects [19.17ms]
+(pass) resize subprocess cleanup > session close waits for a timed-out derived screenshot to exit [307.51ms]
+
+tests/computer-lane-release-benchmark.test.ts:
+(pass) release lane: synthetic benchmark evidence > measures equivalent four-action variants and reports unavailable native/model data [2526.13ms]
+
+tests/computer-session-host.test.ts:
+(pass) session host (B2) > the plan's reference case: driver reuse across observes [23.68ms]
+(pass) session host (B2) > idle timeout closes the session only when nothing is in flight [408.61ms]
+(pass) session host (B2) > status does not extend the idle timer and never calls the driver [417.21ms]
+(pass) session host (B2) > a running request answers concurrent requests with session_busy [342.87ms]
+(pass) session host (B2) > batch replies decode BatchResult with per-step receipts [26.78ms]
+(pass) session host (B2) > a failed or interrupted batch result never maps to a successful reply [24.40ms]
+(pass) session host (B2) > generation mismatches are refused [9.73ms]
+(pass) session host (B2) > business payload text cannot be mistaken for a control command [61.80ms]
+(pass) session host (B2) > exec with structurally invalid input fails loud before any script runs [6.64ms]
+(pass) session host (B2) > cancellation during final observation reports an interrupted batch [6.17ms]
+(pass) session host (B2) > close is idempotent and reports the final state [3.22ms]
+(pass) request dedup at the host (B3) > state and request journals stay isolated under a shared production root [128.43ms]
+(pass) request dedup at the host (B3) > an interrupted batch with an unknown receipt becomes an unknown session reply [6.08ms]
+(pass) request dedup at the host (B3) > cancel closes admission before the delayed native call settles [34.52ms]
+(pass) request dedup at the host (B3) > a delayed native call blocks admission until it settles or the session is unusable [41.29ms]
+(pass) request dedup at the host (B3) > the same request-id runs exactly once; different content conflicts [6.99ms]
+(pass) request dedup at the host (B3) > unknown-delivery failures close the session as unusable (no replay) [9.31ms]
+
+tests/computer-exec-lifecycle.test.ts:
+(pass) exec lifecycle (C3) > the plan's reference case: an infinite loop is reclaimed by the watchdog [110.16ms]
+(pass) exec lifecycle (C3) > timeout waits for a delayed native dispatch before admitting another exec [394.29ms]
+(pass) exec lifecycle (C3) > an infinite async wait is also reclaimed [111.70ms]
+(pass) exec lifecycle (C3) > script-spawned children die with the worker's process group [514.52ms]
+(pass) exec lifecycle (C3) > a successfully returned script still reaps a surviving child [527.54ms]
+(pass) exec lifecycle (C3) > returning with an unawaited facade call refuses completion [63.57ms]
+(pass) exec lifecycle (C3) > a failed single facade action rejects and prevents later actions [60.66ms]
+(pass) exec lifecycle (C3) > late RPCs after the request finished are refused, never delivered [119.33ms]
+(pass) exec lifecycle (C3) > log overflow closes admission before a later input can be delivered [60.22ms]
+(pass) exec lifecycle (C3) > exceeding the action budget fails loud with receipts so far [110.68ms]
+(pass) exec lifecycle (C3) > no stray exec worker processes survive the test run [75.78ms]
+
+tests/computer-lane-runtime-batch.test.ts:
+(pass) runtime lane standalone batch deadline > one absolute budget stops later per-action dispatch and final observation [51.46ms]
+
+tests/computer-use-batch-cli.test.ts:
+(pass) parseRequest (agentic additions) > the plan's reference failures [0.11ms]
+(pass) parseRequest (agentic additions) > a visual click needs observation + both coordinates [0.08ms]
+(pass) parseRequest (agentic additions) > old --x/--y still belong to scroll only [0.05ms]
+(pass) parseRequest (agentic additions) > observe parses mode, max-dimension, and structured selector [0.08ms]
+(pass) parseRequest (agentic additions) > batch requires --file and --request-id together [0.04ms]
+(pass) batchCommand (journal-backed dedup, no replay) > a completed batch prints a schemaVersion-1 result [4.59ms]
+(pass) batchCommand (journal-backed dedup, no replay) > --out-dir is passed to the batch session [4.11ms]
+(pass) batchCommand (journal-backed dedup, no replay) > the same request-id + same content replays nothing [3.50ms]
+(pass) batchCommand (journal-backed dedup, no replay) > the same request-id with different content is a conflict [3.47ms]
+(pass) batchCommand (journal-backed dedup, no replay) > failed and interrupted batches exit non-zero with receipts attached [3.60ms]
+(pass) batchCommand (journal-backed dedup, no replay) > an invalid batch file fails before any driver starts [0.43ms]
+(pass) batchCommand (journal-backed dedup, no replay) > an unknown-delivery mid-run failure records unknown, never replays [3.91ms]
+(pass) batchCommand (journal-backed dedup, no replay) > defaultRequestsDir lives in the user cache [0.03ms]
+(pass) observeCommand (schemaVersion-1 envelope) > prints target + observation with independent channels [0.11ms]
+(pass) observeCommand (schemaVersion-1 envelope) > --out-dir is passed to the observation session [0.04ms]
+(pass) observeCommand (schemaVersion-1 envelope) > a missing window fails with the shared selector error [0.08ms]
+
+tests/pbench-reporting.test.ts:
+(pass) reporting returns an empty stable report [0.27ms]
+(pass) reporting separates trusted cohorts and tolerates malformed artifacts [2.35ms]
+(pass) reporting keeps legacy runs visible but unevaluated [0.54ms]
+(pass) reporting renders comparable cohorts as Markdown [0.57ms]
+
+tests/computer-coordinates.test.ts:
+(pass) mapImagePoint (sent pixels -> window-local points) > the plan's reference case: input units are POINTS, not a blind x2 [0.02ms]
+(pass) mapImagePoint (sent pixels -> window-local points) > unscaled 2x Retina capture maps sent pixels to half-size points [0.01ms]
+(pass) mapImagePoint (sent pixels -> window-local points) > non-integer scale factors keep precision without early rounding [0.01ms]
+(pass) mapImagePoint (sent pixels -> window-local points) > non-zero inputBounds origin offsets the mapped point
+(pass) mapImagePoint (sent pixels -> window-local points) > out-of-image and non-finite points are rejected: {"x":-1,"y":300} [0.02ms]
+(pass) mapImagePoint (sent pixels -> window-local points) > out-of-image and non-finite points are rejected: {"x":500,"y":-0.5}
+(pass) mapImagePoint (sent pixels -> window-local points) > out-of-image and non-finite points are rejected: {"x":1440,"y":300}
+(pass) mapImagePoint (sent pixels -> window-local points) > out-of-image and non-finite points are rejected: {"x":500,"y":900}
+(pass) mapImagePoint (sent pixels -> window-local points) > out-of-image and non-finite points are rejected: {"x":null,"y":300}
+(pass) mapImagePoint (sent pixels -> window-local points) > out-of-image and non-finite points are rejected: {"x":null,"y":300}
+(pass) mapImagePoint (sent pixels -> window-local points) > invalid geometry is rejected: {"sourceWidth":0,"sourceHeight":800} [0.02ms]
+(pass) mapImagePoint (sent pixels -> window-local points) > invalid geometry is rejected: {"sourceWidth":-10,"sourceHeight":800}
+(pass) mapImagePoint (sent pixels -> window-local points) > invalid geometry is rejected: {"sourceWidth":null,"sourceHeight":800}
+(pass) mapImagePointToDriverPixels (window-local points -> driver pixels) > unscaled capture is the identity on pixel coordinates [0.01ms]
+(pass) mapImagePointToDriverPixels (window-local points -> driver pixels) > scaled sent image upscales back to source pixels
+(pass) mapImagePointToDriverPixels (window-local points -> driver pixels) > the far corner of the sent image maps inside the source frame or refuses [0.01ms]
+
+tests/computer-session-protocol.test.ts:
+(pass) request codec > the plan's reference case round-trips [0.05ms]
+(pass) request codec > windowId arrives as a decimal string and becomes bigint exactly once [0.07ms]
+(pass) request codec > schema version mismatches fail with protocol_version [0.05ms]
+(pass) request codec > non-decimal windowIds are rejected, never coerced [0.06ms]
+(pass) request codec > unknown operations and missing identity are rejected [0.05ms]
+(pass) request codec > business reply decoding restores a complete observation and rejects an incomplete one [0.12ms]
+(pass) request codec > replies round-trip and reject bad versions [0.05ms]
+(pass) FrameReader > partial frames buffer until the newline; multiple frames split apart [0.04ms]
+(pass) FrameReader > a frame over the 1MiB cap aborts immediately (not after buffering) [12.56ms]
+(pass) FrameReader > split UTF-8 bytes are decoded without replacement characters [0.10ms]
+(pass) FrameReader > several independently valid frames in one chunk do not share a size budget [6.52ms]
+(pass) FrameReader > a partial frame past the cap aborts before completion [6.46ms]
+(pass) sessionPaths > the plan's traversal attempt is rejected [0.06ms]
+(pass) sessionPaths > paths derive from the id; socket stays short and in the temp root [0.71ms]
+(pass) client/server roundtrip over a real socket > one request, one reply; a slow second write is not sent on timeout [305.68ms]
+
+tests/computer-use-exec-cli.test.ts:
+(pass) parseRequest exec (C4) > the plan's reference failures [0.35ms]
+(pass) parseRequest exec (C4) > exec requires session + file + request-id together [0.27ms]
+(pass) parseRequest exec (C4) > exec never takes --pid (sessions own the target) [0.06ms]
+(pass) execCommand (C4) > a missing script file fails before any session work [1.15ms]
+(pass) execCommand (C4) > an unknown session fails with unknown_session [1.96ms]
+
+tests/computer-e2e-suite.test.ts:
+(pass) runSuite (sequential, fail-stop) > beforeAll failure runs afterAll once, marks cases not_run, records the phase [1.52ms]
+(pass) runSuite (sequential, fail-stop) > a failed case stops the file; later cases are not_run; afterAll still runs once [1.00ms]
+(pass) runSuite (sequential, fail-stop) > sync and async throws both fail the case [0.72ms]
+(pass) runSuite (sequential, fail-stop) > declared skip and runtime skip both record reasons without running [0.64ms]
+(pass) runSuite (sequential, fail-stop) > ctx.skip without a reason is a failure, not a skip [0.56ms]
+(pass) runSuite (sequential, fail-stop) > an afterAll failure is recorded without masking the primary case error [0.66ms]
+(pass) runSuite (sequential, fail-stop) > a case exceeding its budget is interrupted and stops the file [33.43ms]
+(pass) runSuite (sequential, fail-stop) > steps emit begin/end pairs bound to the running case [1.66ms]
+(pass) runSuite (sequential, fail-stop) > a failing step marks the step failed and the case failed [0.81ms]
+(pass) runSuite (sequential, fail-stop) > suite_collected is emitted before any hook event, with the full case list [0.57ms]
+(pass) runSuite (sequential, fail-stop) > context passthrough: params keep identity and the computer delegates to the injected one [0.52ms]
+(pass) runSuite (sequential, fail-stop) > a timed-out case's zombie continuation is refused, not delivered [129.56ms]
+(pass) validateSuite > accepts the minimal shape [0.90ms]
+(pass) validateSuite > rejects wrong apiVersion [0.18ms]
+(pass) validateSuite > rejects empty suites [0.08ms]
+(pass) validateSuite > rejects duplicate case ids [0.10ms]
+(pass) validateSuite > rejects non-function run [0.07ms]
+(pass) validateSuite > rejects negative and NaN budgets [0.15ms]
+(pass) validateSuite > rejects non-object values [0.05ms]
+(pass) exitCodeFor > all passed is 0 [0.14ms]
+(pass) exitCodeFor > any skipped or not_run (no failures) is 2 [0.04ms]
+(pass) exitCodeFor > no cases at all is 2 [0.02ms]
+(pass) exitCodeFor > failures, interruptions, and errors are 1 [0.09ms]
+
+tests/cli.test.ts:
+(pass) yk list discovers plan-jury in the root catalog [53.34ms]
+(pass) yk list prints each skill on one aligned line so names stay scannable [28.78ms]
+(pass) yk exposes conventional help flags [47.26ms]
+(pass) yk exposes conventional version flags [46.63ms]
+(pass) yk install -g uses the user-level default target [28.98ms]
+(pass) yk install --global uses every existing user-level target [28.03ms]
+(pass) yk uninstall -g removes a user-level skill without touching the current repository [85.11ms]
+(pass) yk uninstall --global removes from every existing user-level target [60.76ms]
+(pass) pbench documentation matches registered cross-agent workflows [0.58ms]
+(pass) yk prints subcommand and function help without side effects [97.71ms]
+
+tests/computer-exec-worker.test.ts:
+(pass) exec through the session host (C1, real exec-worker subprocess) > the plan's reference case: scripted actions + observe + state [111.74ms]
+(pass) exec through the session host (C1, real exec-worker subprocess) > state persists across exec calls only on clean completion [178.63ms]
+(pass) exec through the session host (C1, real exec-worker subprocess) > static import syntax fails with a readable error, nothing delivered [60.00ms]
+(pass) exec through the session host (C1, real exec-worker subprocess) > oversized code is rejected before any worker spawns [14.00ms]
+(pass) exec through the session host (C1, real exec-worker subprocess) > unknown RPC methods from a hostile script are refused, no desktop effect [59.66ms]
+(pass) createScriptComputer (fixed wire surface) > every facade method maps to exactly one fixed RPC name [0.42ms]
+
+tests/computer-integration-observation-budget.test.ts:
+(pass) observation request budget finalization > cancellation during store.save stays interrupted after save resolves [0.46ms]
+(pass) observation request budget finalization > deadline remains active while store.save is pending [100.50ms]
+(pass) derived screenshot request budget > passes only the remaining deadline to each child process and fails after expiry [62.28ms]
+(pass) derived screenshot request budget > cancellation during a child process remains an interruption signal [31.67ms]
+(pass) host-style observation finalization > real host and driver-worker IPC preserve interrupted final observation [69.40ms]
+(pass) host-style observation finalization > driver-worker factory forwards cancellation through production runtime finalization [0.78ms]
+(pass) host-style observation finalization > session cancellation interrupts derivation even with a live per-call signal [0.47ms]
+(pass) host-style observation finalization > deadline expires during derivation before it can publish [102.19ms]
+(pass) host-style observation finalization > a delayed derivation is cancelled without becoming an artifact failure [1.16ms]
+
+tests/computer-use-probe-guard.test.ts:
+{"mode":"no-target","driverStarted":false}
+(pass) probe arg guard (parseProbeArgs) > no arguments is a valid no-target run that must not start the driver [0.04ms]
+(pass) probe arg guard (parseProbeArgs) > --help is usage, never a driver start [0.02ms]
+(pass) probe arg guard (parseProbeArgs) > a target requests the driver; without --allow-input it stays read-only [0.09ms]
+(pass) probe arg guard (parseProbeArgs) > --allow-input authorizes input and accepts window-target click coordinates [0.07ms]
+(pass) probe arg guard (parseProbeArgs) > click coordinates without --allow-input are rejected before any driver work [0.04ms]
+(pass) probe arg guard (parseProbeArgs) > --allow-input without a target is rejected [0.04ms]
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver [0.02ms]
+(pass) probe arg guard (parseProbeArgs) > "--window" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe report projection (privacy allowlist) > driver errors retain their structured code without copying inner content [0.10ms]
+(pass) probe report projection (privacy allowlist) > projects geometry, scale, pixel size, and frame validity only [0.10ms]
+(pass) probe report projection (privacy allowlist) > never emits elements, labels, values, markdown, or image bytes [0.05ms]
+(pass) probe CLI desktop-free behavior > running without a target exits 0 and reports driverStarted:false [15.90ms]
+(pass) probe CLI desktop-free behavior > click coordinates without --allow-input exit non-zero with the guard reason [12.02ms]
+
+10 tests skipped:
+(skip) compiled yk native (opt-in via YK_CU_NATIVE_TESTS=1) > loads the SDK sidecar in-process from a hostile cwd and reads real apps
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > release artifacts exist and include the generated skill api
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the packaged skill references match the generated api
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > help output lists the agentic actions and executes no project scripts
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > invalid exec requests fail cleanly without native load
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the internal exec worker completes pure JS + state + log against a test RPC peer
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the compiled exec loop proves body readiness before TERM/KILL cleanup
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > same exec request-id replays nothing through a re-invoked CLI
+(skip) release lane: packaged live fake session > deduplicates a live request through a separate packaged driver process
+(skip) release lane: packaged live fake session > a symlinked packaged executable self-spawns its driver worker
+
+ 644 pass
+ 10 skip
+ 0 fail
+ 2345 expect() calls
+Ran 654 tests across 76 files. [54.54s]

@@ -1,6 +1,6 @@
 # 原生验收续测 — 2026-09-16
 
-状态：后台坐标输入已取得 SDK 与打包产品路径的成功证据。原生取消发现的结果误分类已在 `b096bfd` 修复并通过无桌面/打包门禁；解锁后实机复跑确认首动作 unknown、第二动作 not_run，但发现独立宿主提前退出的问题。完整原生验收尚未通过。
+状态：后台坐标输入已取得 SDK 与打包产品路径的成功证据。原生取消发现的结果误分类已在 `b096bfd` 修复并通过无桌面/打包门禁；解锁后实机复跑确认首动作 unknown、第二动作 not_run，并发现、修复了独立宿主提前退出的问题。最新完整门禁通过；宿主修复后的原生复跑因再次锁屏未执行输入。完整原生验收尚未通过。
 
 基线是本地分支 `computer-use/takeover-20260916` 的 `0cbaffd`。本轮最初的打包二进制来自已通过前轮门禁的产品提交 `82b1f49`，Bun 1.3.14、SDK 0.27.0。下面的“修复前”证据不能当作最终修复版的验收结果。
 
@@ -11,8 +11,8 @@
 | 项目 | 结果 |
 |---|---|
 | 原生 AX 阻塞后取消 | 首动作 unknown、第二动作 not_run；释放回调后实际计数为 1，符合未知结果分类。[实机记录](evidence/2026-09-16-native/unlocked/cancel/cancel-run.json)。 |
-| unknown 后控制面 | 未通过：独立宿主退出，status 回退为 unusable 且保留 lease；重复请求和新请求连接失败。[记录](evidence/2026-09-16-native/unlocked/cancel/terminal-checks.json)。进程内 host 回归未覆盖此退出路径，正在补修。 |
-| 自定义 out-dir 跨命令 / 非整数缩放 | 通过：1040×664→400×255，新鲜图像坐标点击输入框成功，前台与 key/main 标志保持不变。[点击](evidence/2026-09-16-native/unlocked/form/field-click.json)。 |
+| unknown 后控制面 | 未通过：独立宿主退出，status 回退为 unusable 且保留 lease；重复请求和新请求连接失败。[记录](evidence/2026-09-16-native/unlocked/cancel/terminal-checks.json)。进程内 host 回归未覆盖此退出路径。新增真实 openSession 子进程回归先在 ENOENT 处失败；修复后保留控制面直到显式 close，19 个相关测试通过，完整门禁通过；最后一次原生复跑前再次锁屏，因此该项实机验收仍待补。 |
+| 自定义 out-dir 跨命令 / 非整数缩图 | 通过目录读取与坐标请求：1040×664→400×255，点击命令返回成功，前台与 key/main 标志保持不变。此字段没有点击计数，不能单凭回执确认焦点变化；实际画布命中见尺寸变化后的记录。[点击](evidence/2026-09-16-native/unlocked/form/field-click.json)。 |
 | 文本输入 | 未通过：坐标点击后 firstResponder 为 NSTextView，一次 type 返回成功，但独立 observe、fixture value 和截图均为空。停止输入，没有重试。[输入](evidence/2026-09-16-native/unlocked/form/field-type.json)、[复查](evidence/2026-09-16-native/unlocked/form/field-type-verify.json)、[截图](evidence/2026-09-16-native/unlocked/form/field-type-verify.png)。 |
 | 内容变化拒绝旧图 | 通过：自有画布变色后旧图被拒绝，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/changed-content-reject.json)。 |
 | 尺寸变化拒绝旧图 | 通过：520×332→600×372 后旧图被拒绝，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/resized-reject.json)。 |
@@ -20,7 +20,19 @@
 | 越界坐标 | 通过：400×248 图像的 x=401 在派发前被拒绝，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/bounds-reject.json)。 |
 | 窗口不匹配 | 通过：将同一观察用于不同窗口号时返回 belongs to a different target，计数不变。[记录](evidence/2026-09-16-native/unlocked/form/wrong-window-reject.json)。 |
 
-表单 fixture 已关闭。前台应用在步骤之间有用户切换；上述通过步骤的前后快照一致，fixture 没有成为前台或 key/main window。文本输入结果不证明普通应用的输入能力，也不能作为表单完成证据。
+表单 fixture 已关闭。前台应用在步骤之间有用户切换；上述通过步骤的前后快照一致，fixture 没有成为前台或 key/main window。文本输入结果不证明普通应用的输入能力，也不能作为表单完成证据。代码审计确认产品没有透传 SDK action effect，但 delivered 的合同仅指投递，不保证业务效果；此次未采集原始 SDK effect，不能据此断言投递误分类。
+
+### 宿主修复的最终门禁
+
+产品提交：`1bface0`。
+
+- 两个 API 生成无漂移，typecheck 通过。
+- 默认测试：644 pass / 10 skip / 0 fail，654 tests，2345 assertions。与前轮相比新增两个跨进程测试；已有打包产物使五个装配用例在默认测试中直接运行。
+- package:release、build、smoke 通过；三文件打包验收 12 pass / 72 assertions；runtime 装配 4 pass / 23 assertions。
+- [门禁日志](evidence/2026-09-16-native/unlocked/gates)。
+- 独立只读复审：无阻塞缺陷。复审者确认 unknown 保留查询与 lease，显式 close 退出；新增 self-spawn 测试重复 25 次通过，idle / close / standalone / unusable finalize 相关测试通过。未执行 UI 操作。
+
+重新打包后启动了新 fixture 与 session，但 [observe](evidence/2026-09-16-native/unlocked/final-cancel-locked/observe.json) 返回 image unavailable / AX unresolved；[只读检查](evidence/2026-09-16-native/unlocked/final-cancel-locked/lock-state.json) 确认再次锁屏。没有执行输入，session [正常关闭](evidence/2026-09-16-native/unlocked/final-cancel-locked/close.json)，driverTerminated 与 leaseReleased 均 true，fixture 也已退出。
 
 ## 运行边界
 

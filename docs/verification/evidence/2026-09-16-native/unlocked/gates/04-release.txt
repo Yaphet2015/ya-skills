@@ -1,0 +1,24 @@
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-e2e-release.test.ts:
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > release artifacts must exist when YK_RELEASE_TESTS=1 [0.29ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > install + run + history + report through the compiled yk [1623.39ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > external TS relative imports work; hostile package.json does not stop the run [84.67ms]
+
+tests/computer-session-release.test.ts:
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > release artifacts exist and include the generated skill api [0.04ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the packaged skill references match the generated api [0.06ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > help output lists the agentic actions and executes no project scripts [22.56ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > invalid exec requests fail cleanly without native load [21.91ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the internal exec worker completes pure JS + state + log against a test RPC peer [25.69ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the compiled exec loop proves body readiness before TERM/KILL cleanup [2197.82ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > same exec request-id replays nothing through a re-invoked CLI [47.07ms]
+
+tests/computer-lane-release-packaging.test.ts:
+(pass) release lane: packaged live fake session > deduplicates a live request through a separate packaged driver process [121.79ms]
+(pass) release lane: packaged live fake session > a symlinked packaged executable self-spawns its driver worker [118.87ms]
+
+ 12 pass
+ 0 fail
+ 72 expect() calls
+Ran 12 tests across 3 files. [4.28s]

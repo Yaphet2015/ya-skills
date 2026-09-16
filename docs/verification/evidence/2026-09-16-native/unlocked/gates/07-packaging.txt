@@ -1,0 +1,12 @@
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-use-packaging.test.ts:
+(pass) package:release runtime assembly > assembles the sidecar runtime with every required file and no symlinks [0.67ms]
+(pass) package:release runtime assembly > compiled yk loads from a hostile package.json cwd without executing project scripts [47.67ms]
+(pass) package:release runtime assembly > compiled yk build uses the pinned external + autoload + define flags [0.17ms]
+(pass) package:release runtime assembly > package:release script is the single packaging entrypoint both workflows call [0.26ms]
+
+ 4 pass
+ 0 fail
+ 23 expect() calls
+Ran 4 tests across 1 file. [59.00ms]
