@@ -273,6 +273,8 @@ export interface Host {
   socketPath(): string;
   close(): Promise<SessionInfo>;
   waitUntilClosed(): Promise<SessionInfo>;
+  /** Resolves when the control listener is explicitly or normally closed. */
+  waitUntilListenerClosed(): Promise<void>;
 }
 
 export interface HostDeps {
@@ -350,6 +352,9 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   /** Deferred teardown that must wait until the business reply is written. */
   let afterReply: (() => void) | null = null;
   const closeWaiters: ((info: SessionInfo) => void)[] = [];
+  const listenerCloseWaiters: (() => void)[] = [];
+  let listenerClosed = false;
+  let closeRequested = false;
   const journalSeq = new Map<string, number>();
   const appendJournalEvent = async (
     requestId: string,
@@ -515,6 +520,20 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     idleTimer.unref();
   };
 
+  const closeSocket = (): void => {
+    if (server !== null) {
+      server.close();
+      server = null;
+    }
+    listenerClosed = true;
+    for (const waiter of listenerCloseWaiters.splice(0)) waiter();
+    try {
+      rmSync(config.socketPath, { force: true });
+    } catch {
+      // best effort
+    }
+  };
+
   let leaseReleased = false;
   const shutdown = (reason: string, force = false): Promise<SessionInfo> => {
     if (shutdownPromise) return shutdownPromise;
@@ -605,22 +624,9 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           state.value = "unusable";
         }
       }
-      // A closed host removes its listener/path. An unusable host remains a
-      // live, queryable listener until the owning process explicitly exits;
-      // this lets callers retrieve the recorded unknown result. `hostMain`
-      // and the public close path perform the final listener removal, so no
-      // dead socket path survives process exit.
-      if (state.value === "closed") {
-        try {
-          rmSync(config.socketPath, { force: true });
-        } catch {
-          // best effort
-        }
-        if (server !== null) {
-          server.close();
-          server = null;
-        }
-      }
+      // Unknown delivery retains the lease and the queryable control plane.
+      // Only normal closure or an explicit close request ends the listener.
+      if (state.value === "closed" || closeRequested) closeSocket();
       writeMetadata();
       finalized = true;
       const final = info();
@@ -1396,7 +1402,11 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       const control = parsed as SessionControl | { kind: "diagnostics"; schemaVersion: 1; sessionId: string };
       void Promise.resolve(handleControl(control)).then((reply) => {
         socket.write(encodeControl(reply));
-        if (reply.info?.state === "closed" || reply.info?.state === "unusable") socket.end();
+        if (reply.info?.state === "closed" || reply.info?.state === "unusable") {
+          socket.end(() => {
+            if (control.kind === "close" && finalized) closeSocket();
+          });
+        }
       });
       return;
     }
@@ -1488,6 +1498,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         return { schemaVersion: 1, info: info() };
       }
       case "close": {
+        closeRequested = true;
         // A repeated close joins the original shutdown rather than returning
         // a transient `stopping` state. The bounded race keeps status/control
         // responsive if a native worker cannot be reclaimed.
@@ -1518,27 +1529,19 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   writeMetadata();
   scheduleIdle();
 
-  const closeSocket = (): void => {
-    if (server !== null) {
-      server.close();
-      server = null;
-    }
-    try {
-      rmSync(config.socketPath, { force: true });
-    } catch {
-      // best effort
-    }
-  };
   return {
     info,
     socketPath: () => config.socketPath,
     close: async () => {
+      closeRequested = true;
       const final = await shutdown("close");
       if (final.state === "unusable") closeSocket();
       return final;
     },
     waitUntilClosed: () =>
-      new Promise((resolve) => (finalized ? resolve(info()) : closeWaiters.push(resolve)))
+      new Promise((resolve) => (finalized ? resolve(info()) : closeWaiters.push(resolve))),
+    waitUntilListenerClosed: () =>
+      new Promise((resolve) => (listenerClosed ? resolve() : listenerCloseWaiters.push(resolve)))
   };
 }
 
@@ -1553,10 +1556,9 @@ export async function hostMain(configPath: string): Promise<number> {
   const config = JSON.parse(await readFile(configPath, "utf8")) as HostConfig;
   const host = await startHost(config);
   const info = await host.waitUntilClosed();
-  // Close the final listener/path after the process-level owner has observed
-  // the terminal state. During the short live-host window an unusable session
-  // remains queryable; after this point no dead socket is left behind.
-  await host.close();
+  // Unknown is a request/driver terminal state, not a control-plane exit.
+  // Keep the host alive for status and deduplicated replies until explicit close.
+  await host.waitUntilListenerClosed();
   // `cli.ts` uses process.exit for internal entrypoints. Give any control
   // handler that triggered the final shutdown one event-loop turn to write
   // its terminal reply before the host process exits.

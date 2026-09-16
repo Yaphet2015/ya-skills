@@ -4,9 +4,52 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sendControl, sendRequest, startHost, type HostConfig, type SessionRequest } from "@ya-skills/computer-session";
+import {
+  openSession,
+  sendControl,
+  sendRequest,
+  sessionPaths,
+  startHost,
+  type HostConfig,
+  type SessionRequest
+} from "@ya-skills/computer-session";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function waitForUnusable(socketPath: string, sessionId: string, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  for (;;) {
+    try {
+      const reply = await sendControl(socketPath, { kind: "status", schemaVersion: 1, sessionId }, 1_000);
+      if (reply.info?.state === "unusable") return reply;
+      lastError = new Error(`session is ${reply.info?.state ?? "unknown"}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`unusable host did not remain queryable: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+    }
+    await sleep(20);
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("condition did not become true");
+    await sleep(20);
+  }
+}
 
 describe("native action outcome across the production IPC boundary", () => {
   test("structured Tool unknown poisons the session and never dispatches queued actions", async () => {
@@ -127,6 +170,96 @@ describe("native action outcome across the production IPC boundary", () => {
       await host?.close().catch(() => undefined);
       await rm(root, { recursive: true, force: true });
       await rm(socketPath, { force: true }).catch(() => undefined);
+    }
+  }, 60_000);
+
+  test("a self-spawned unusable host stays queryable until explicit close", async () => {
+    const root = await mkdtemp(join(tmpdir(), "cu-native-action-host-lifecycle-"));
+    const target = {
+      pid: 200_000 + Math.floor(Math.random() * 100_000),
+      windowId: 12345n
+    };
+    const modulePath = join(import.meta.dir, "helpers/structured-tool-unknown-subprocess-driver.ts");
+    let opened: Awaited<ReturnType<typeof openSession>> | undefined;
+    try {
+      opened = await openSession({
+        root,
+        target,
+        idleTimeoutMs: 120_000,
+        driverModule: { path: modulePath, export: "createStructuredToolUnknownSubprocessDriver" }
+      });
+      const request: SessionRequest = {
+        schemaVersion: 1,
+        sessionId: opened.info.id,
+        generation: opened.info.generation,
+        requestId: "selfspawned-structured-tool-unknown",
+        operation: {
+          kind: "batch",
+          request: {
+            actions: [
+              { kind: "type", text: "delivery is unknown" },
+              { kind: "key", key: "Return" }
+            ],
+            maxActions: 2
+          }
+        }
+      };
+
+      const first = await sendRequest(opened.socketPath, request, 30_000);
+      expect(first.status).toBe("unknown");
+      expect((first.result as { steps: Array<{ status: string }> }).steps.map((step) => step.status)).toEqual([
+        "unknown",
+        "not_run"
+      ]);
+
+      // The process that runs hostMain must keep its control socket alive after
+      // it records unknown. This is the user-visible lease recovery path.
+      await waitForUnusable(opened.socketPath, opened.info.id);
+      const duplicate = await sendRequest(opened.socketPath, request, 10_000);
+      expect(duplicate).toEqual(first);
+      const afterUnknown = await sendRequest(opened.socketPath, {
+        ...request,
+        requestId: "selfspawned-after-unknown",
+        operation: { kind: "batch", request: { actions: [{ kind: "key", key: "Escape" }] } }
+      }, 10_000);
+      expect(afterUnknown.status).toBe("failed");
+      expect(afterUnknown.error?.code).toBe("session_closed");
+
+      const leasePath = join(root, "leases", `app-${target.pid}.lease`);
+      expect(existsSync(leasePath)).toBe(true);
+
+      // Explicit close is the only operation that ends the unusable host's
+      // control plane. Unknown ownership remains fail-closed in the lease.
+      const close = await sendControl(opened.socketPath, {
+        kind: "close",
+        schemaVersion: 1,
+        sessionId: opened.info.id
+      }, 10_000);
+      expect(close.info?.state).toBe("unusable");
+      expect((close as typeof close & { cleanup?: { driverTerminated?: boolean } }).cleanup?.driverTerminated).toBe(false);
+
+      await waitUntil(() => !existsSync(opened!.socketPath));
+      await waitUntil(() => !processAlive(opened!.hostPid));
+      expect(existsSync(leasePath)).toBe(true);
+      const paths = sessionPaths(root, opened.info.id);
+      expect(existsSync(paths.socket)).toBe(false);
+    } finally {
+      if (opened !== undefined) {
+        await sendControl(opened.socketPath, {
+          kind: "close",
+          schemaVersion: 1,
+          sessionId: opened.info.id
+        }, 1_000).catch(() => undefined);
+        // A failed assertion must not leave the detached fixture host alive.
+        if (processAlive(opened.hostPid)) {
+          try {
+            process.kill(-opened.hostPid, "SIGKILL");
+          } catch {
+            // The host may have exited between the liveness check and kill.
+          }
+        }
+      }
+      await rm(root, { recursive: true, force: true });
     }
   }, 60_000);
 });
