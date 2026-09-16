@@ -175,6 +175,140 @@ function timeoutWithinDeadline(capMs: number, deadlineAt?: number): number {
   return Math.max(1, Math.min(capMs, remaining));
 }
 
+const RESIZE_TERM_GRACE_MS = 100;
+const RESIZE_KILL_GRACE_MS = 1_000;
+
+export class ProcessCleanupError extends Error {
+  readonly code = "process_cleanup_failed";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ProcessCleanupError";
+  }
+}
+
+async function waitForExit(exited: Promise<boolean>, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      exited,
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function stopBunChild(child: ReturnType<typeof Bun.spawn>): Promise<void> {
+  const exited = child.exited.then(
+    () => true,
+    () => false
+  );
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    // The process may have exited between the result check and this call.
+  }
+  if (await waitForExit(exited, RESIZE_TERM_GRACE_MS)) return;
+
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    // The process may have exited while the TERM grace timer was running.
+  }
+  if (!(await waitForExit(exited, RESIZE_KILL_GRACE_MS))) {
+    throw new ProcessCleanupError("sips child did not exit after SIGKILL");
+  }
+}
+
+async function runNodeChild(
+  command: string,
+  args: string[],
+  options: { timeoutMs: number; signal?: AbortSignal }
+): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  if (options.signal?.aborted) throw new Error("sips was aborted");
+  const { spawn } = require("node:child_process") as typeof import("node:child_process");
+  const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+  const closed = new Promise<void>((resolve) => {
+    child.once("close", resolve);
+  });
+  const result = new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve, reject) => {
+    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.once("error", reject);
+    child.once("close", (code: number | null) => {
+      resolve({
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+        code
+      });
+    });
+  });
+  const exited = closed.then(
+    () => true,
+    () => false
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cleanupPromise: Promise<void> | undefined;
+  let controlStarted = false;
+  let rejectControl: ((error: Error) => void) | undefined;
+  const stop = () => {
+    cleanupPromise ??= (async () => {
+      // A spawn error before pid assignment has no child to reap.
+      if (child.pid === undefined) return;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // The process may have exited between the result check and this call.
+      }
+      if (await waitForExit(exited, RESIZE_TERM_GRACE_MS)) return;
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // The process may have exited while the TERM grace timer was running.
+      }
+      if (!(await waitForExit(exited, RESIZE_KILL_GRACE_MS))) {
+        throw new ProcessCleanupError("sips child did not close after SIGKILL");
+      }
+    })();
+    return cleanupPromise;
+  };
+  const stopAndReject = (error: Error): void => {
+    if (controlStarted) return;
+    controlStarted = true;
+    void stop().then(
+      () => rejectControl?.(error),
+      (cleanupError: unknown) => rejectControl?.(cleanupError instanceof Error ? cleanupError : error)
+    );
+  };
+  const onAbort = () => stopAndReject(new Error("sips was aborted"));
+  const control = new Promise<never>((_resolve, reject) => {
+    rejectControl = reject;
+    timer = setTimeout(() => {
+      stopAndReject(new Error("sips timed out after " + options.timeoutMs + "ms"));
+    }, options.timeoutMs);
+  });
+  options.signal?.addEventListener("abort", onAbort, { once: true });
+  if (options.signal?.aborted) onAbort();
+  try {
+    return await Promise.race([result, control]);
+  } catch (error) {
+    if (cleanupPromise === undefined) {
+      cleanupPromise = stop();
+      await cleanupPromise;
+    }
+    throw error;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onAbort);
+    if (cleanupPromise !== undefined) await cleanupPromise;
+  }
+}
+
 const DEFAULT_RUNNER: ProcessRunner = async (command, args, options) => {
   // Bun 1.3.14's Node child_process pipe setup can intermittently lose a
   // short subprocess result when many desktop-free tests run together. Use
@@ -184,64 +318,50 @@ const DEFAULT_RUNNER: ProcessRunner = async (command, args, options) => {
     if (options.signal?.aborted) throw new Error("sips was aborted");
     const child = Bun.spawn([command, ...args], { stdout: "pipe", stderr: "pipe" });
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let aborted = false;
-    const kill = () => {
-      aborted = true;
-      try { child.kill(); } catch { /* already exited */ }
+    let cleanupPromise: Promise<void> | undefined;
+    let controlStarted = false;
+    let rejectControl: ((error: Error) => void) | undefined;
+    const stop = () => {
+      cleanupPromise ??= stopBunChild(child);
+      return cleanupPromise;
     };
-    const onAbort = () => kill();
+    const stopAndReject = (error: Error): void => {
+      if (controlStarted) return;
+      controlStarted = true;
+      void stop().then(
+        () => rejectControl?.(error),
+        (cleanupError: unknown) => rejectControl?.(cleanupError instanceof Error ? cleanupError : error)
+      );
+    };
+    const onAbort = () => stopAndReject(new Error("sips was aborted"));
     options.signal?.addEventListener("abort", onAbort, { once: true });
     const result = Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
       child.exited
     ]).then(([stdout, stderr, code]) => ({ stdout, stderr, code }));
-    const timeout = new Promise<never>((_, reject) => {
+    const control = new Promise<never>((_resolve, reject) => {
+      rejectControl = reject;
       timer = setTimeout(() => {
-        kill();
-        reject(new Error(`sips timed out after ${options.timeoutMs}ms`));
+        stopAndReject(new Error("sips timed out after " + options.timeoutMs + "ms"));
       }, options.timeoutMs);
     });
+    if (options.signal?.aborted) onAbort();
     try {
-      if (options.signal?.aborted) {
-        kill();
-        throw new Error("sips was aborted");
+      return await Promise.race([result, control]);
+    } catch (error) {
+      if (cleanupPromise === undefined) {
+        cleanupPromise = stop();
+        await cleanupPromise;
       }
-      return await Promise.race([result, timeout]);
+      throw error;
     } finally {
       if (timer !== undefined) clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
-      void aborted;
+      if (cleanupPromise !== undefined) await cleanupPromise;
     }
   }
-  return new Promise((resolve, reject) => {
-    const { spawn } = require("node:child_process") as typeof import("node:child_process");
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    child.stdout.on("data", (c: Buffer) => stdout.push(c));
-    child.stderr.on("data", (c: Buffer) => stderr.push(c));
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error(`sips timed out after ${options.timeoutMs}ms`));
-    }, options.timeoutMs);
-    const onAbort = () => child.kill("SIGKILL");
-    options.signal?.addEventListener("abort", onAbort, { once: true });
-    if (options.signal?.aborted) onAbort();
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      options.signal?.removeEventListener("abort", onAbort);
-      resolve({
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-        code
-      });
-    });
-  });
+  return runNodeChild(command, args, options);
 };
 
 export interface ResizeResult {
@@ -279,6 +399,9 @@ async function runSips(
       // (the Bun 1.3.14 child-pipe race observed in parallel suites).
       if (result.code !== 0 || result.stdout.trim() !== "") return result;
     } catch (error) {
+      // Cleanup failures are evidence that child termination was not proven.
+      // Preserve this error even when the request also reached its deadline.
+      if (error instanceof ProcessCleanupError) throw error;
       // Preserve request controls even when a child reports a generic error
       // after being killed. This lets the session classify cancellation as an
       // interruption rather than as an artifact failure.

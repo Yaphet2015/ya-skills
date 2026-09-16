@@ -30,6 +30,7 @@ import { mapImagePointToDriverPixels } from "./coordinates.js";
 import {
   frameMatchesObservation,
   pngSha256,
+  ProcessCleanupError,
   resizeScreenshot,
   type ObservationStore,
   type ResizeResult
@@ -256,6 +257,9 @@ class SessionImpl implements ComputerSession {
    * A timed-out wrapper is not proof that native work stopped; close waits for
    * this set (or keeps the target lease when it cannot drain). */
   private readonly nativeInFlight = new Set<Promise<unknown>>();
+  /** A derived screenshot process can fail after the caller-visible deadline.
+   * Keep that failure durable so close cannot report safe cleanup later. */
+  private nativeCleanupError: ProcessCleanupError | null = null;
   /** Absolute deadline of the batch currently executing (A5 budget
    * propagation): every native read/action/wait during a batch is capped by
    * it, not just the steps around it. */
@@ -367,12 +371,15 @@ class SessionImpl implements ComputerSession {
     return error;
   }
 
-  private trackNative<T>(promise: Promise<T>): Promise<T> {
+  private trackNative<T>(promise: Promise<T>, onRejected?: (error: unknown) => void): Promise<T> {
     const tracked = Promise.resolve(promise);
     this.nativeInFlight.add(tracked);
     void tracked.then(
       () => this.nativeInFlight.delete(tracked),
-      () => this.nativeInFlight.delete(tracked)
+      (error) => {
+        this.nativeInFlight.delete(tracked);
+        onRejected?.(error);
+      }
     );
     return tracked;
   }
@@ -692,18 +699,35 @@ class SessionImpl implements ComputerSession {
                 deadlineAt
               })
               : resizeScreenshot(path, opts.maxDimension, operationSignal, undefined, deadlineAt);
+            // A deadline wrapper only reports the caller-visible timeout. The
+            // child process cleanup belongs to the derived operation, so keep
+            // that promise tracked until it has reaped its child.
             resized = await withDeadline(
               "screenshot derivation",
-              resizePromise,
+              this.trackNative(resizePromise, (error) => {
+                if (error instanceof ProcessCleanupError) {
+                  this.nativeCleanupError = error;
+                  this.poisoned = true;
+                }
+              }),
               Math.max(deadlineAt - Date.now(), 1),
               operationSignal
             );
           } catch (error) {
+            if (error instanceof ProcessCleanupError || this.nativeCleanupError) {
+              this.poisoned = true;
+              throw new ComputerError(
+                "cleanup_failed",
+                "the screenshot resize process could not be reaped: " +
+                  (error instanceof Error ? error.message : String(error))
+              );
+            }
             const controlError = this.observationControlError(deadlineAt, operationSignal, "during image derivation");
             if (controlError) throw controlError;
             throw new ComputerError(
               "artifact_derivation_failed",
-              `the requested screenshot resize failed: ${error instanceof Error ? error.message : String(error)}`
+              "the requested screenshot resize failed: " +
+                (error instanceof Error ? error.message : String(error))
             );
           }
           this.assertObservationAllowed(deadlineAt, operationSignal, "after image derivation");
@@ -1130,6 +1154,9 @@ class SessionImpl implements ComputerSession {
       // backend promise remains unresolved.
       if (!(await this.waitForNativeIdle(Date.now() + (this.options.cleanupDeadlineMs ?? CLEANUP_BUDGET_MS)))) {
         errors.push("native work remained in flight after cleanup; target lease retained");
+      }
+      if (this.nativeCleanupError) {
+        errors.push("derived screenshot cleanup failed: " + this.nativeCleanupError.message + "; target lease retained");
       }
       if (errors.length === 0) {
         errors.push(...(await this.releaseLeases()));
