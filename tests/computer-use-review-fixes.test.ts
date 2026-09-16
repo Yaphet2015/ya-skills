@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { connect } from "node:net";
+import { existsSync } from "node:fs";
 import { readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -279,19 +280,29 @@ describe("review-fix regressions: exec state, output, and delivery", () => {
   }, 30_000);
 
   test("a late unknown receipt reconciles an already-terminal unawaited result", async () => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let dispatchMarker = "";
+    let terminalMarker = "";
     const host = await startTestHost({
       driver: "fake",
       idleTimeoutMs: 60_000,
       batchResult: async () => {
-        await sleep(150);
+        await writeFile(dispatchMarker, "dispatched", { mode: 0o600 });
+        await held;
         throw new Error("driver_worker_exited");
       }
     });
+    dispatchMarker = join(host.root, "dispatch-started");
+    terminalMarker = join(host.root, "script-terminal");
     try {
-      const result = await host.exec({
-        code: "void computer.key('Return'); return 1;",
+      const running = host.exec({
+        code: `const { existsSync, writeFileSync } = await import("node:fs"); void computer.key("Return"); while (!existsSync(${JSON.stringify(dispatchMarker)})) await new Promise((resolve) => setTimeout(resolve, 1)); writeFileSync(${JSON.stringify(terminalMarker)}, "terminal"); return 1;`,
         timeoutMs: 2_000
       });
+      await waitUntil(() => existsSync(terminalMarker));
+      release?.();
+      const result = await running;
       expect(result.result.status).toBe("unknown");
       expect(result.result.stateCommitted).toBe(false);
       expect(result.result.error?.code).toMatch(/unknown|driver/);

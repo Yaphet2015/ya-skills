@@ -459,10 +459,10 @@ export async function runExec(
                 // the worker/host terminal failure; no desktop input crossed
                 // here.
               }
-            } else {
+            } else if (method !== "observe") {
               await addReceipt({
                 index,
-                kind: method as ActionReceipt["kind"],
+                kind: method,
                 status: "not_run",
                 error: { code: beforeRunError.code, message: beforeRunError.message }
               });
@@ -682,10 +682,15 @@ export async function runExec(
         inFlightNative = nativeCall;
         return (await nativeCall) as JsonValue;
       } catch (error) {
-        if (!(error instanceof ComputerError) && !receipts.some((receipt) => receipt.index === index)) {
+        if (
+          !(error instanceof ComputerError) &&
+          method !== "observe" &&
+          method !== "batch" &&
+          !receipts.some((receipt) => receipt.index === index)
+        ) {
           receipts.push({
             index,
-            kind: method as ActionReceipt["kind"],
+            kind: method,
             status: "unknown",
             error: { code: "action_failed", message: error instanceof Error ? error.message : String(error) }
           });
@@ -923,33 +928,50 @@ export async function runExec(
     if (controlPollFailed) return;
     let stableOffset: number | null = null;
     while (!controlPollFailed) {
-      const before = controlOffset;
-      pollControl();
-      if (controlPollFailed) return;
+      try {
+        const before = controlOffset;
+        pollControl();
+        if (controlPollFailed) return;
 
-      const size = statSync(controlPath).size;
-      if (size > controlOffset || controlOffset !== before) {
-        stableOffset = null;
-        continue;
-      }
+        const size = statSync(controlPath).size;
+        if (size < controlOffset) {
+          throw new Error("the exec control spool shrank before EOF was verified");
+        }
+        if (size > controlOffset || controlOffset !== before) {
+          stableOffset = null;
+          continue;
+        }
 
-      // A regular-file read at the current offset is the explicit EOF probe.
-      // Do not infer EOF only from stat: a child may append after that call.
-      const probe = Buffer.allocUnsafe(1);
-      const count = readSync(controlReadFd, probe, 0, 1, controlOffset);
-      if (count > 0) {
-        controlOffset += count;
-        processControlChunk(probe.subarray(0, count));
-        stableOffset = null;
-        continue;
+        // A regular-file read at the current offset is the explicit EOF
+        // probe. Do not infer EOF only from stat: a child may append after
+        // that call.
+        const probe = Buffer.allocUnsafe(1);
+        const count = readSync(controlReadFd, probe, 0, 1, controlOffset);
+        if (count > 0) {
+          controlOffset += count;
+          processControlChunk(probe.subarray(0, count));
+          stableOffset = null;
+          continue;
+        }
+        const afterProbe = statSync(controlPath).size;
+        if (afterProbe < controlOffset) {
+          throw new Error("the exec control spool shrank during EOF verification");
+        }
+        if (afterProbe !== controlOffset) {
+          stableOffset = null;
+          continue;
+        }
+        if (stableOffset === controlOffset) return;
+        stableOffset = controlOffset;
+      } catch {
+        // A truncated or unreadable spool cannot prove terminal delivery.
+        // Stop polling and fail closed; never spin or let a malformed tail
+        // keep the request alive indefinitely.
+        controlPollFailed = true;
+        admissionClosed = true;
+        void stopProcessGroup(child, TERM_GRACE_MS);
+        return;
       }
-      const afterProbe = statSync(controlPath).size;
-      if (afterProbe !== controlOffset) {
-        stableOffset = null;
-        continue;
-      }
-      if (stableOffset === controlOffset) return;
-      stableOffset = controlOffset;
     }
   };
   const controlTimer = setInterval(pollControl, 10);
