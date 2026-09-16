@@ -713,11 +713,6 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       }
     }
     spoolReader.close();
-    // Keep cleanup idempotent for Bun versions that close numeric stdio fds as
-    // part of child setup; closeOwnedFd still surfaces unrelated failures.
-    closeOwnedFd(stdoutFd);
-    closeOwnedFd(stderrFd);
-    closeOwnedFd(eventFd);
     rmSync(eventSpoolPath, { force: true });
     clearTimers();
     rmSync(configPath, { force: true });
