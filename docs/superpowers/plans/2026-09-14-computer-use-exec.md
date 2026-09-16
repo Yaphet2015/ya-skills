@@ -19,7 +19,7 @@
 - 不要求安装额外 Node/Bun；SDK继续lazy，help/list/install不启动worker。
 - E2E默认测试desktop-free；发布门禁和真实桌面结果独立记录。
 
-> **Integration status (2026-09-15):** The four current lane deltas, generated API references, and exact Bun 1.3.14 desktop-free/release gates are integrated at checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` and recorded in `docs/verification/2026-09-15-parallel-integration.md`. Native Background/TCC, real UI/model usage, and performance acceptance remain unchecked; this plan is not wholly complete.
+> **接手状态（2026-09-16）：** 恢复检查点和当前主仓库 0.22.0 已整合到隔离分支；J1–J6 修复与验证见 `docs/verification/2026-09-16-takeover.md`。原生 Background 坐标探针被 SDK 拒绝，完整原生矩阵与真实模型性能验收仍未通过。勾选的实现任务不代表完整计划验收。
 
 ---
 

@@ -20,7 +20,7 @@
 - 原生未知投递不可自动重放；原生 worker 未确认终止不得释放目标。
 - 不增加模型调用、脚本审计、调用方权限配置或运行时适配。
 
-> **Integration status (2026-09-15):** Session implementation and desktop-free packaged checks are integrated at checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` plus the four current unstaged lane deltas. The current evidence proves local protocol/process behavior only; native session TCC attribution and real driver lifecycle remain open. See `docs/verification/2026-09-15-parallel-integration.md`; this note is not a completion claim.
+> **接手状态（2026-09-16）：** 恢复检查点和当前主仓库 0.22.0 已整合到隔离分支；J1–J6 修复与验证见 `docs/verification/2026-09-16-takeover.md`。原生 Background 坐标探针被 SDK 拒绝，完整原生矩阵与真实模型性能验收仍未通过。勾选的实现任务不代表完整计划验收。
 
 ---
 

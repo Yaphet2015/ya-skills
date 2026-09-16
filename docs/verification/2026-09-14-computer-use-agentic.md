@@ -1,14 +1,8 @@
 # Computer-Use Agentic Implementation Verification (historical filename)
 
-> **Current authoritative record:** `docs/verification/2026-09-15-parallel-integration.md`.
-> The checkpoint evidence retained below is historical and is not evidence for
-> the current unstaged integration delta.
+当前验证记录：[2026-09-16 接手验证](2026-09-16-takeover.md)。恢复代码与主仓库 0.22.0 已在隔离分支整合，修复和门禁以该记录为准。
 
-## Current integration pointer (2026-09-15)
-
-- Current checkout: checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` plus the four current lane deltas and narrow integration fixes; no commit, merge, push, or publication.
-- Current cumulative release-gate, packaged-lane, and benchmark evidence—including mutable test counts—is maintained in [`docs/verification/2026-09-15-parallel-integration.md`](2026-09-15-parallel-integration.md). This historical filename intentionally does not duplicate those counts.
-- Native Background Coordinates success on a never-activated fixture, host TCC attribution, real UI matrix, and real model/performance usage remain unverified; this is not a whole-plan completion claim.
+以下内容保留为历史证据。原生 Background 坐标成功、session-host TCC、完整实机矩阵和真实模型性能验收仍未完成。
 
 ## Historical checkpoint record (superseded)
 

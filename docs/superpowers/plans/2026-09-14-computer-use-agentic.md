@@ -20,9 +20,9 @@
 - batch 串行执行；delivered 不等于业务成功，unknown 不能自动重放。
 - 默认不缩图，不自动抢前台；图像有效性和 AX 有效性分别报告。
 - 跨包用 workspace import；领域实现不放进 packages/cli。
-- 规划阶段约束（历史）：实施与真实桌面验证必须分开进入执行阶段并明确测试窗口；本次集成的实际命令与结果只以 `docs/verification/2026-09-15-parallel-integration.md` 为准，不把未运行的计划命令当作证据。
+- 规划阶段约束（历史）：实施与真实桌面验证必须分开进入执行阶段并明确测试窗口；本次集成的实际命令与结果只以 `docs/verification/2026-09-16-takeover.md` 为准，不把未运行的计划命令当作证据。
 
-> **Integration status (2026-09-15):** The four current lane deltas have been applied to checkpoint `82722ea5e9ab4021b521def8dcae4cf703fe493f` and the desktop-free/release gates are recorded in `docs/verification/2026-09-15-parallel-integration.md`. This is an uncommitted integration delta, not whole-plan completion: native Background/TCC/session acceptance and real model/performance evidence remain blocked by the no-disruption rule. Unchecked native and performance tasks below remain open.
+> **接手状态（2026-09-16）：** 恢复检查点和当前主仓库 0.22.0 已整合到隔离分支；J1–J6 修复与验证见 `docs/verification/2026-09-16-takeover.md`。原生 Background 坐标探针被 SDK 拒绝，完整原生矩阵与真实模型性能验收仍未通过。勾选的实现任务不代表完整计划验收。
 
 ---
 

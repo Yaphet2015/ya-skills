@@ -1,5 +1,7 @@
 # Parallel computer-use integration verification — 2026-09-15
 
+> 后续状态见 [2026-09-16 接手验证](2026-09-16-takeover.md)。下文是历史门禁记录；后续独立审查发现 J1–J6，不能将下文的修复自述当作最终验收。
+
 ## Current disposition
 
 - **Source integration:** the four current lane deltas are applied once to
