@@ -1,0 +1,127 @@
+{
+  "command": [
+    "act",
+    "--pid",
+    "90189",
+    "--window",
+    "30903",
+    "--click-x",
+    "160",
+    "--click-y",
+    "166",
+    "--observation",
+    "9716f994-a790-4607-8193-33c5a455758f",
+    "--out-dir",
+    "/tmp/ya-native-type-diagnostic/images"
+  ],
+  "started": 1789542255.722284,
+  "ended": 1789542257.6307771,
+  "exitCode": 0,
+  "result": {
+    "pid": 90189,
+    "windowId": "30903",
+    "title": "YK native acceptance fixture",
+    "elements": [
+      {
+        "role": "AXWindow",
+        "label": "YK native acceptance fixture",
+        "elementToken": "s00000001:0",
+        "frame": {
+          "x": 80,
+          "y": 648,
+          "w": 520,
+          "h": 332
+        }
+      },
+      {
+        "role": "AXButton",
+        "label": "Increment",
+        "elementToken": "s00000001:1",
+        "frame": {
+          "x": 99,
+          "y": 723,
+          "w": 142,
+          "h": 38
+        },
+        "enabled": true
+      },
+      {
+        "role": "AXTextField",
+        "label": "Fixture input",
+        "elementToken": "s00000001:2",
+        "frame": {
+          "x": 99,
+          "y": 797,
+          "w": 282,
+          "h": 34
+        },
+        "enabled": true
+      }
+    ]
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789542250.142682,
+        "pid": 21897
+      }
+    ],
+    "at": 1789542255.6954951,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 21897,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 90189,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 30903,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789542250.142682,
+        "pid": 21897
+      }
+    ],
+    "at": 1789542257.595635,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 21897,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 90189,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 30903,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

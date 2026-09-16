@@ -1,0 +1,87 @@
+{
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789542250.142682,
+        "pid": 21897
+      }
+    ],
+    "at": 1789542280.695775,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 21897,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 90189,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 30903,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "started": 1789542280752,
+  "result": {
+    "text": "📨 Sent (unverified) 19 char(s) via CGEvent (30ms delay). — driver could not confirm the text landed; verify via screenshot, and re-call with delivery_mode:\"foreground\" if it didn't.",
+    "images": [],
+    "structuredJson": "{\"delivery\":{\"mode\":\"background\"},\"effect\":\"unverifiable\",\"escalation\":{\"reason\":\"delivery_failed\",\"target\":\"foreground\"},\"route\":\"synthetic_events\"}",
+    "isError": false,
+    "action": {
+      "effect": 2,
+      "route": 1,
+      "delivery": {
+        "mode": 0
+      },
+      "escalation": {
+        "target": 1,
+        "reason": 1
+      }
+    },
+    "degraded": false,
+    "rawJson": "{\"content\":[{\"text\":\"📨 Sent (unverified) 19 char(s) via CGEvent (30ms delay). — driver could not confirm the text landed; verify via screenshot, and re-call with delivery_mode:\\\"foreground\\\" if it didn't.\",\"type\":\"text\"}],\"structuredContent\":{\"delivery\":{\"mode\":\"background\"},\"effect\":\"unverifiable\",\"escalation\":{\"reason\":\"delivery_failed\",\"target\":\"foreground\"},\"route\":\"synthetic_events\"}}"
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789542250.142682,
+        "pid": 21897
+      }
+    ],
+    "at": 1789542283.1454182,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "firstResponderClass": "NSTextView",
+    "frontmostPid": 21897,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 90189,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowHeight": 332,
+    "windowId": 30903,
+    "windowWidth": 520,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "ended": 1789542283196
+}

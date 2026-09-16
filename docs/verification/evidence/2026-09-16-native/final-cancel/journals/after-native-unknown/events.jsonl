@@ -1,0 +1,2 @@
+{"seq":0,"time":1789542181235,"type":"request_started","payload":{"kind":"batch"}}
+{"seq":1,"time":1789542181235,"type":"request_finished","payload":{"status":"failed","error":{"code":"session_closed","message":"session is unusable"}}}

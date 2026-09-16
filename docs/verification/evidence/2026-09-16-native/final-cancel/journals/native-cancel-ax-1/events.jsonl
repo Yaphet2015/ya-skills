@@ -1,0 +1,5 @@
+{"seq":0,"time":1789542160446,"type":"request_started","payload":{"kind":"batch"}}
+{"seq":1,"time":1789542160446,"type":"action_started","payload":{"index":0,"kind":"click"}}
+{"seq":2,"time":1789542167592,"type":"action_finished","payload":{"index":0,"kind":"click","outcome":"unknown","error":{"code":"action_failed","message":"click failed with an unclassified native error: DriverError.Tool"}}}
+{"seq":3,"time":1789542167593,"type":"action_finished","payload":{"index":1,"kind":"click","outcome":"not_run","error":{"code":"action_failed","message":"click failed with an unclassified native error: DriverError.Tool"}}}
+{"seq":4,"time":1789542167609,"type":"request_finished","payload":{"status":"unknown","result":{"status":"interrupted","steps":[{"index":0,"kind":"click","status":"unknown","error":{"code":"action_failed","message":"click failed with an unclassified native error: DriverError.Tool"}},{"index":1,"kind":"click","status":"not_run","error":{"code":"action_failed","message":"click failed with an unclassified native error: DriverError.Tool"}}]},"error":{"code":"action_failed","message":"click failed with an unclassified native error: DriverError.Tool"}}}

@@ -1,10 +1,33 @@
 # 原生验收续测 — 2026-09-16
 
-状态：后台坐标输入已取得 SDK 与打包产品路径的成功证据。原生取消发现的结果误分类已在 `b096bfd` 修复并通过无桌面/打包门禁；解锁后实机复跑确认首动作 unknown、第二动作 not_run，并发现、修复了独立宿主提前退出的问题。最新完整门禁通过；宿主修复后的原生复跑因再次锁屏未执行输入。完整原生验收尚未通过。
+状态：后台坐标矩阵及修复后的原生取消／控制面闭环已通过。完整原生验收仍未通过：禁止成为 key window 的表单中，SDK Background type 返回 unverifiable / delivery_failed，独立复查文本为空；未使用其建议的 Foreground 重试。
 
 基线是本地分支 `computer-use/takeover-20260916` 的 `0cbaffd`。本轮最初的打包二进制来自已通过前轮门禁的产品提交 `82b1f49`，Bun 1.3.14、SDK 0.27.0。下面的“修复前”证据不能当作最终修复版的验收结果。
 
-## 解锁后续测
+## 最后复测（产品提交 `1bface0`）
+
+用户继续授权后确认解锁，使用已通过门禁的打包二进制完成测试。未修改产品代码，因此沿用下方完整门禁结果。
+
+### 取消、查询、去重、关闭：通过
+
+自有 NonKeyPanel PID 90121 / window 30827，session `b606a7af-4f8e-4f01-800f-8c0bf89e1fb5`，host PID 90128。
+
+- 真实 AXPress 回调进入后取消，控制面约 26 ms 返回；首动作 unknown，第二动作 not_run。释放回调后实际按钮计数为 1。[完整记录](evidence/2026-09-16-native/final-cancel/cancel-run.json)。
+- 宿主仍可查询 unusable；相同 requestId 返回原有 unknown 结果，新请求返回 session_closed。按钮始终为 1，没有重放。[查询与去重](evidence/2026-09-16-native/final-cancel/terminal-checks.json)。
+- 显式 close 返回 unusable、leaseReleased=false，符合未知结果保留占用的合同；宿主与 fixture 随后退出。[close](evidence/2026-09-16-native/final-cancel/close.json)。清理字段 driverTerminated=false 是当前保守状态报告，不应解读为 ps 检查仍有宿主存活。
+- 从窗口创建到最终记录，frontmost 始终 57145、activationChanges=[]，key/main 均 false、keyEvents=0。[最终窗口状态](evidence/2026-09-16-native/final-cancel/final-state.json)。
+
+### 表单输入：SDK 背景路径未产生效果
+
+另开新 NonKeyPanel PID 90189 / window 30903。新截图坐标点击输入框后，只调用一次 SDK typeText，并保存原始回执；没有重试此前窗口的输入。
+
+[SDK 原始回执](evidence/2026-09-16-native/type-diagnostic/raw-type.json) 为 isError=false、effect=Unverifiable、route=SyntheticEvents、delivery=Background，escalation={target:Foreground, reason:DeliveryFailed}。调用前后 field value 为空，前台 PID 21897 不变，key/main 为 false。等待 500 ms 后读取状态，再独立 observe 一次：[复查](evidence/2026-09-16-native/type-diagnostic/verify.json)、[截图](evidence/2026-09-16-native/type-diagnostic/verify.png)仍为空。
+
+这证明本次 SDK 后台路径没有可确认的表单效果，不证明所有应用均无法后台输入。SDK 建议 Foreground 重试，但本任务明确禁止抢前台，因此停止并将表单验收保留为未通过。产品的 delivered 合同仅描述投递，不保证业务效果；本次原始结果不支持把它改成 not_delivered。
+
+全部自有测试进程已退出。[清理记录](evidence/2026-09-16-native/final-process-cleanup.json)。
+
+## 解锁后续测（此前批次，以下保留当时结果）
 
 使用 `b096bfd` 产品源码生成的本仓库打包二进制，仍只操作禁止成为 key/main window 的自有窗口。
 
