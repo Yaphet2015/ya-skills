@@ -1,0 +1,132 @@
+{
+  "command": [
+    "act",
+    "--session",
+    "4095a531-5c17-4070-87b3-2e3548ed6b81",
+    "--click-x",
+    "410",
+    "--click-y",
+    "180",
+    "--observation",
+    "5e3a7b84-c847-4ac7-b5aa-d2a19b1676bf"
+  ],
+  "started": 1789530590.180992,
+  "ended": 1789530590.448313,
+  "exitCode": 1,
+  "result": "",
+  "stderr": "{\"error\":{\"code\":\"session_failed\",\"message\":\"session request ended failed\",\"sessionRequestId\":\"act-1789530590203-gqie5a\",\"reply\":{\"schemaVersion\":1,\"requestId\":\"act-1789530590203-gqie5a\",\"status\":\"failed\",\"result\":{\"status\":\"failed\",\"steps\":[{\"index\":0,\"kind\":\"click_point\",\"status\":\"not_delivered\",\"error\":{\"code\":\"stale_observation\",\"message\":\"the window changed since the observation (geometry or pixels) \u2014 observe again\"}}]}}}}\n",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      },
+      {
+        "at": 1789530558.188591,
+        "pid": 4610
+      },
+      {
+        "at": 1789530562.9374251,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530590.136981,
+    "canvasClicks": 2,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530558.102477,
+        "kind": "button"
+      },
+      {
+        "at": 1789530590.136451,
+        "kind": "move"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 140,
+    "windowY": 140
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      },
+      {
+        "at": 1789530558.188591,
+        "pid": 4610
+      },
+      {
+        "at": 1789530562.9374251,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530590.432053,
+    "canvasClicks": 2,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530558.102477,
+        "kind": "button"
+      },
+      {
+        "at": 1789530590.136451,
+        "kind": "move"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 140,
+    "windowY": 140
+  }
+}

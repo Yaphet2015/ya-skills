@@ -1,0 +1,72 @@
+{
+  "command": [
+    "exec",
+    "--session",
+    "2f06f4f9-67e2-4d7b-b3d3-5ff38f335c44",
+    "--file",
+    "/tmp/ya-native-20260916/matrix-nonkey/canvas.js",
+    "--request-id",
+    "canvas-native-1"
+  ],
+  "started": 1789530444.6568692,
+  "ended": 1789530445.379869,
+  "exitCode": 1,
+  "result": "",
+  "stderr": "{\"error\":{\"code\":\"exec_failed\",\"message\":\"exec ended failed\",\"sessionRequestId\":\"canvas-native-1\",\"status\":\"failed\",\"result\":{\"status\":\"failed\",\"stateVersion\":0,\"stateCommitted\":false,\"actions\":[{\"index\":1,\"kind\":\"click_point\",\"status\":\"not_delivered\",\"error\":{\"code\":\"action_refused\",\"message\":\"click_point was refused by the driver: DriverError.Tool\"}}],\"observations\":[{\"id\":\"79f0d2ac-0bc4-4f10-9c2b-6d0081016d73\",\"target\":{\"pid\":46143,\"windowId\":\"29121\"},\"capturedAt\":1789530444875,\"epoch\":\"56e6811f-02ad-4b99-a013-ab6edef5ad7a\",\"revision\":0,\"title\":\"YK native acceptance fixture\",\"ax\":{\"status\":\"degraded\",\"reason\":\"ax_window_unresolved: window_id 29121 exists and is owned by pid 46143, but none of the 0 AXWindow element(s) under that pid reports this CGWindowID. The tree is returned EMPTY on purpose: the accessibility elements reachable under this pid belong to other surfaces (the menu bar, other windows), not to the requested window, so presenting them would misground the next action.\",\"elements\":[],\"total\":0,\"returned\":0,\"complete\":false},\"image\":{\"status\":\"usable\",\"originalPath\":\"/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/artifacts/1789530444875-60bb8e38-cu.png\",\"path\":\"/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/artifacts/1789530444875-60bb8e38-cu-520.png\",\"frameValid\":true,\"geometry\":{\"sourceWidth\":1040,\"sourceHeight\":664,\"sentWidth\":520,\"sentHeight\":332,\"inputBounds\":{\"x\":0,\"y\":0,\"width\":520,\"height\":332},\"windowBounds\":{\"x\":80,\"y\":648,\"width\":520,\"height\":332}}}}],\"logs\":[],\"error\":{\"code\":\"action_refused\",\"message\":\"click_point was refused by the driver: DriverError.Tool\"}}}}\n",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      }
+    ],
+    "at": 1789530444.633926,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 20223,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      }
+    ],
+    "at": 1789530445.333928,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 20223,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

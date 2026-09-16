@@ -1,0 +1,130 @@
+{
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530762.077275,
+        "pid": 21897
+      },
+      {
+        "at": 1789530771.894269,
+        "pid": 10345
+      },
+      {
+        "at": 1789530773.342606,
+        "pid": 1383
+      },
+      {
+        "at": 1789530776.600359,
+        "pid": 23428
+      },
+      {
+        "at": 1789530778.8745852,
+        "pid": 82832
+      },
+      {
+        "at": 1789530783.067919,
+        "pid": 1383
+      },
+      {
+        "at": 1789530793.721416,
+        "pid": 395
+      }
+    ],
+    "at": 1789530838.333508,
+    "canvasClicks": 0,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530771.8920112,
+        "kind": "blocking-button-completed"
+      }
+    ],
+    "frontmostPid": 395,
+    "initialFrontmostPid": 82832,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46629,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29192,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "started": 1789530838405,
+  "elements": [],
+  "error": {
+    "string": "Error: one Block Increment element required",
+    "props": {
+      "message": "one Block Increment element required",
+      "originalLine": 14,
+      "originalColumn": 16,
+      "line": 13,
+      "column": 35,
+      "sourceURL": "/private/tmp/ya-native-20260916/raw-ax-timeout.ts"
+    }
+  },
+  "ended": 1789530838470,
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530762.077275,
+        "pid": 21897
+      },
+      {
+        "at": 1789530771.894269,
+        "pid": 10345
+      },
+      {
+        "at": 1789530773.342606,
+        "pid": 1383
+      },
+      {
+        "at": 1789530776.600359,
+        "pid": 23428
+      },
+      {
+        "at": 1789530778.8745852,
+        "pid": 82832
+      },
+      {
+        "at": 1789530783.067919,
+        "pid": 1383
+      },
+      {
+        "at": 1789530793.721416,
+        "pid": 395
+      }
+    ],
+    "at": 1789530838.586547,
+    "canvasClicks": 0,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530771.8920112,
+        "kind": "blocking-button-completed"
+      }
+    ],
+    "frontmostPid": 395,
+    "initialFrontmostPid": 82832,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46629,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29192,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

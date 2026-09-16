@@ -1,0 +1,74 @@
+{
+  "command": [
+    "act",
+    "--session",
+    "2f06f4f9-67e2-4d7b-b3d3-5ff38f335c44",
+    "--click-x",
+    "410",
+    "--click-y",
+    "180",
+    "--observation",
+    "d9012a41-db78-4087-a0e3-c413113251c1"
+  ],
+  "started": 1789530425.80815,
+  "ended": 1789530426.1276958,
+  "exitCode": 1,
+  "result": "",
+  "stderr": "{\"error\":{\"code\":\"session_failed\",\"message\":\"session request ended failed\",\"sessionRequestId\":\"act-1789530425829-ks03v2\",\"reply\":{\"schemaVersion\":1,\"requestId\":\"act-1789530425829-ks03v2\",\"status\":\"failed\",\"result\":{\"status\":\"failed\",\"steps\":[{\"index\":0,\"kind\":\"click_point\",\"status\":\"not_delivered\",\"error\":{\"code\":\"stale_observation\",\"message\":\"the window changed since the observation (geometry or pixels) \u2014 observe again\"}}]}}}}\n",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      }
+    ],
+    "at": 1789530425.780602,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 20223,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      }
+    ],
+    "at": 1789530426.084192,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 20223,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

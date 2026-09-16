@@ -1,0 +1,11 @@
+{
+  "id": "4095a531-5c17-4070-87b3-2e3548ed6b81",
+  "target": {
+    "pid": 46143,
+    "windowId": "29121"
+  },
+  "state": "closed",
+  "hostPid": 46378,
+  "generation": "90f8b5e8-65c0-4844-b7a4-f5fa2eb49341",
+  "idleTimeoutMs": 120000
+}

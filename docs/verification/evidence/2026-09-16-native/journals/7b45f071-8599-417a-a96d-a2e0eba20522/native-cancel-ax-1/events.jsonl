@@ -1,0 +1,5 @@
+{"seq":0,"time":1789530765710,"type":"request_started","payload":{"kind":"batch"}}
+{"seq":1,"time":1789530765711,"type":"action_started","payload":{"index":0,"kind":"click"}}
+{"seq":2,"time":1789530771880,"type":"action_finished","payload":{"index":0,"kind":"click","outcome":"not_delivered","error":{"code":"action_refused","message":"click was refused by the driver: DriverError.Tool"}}}
+{"seq":3,"time":1789530771881,"type":"action_finished","payload":{"index":1,"kind":"click","outcome":"not_run","error":{"code":"action_refused","message":"click was refused by the driver: DriverError.Tool"}}}
+{"seq":4,"time":1789530771882,"type":"request_finished","payload":{"status":"interrupted","result":{"status":"interrupted","steps":[{"index":0,"kind":"click","status":"not_delivered","error":{"code":"action_refused","message":"click was refused by the driver: DriverError.Tool"}},{"index":1,"kind":"click","status":"not_run","error":{"code":"action_refused","message":"click was refused by the driver: DriverError.Tool"}}]}}}

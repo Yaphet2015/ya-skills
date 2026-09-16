@@ -1,0 +1,97 @@
+{
+  "command": [
+    "batch",
+    "--session",
+    "7b45f071-8599-417a-a96d-a2e0eba20522",
+    "--file",
+    "/tmp/ya-native-20260916/matrix-cancel/batch.json",
+    "--request-id",
+    "native-cancel-ax-1",
+    "--timeout-ms",
+    "30000"
+  ],
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530762.077275,
+        "pid": 21897
+      }
+    ],
+    "at": 1789530765.630408,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 21897,
+    "initialFrontmostPid": 82832,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46629,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29192,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "started": 1789530765.678049,
+  "entered": {
+    "kind": "AXPress entered",
+    "at": 1789530765.7576032,
+    "pid": 46629
+  },
+  "cancel": {
+    "started": 1789530765.764652,
+    "ended": 1789530765.7920861,
+    "exitCode": 0,
+    "stdout": "{\"schemaVersion\":1,\"session\":{\"id\":\"7b45f071-8599-417a-a96d-a2e0eba20522\",\"target\":{\"pid\":46629,\"windowId\":\"29192\"},\"state\":\"running\",\"activeRequestId\":\"native-cancel-ax-1\",\"hostPid\":46645,\"generation\":\"8dcc3387-d8af-4518-94b8-8337aad898f6\",\"idleTimeoutMs\":120000},\"next\":\"the cancelled request's delivery state is recorded; observe instead of replaying\"}\n",
+    "stderr": ""
+  },
+  "terminal": {
+    "ended": 1789530771.891057,
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "{\"error\":{\"code\":\"session_failed\",\"message\":\"session request ended interrupted\",\"sessionRequestId\":\"native-cancel-ax-1\",\"reply\":{\"schemaVersion\":1,\"requestId\":\"native-cancel-ax-1\",\"status\":\"interrupted\",\"result\":{\"status\":\"interrupted\",\"steps\":[{\"index\":0,\"kind\":\"click\",\"status\":\"not_delivered\",\"error\":{\"code\":\"action_refused\",\"message\":\"click was refused by the driver: DriverError.Tool\"}},{\"index\":1,\"kind\":\"click\",\"status\":\"not_run\",\"error\":{\"code\":\"action_refused\",\"message\":\"click was refused by the driver: DriverError.Tool\"}}]}}}}\n"
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530762.077275,
+        "pid": 21897
+      },
+      {
+        "at": 1789530771.894269,
+        "pid": 10345
+      }
+    ],
+    "at": 1789530772.178738,
+    "canvasClicks": 0,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530771.8920112,
+        "kind": "blocking-button-completed"
+      }
+    ],
+    "frontmostPid": 10345,
+    "initialFrontmostPid": 82832,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46629,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29192,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

@@ -93,8 +93,9 @@ binary exists).
 - Real read-only checks on this machine (2026-09-13): doctor (same-process
   driver, permissions), apps, windows, perceive with screenshot, ambiguity
   refusal, degraded-snapshot refusal.
-- Real Background coordinate delivery on a never-activated window, session
-  host TCC attribution, and the full non-disruptive UI matrix remain pending;
-  see `docs/verification/2026-09-14-computer-use-agentic-primitives.md` and
-  do not treat synthetic tests or contaminated foreground evidence as native
-  acceptance.
+- Real Background coordinates through the packaged session/exec path now
+  reach an AX-hidden canvas without making the fixture key/main or changing
+  the frontmost app during the action. Window-movement and expired-evidence
+  refusals also passed. Full native acceptance remains incomplete, including
+  the fixed native cancellation case while the desktop is locked; see
+  `docs/verification/2026-09-16-native-acceptance.md`.

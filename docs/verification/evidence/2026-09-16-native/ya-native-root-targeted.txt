@@ -1,0 +1,38 @@
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-use-out-dir-persistence.test.ts:
+(pass) computer-use one-shot observation artifacts > act reads an observation saved by observe in the same --out-dir [10.26ms]
+
+tests/computer-runtime-action-classification.test.ts:
+(pass) native action error classification > structured Tool timeout and unknown codes are unknown and poison the session [0.91ms]
+(pass) native action error classification > a Tool class name without structured details is unknown and poisons the session [0.16ms]
+(pass) native action error classification > only explicit predispatch Tool codes remain not_delivered [0.21ms]
+(pass) native action error classification > InvalidArguments remains a predispatch refusal [0.10ms]
+(pass) native action error classification > AbortError after the native action seam is unknown and poisons the session [0.10ms]
+
+tests/computer-use-probe-guard.test.ts:
+{"mode":"no-target","driverStarted":false}
+(pass) probe arg guard (parseProbeArgs) > no arguments is a valid no-target run that must not start the driver [0.02ms]
+(pass) probe arg guard (parseProbeArgs) > --help is usage, never a driver start
+(pass) probe arg guard (parseProbeArgs) > a target requests the driver; without --allow-input it stays read-only [0.19ms]
+(pass) probe arg guard (parseProbeArgs) > --allow-input authorizes input and accepts window-target click coordinates [0.02ms]
+(pass) probe arg guard (parseProbeArgs) > click coordinates without --allow-input are rejected before any driver work [0.02ms]
+(pass) probe arg guard (parseProbeArgs) > --allow-input without a target is rejected [0.02ms]
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--window" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe arg guard (parseProbeArgs) > "--pid" is invalid and never starts the driver
+(pass) probe report projection (privacy allowlist) > driver errors retain their structured code without copying inner content [0.04ms]
+(pass) probe report projection (privacy allowlist) > projects geometry, scale, pixel size, and frame validity only [0.04ms]
+(pass) probe report projection (privacy allowlist) > never emits elements, labels, values, markdown, or image bytes [0.02ms]
+(pass) probe CLI desktop-free behavior > running without a target exits 0 and reports driverStarted:false [11.32ms]
+(pass) probe CLI desktop-free behavior > click coordinates without --allow-input exit non-zero with the guard reason [8.19ms]
+
+ 25 pass
+ 0 fail
+ 103 expect() calls
+Ran 25 tests across 3 files. [122.00ms]

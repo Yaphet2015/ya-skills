@@ -1,0 +1,18 @@
+{
+  "checkedPids": [
+    44982,
+    45161,
+    45702,
+    46143,
+    46629,
+    46831,
+    45738,
+    45961,
+    46184,
+    46378,
+    46645
+  ],
+  "psExitCode": 1,
+  "psOutput": "",
+  "result": "all listed owned fixture and host processes had exited"
+}

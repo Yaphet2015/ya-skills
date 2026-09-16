@@ -1,0 +1,64 @@
+{
+  "before": {
+    "activationChanges": [],
+    "at": 1789530904.929158,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 395,
+    "initialFrontmostPid": 395,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 46831,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29244,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "started": 1789530904977,
+  "elements": [],
+  "error": {
+    "string": "Error: one Block Increment element required",
+    "props": {
+      "message": "one Block Increment element required",
+      "originalLine": 14,
+      "originalColumn": 16,
+      "line": 13,
+      "column": 35,
+      "sourceURL": "/private/tmp/ya-native-20260916/raw-ax-timeout-allspaces.ts"
+    }
+  },
+  "ended": 1789530905065,
+  "after": {
+    "activationChanges": [],
+    "at": 1789530905.181727,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 395,
+    "initialFrontmostPid": 395,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "keyEvents": 0,
+    "pid": 46831,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29244,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "command": [
+    "act",
+    "--session",
+    "4095a531-5c17-4070-87b3-2e3548ed6b81",
+    "--click-role",
+    "AXButton",
+    "--click-text",
+    "Increment"
+  ],
+  "started": 1789530558.034125,
+  "ended": 1789530559.408405,
+  "exitCode": 0,
+  "result": {
+    "schemaVersion": 1,
+    "session": "4095a531-5c17-4070-87b3-2e3548ed6b81",
+    "result": {
+      "status": "completed",
+      "steps": [
+        {
+          "index": 0,
+          "kind": "click",
+          "status": "delivered"
+        }
+      ]
+    }
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530557.9839191,
+    "canvasClicks": 2,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      },
+      {
+        "at": 1789530558.188591,
+        "pid": 4610
+      }
+    ],
+    "at": 1789530559.3851318,
+    "canvasClicks": 2,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530558.102477,
+        "kind": "button"
+      }
+    ],
+    "frontmostPid": 4610,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

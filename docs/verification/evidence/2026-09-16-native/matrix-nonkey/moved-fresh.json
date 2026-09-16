@@ -1,0 +1,312 @@
+{
+  "command": [
+    "exec",
+    "--session",
+    "4095a531-5c17-4070-87b3-2e3548ed6b81",
+    "--file",
+    "/tmp/ya-native-20260916/matrix-nonkey/canvas.js",
+    "--request-id",
+    "canvas-moved-fresh"
+  ],
+  "started": 1789530600.653622,
+  "ended": 1789530602.5357811,
+  "exitCode": 0,
+  "result": {
+    "schemaVersion": 1,
+    "session": "4095a531-5c17-4070-87b3-2e3548ed6b81",
+    "result": {
+      "status": "completed",
+      "value": "one canvas click",
+      "stateVersion": 2,
+      "stateCommitted": true,
+      "stateHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "actions": [
+        {
+          "index": 1,
+          "kind": "click_point",
+          "status": "delivered"
+        }
+      ],
+      "observations": [
+        {
+          "id": "40927965-bc96-4607-b846-f6fa711ae862",
+          "target": {
+            "pid": 46143,
+            "windowId": "29121"
+          },
+          "capturedAt": 1789530600825,
+          "epoch": "34a37806-51e2-42f2-9a09-e17a381649e7",
+          "revision": 2,
+          "title": "YK native acceptance fixture",
+          "ax": {
+            "status": "truncated",
+            "reason": "elements_incomplete",
+            "elements": [
+              {
+                "role": "AXWindow",
+                "label": "YK native acceptance fixture",
+                "elementToken": "s00000006:0",
+                "frame": {
+                  "x": 140,
+                  "y": 608,
+                  "w": 520,
+                  "h": 332
+                }
+              },
+              {
+                "role": "AXButton",
+                "label": "Increment",
+                "elementToken": "s00000006:1",
+                "frame": {
+                  "x": 159,
+                  "y": 683,
+                  "w": 142,
+                  "h": 38
+                },
+                "enabled": true
+              },
+              {
+                "role": "AXTextField",
+                "label": "Fixture input",
+                "elementToken": "s00000006:2",
+                "frame": {
+                  "x": 159,
+                  "y": 757,
+                  "w": 282,
+                  "h": 34
+                },
+                "enabled": true
+              }
+            ],
+            "total": 3,
+            "returned": 3,
+            "complete": false
+          },
+          "image": {
+            "status": "usable",
+            "originalPath": "/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/artifacts/1789530600825-deb219b7-cu.png",
+            "path": "/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/artifacts/1789530600825-deb219b7-cu-520.png",
+            "frameValid": true,
+            "geometry": {
+              "sourceWidth": 1040,
+              "sourceHeight": 664,
+              "sentWidth": 520,
+              "sentHeight": 332,
+              "inputBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 520,
+                "height": 332
+              },
+              "windowBounds": {
+                "x": 140,
+                "y": 608,
+                "width": 520,
+                "height": 332
+              }
+            }
+          }
+        },
+        {
+          "id": "444b9cd1-03c1-4a0c-9182-ae684ba747a6",
+          "target": {
+            "pid": 46143,
+            "windowId": "29121"
+          },
+          "capturedAt": 1789530602403,
+          "epoch": "34a37806-51e2-42f2-9a09-e17a381649e7",
+          "revision": 3,
+          "title": "YK native acceptance fixture",
+          "ax": {
+            "status": "truncated",
+            "reason": "elements_incomplete",
+            "elements": [
+              {
+                "role": "AXWindow",
+                "label": "YK native acceptance fixture",
+                "elementToken": "s00000008:0",
+                "frame": {
+                  "x": 140,
+                  "y": 608,
+                  "w": 520,
+                  "h": 332
+                }
+              },
+              {
+                "role": "AXButton",
+                "label": "Increment",
+                "elementToken": "s00000008:1",
+                "frame": {
+                  "x": 159,
+                  "y": 683,
+                  "w": 142,
+                  "h": 38
+                },
+                "enabled": true
+              },
+              {
+                "role": "AXTextField",
+                "label": "Fixture input",
+                "elementToken": "s00000008:2",
+                "frame": {
+                  "x": 159,
+                  "y": 757,
+                  "w": 282,
+                  "h": 34
+                },
+                "enabled": true
+              }
+            ],
+            "total": 3,
+            "returned": 3,
+            "complete": false
+          },
+          "image": {
+            "status": "usable",
+            "originalPath": "/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/artifacts/1789530602403-da8bd5e4-cu.png",
+            "path": "/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/artifacts/1789530602403-da8bd5e4-cu.png",
+            "frameValid": true,
+            "geometry": {
+              "sourceWidth": 1040,
+              "sourceHeight": 664,
+              "sentWidth": 1040,
+              "sentHeight": 664,
+              "inputBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 520,
+                "height": 332
+              },
+              "windowBounds": {
+                "x": 140,
+                "y": 608,
+                "width": 520,
+                "height": 332
+              }
+            }
+          }
+        }
+      ],
+      "logs": []
+    }
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      },
+      {
+        "at": 1789530558.188591,
+        "pid": 4610
+      },
+      {
+        "at": 1789530562.9374251,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530600.635594,
+    "canvasClicks": 2,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530558.102477,
+        "kind": "button"
+      },
+      {
+        "at": 1789530590.136451,
+        "kind": "move"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 140,
+    "windowY": 140
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      },
+      {
+        "at": 1789530558.188591,
+        "pid": 4610
+      },
+      {
+        "at": 1789530562.9374251,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530602.486464,
+    "canvasClicks": 3,
+    "clicks": 1,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530558.102477,
+        "kind": "button"
+      },
+      {
+        "at": 1789530590.136451,
+        "kind": "move"
+      },
+      {
+        "at": 1789530601.1468182,
+        "kind": "canvas"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 140,
+    "windowY": 140
+  }
+}

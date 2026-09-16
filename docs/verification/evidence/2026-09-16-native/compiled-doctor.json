@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "platform": "darwin",
+  "arch": "arm64",
+  "sdk": {
+    "loaded": true,
+    "version": "0.27.0"
+  },
+  "driver": {
+    "created": true,
+    "sameProcess": true
+  },
+  "permissions": {
+    "accessibility": true,
+    "screenRecording": true
+  },
+  "hints": []
+}

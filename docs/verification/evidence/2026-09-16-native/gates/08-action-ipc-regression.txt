@@ -1,0 +1,9 @@
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-integration-native-action-outcome.test.ts:
+(pass) native action outcome across the production IPC boundary > structured Tool unknown poisons the session and never dispatches queued actions [49.55ms]
+
+ 1 pass
+ 0 fail
+ 15 expect() calls
+Ran 1 test across 1 file. [67.00ms]

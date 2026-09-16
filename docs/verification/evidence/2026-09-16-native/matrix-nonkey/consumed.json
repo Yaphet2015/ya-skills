@@ -1,0 +1,100 @@
+{
+  "command": [
+    "act",
+    "--session",
+    "4095a531-5c17-4070-87b3-2e3548ed6b81",
+    "--click-x",
+    "410",
+    "--click-y",
+    "180",
+    "--observation",
+    "4ec04beb-928a-47f0-8542-d7325144560c"
+  ],
+  "started": 1789530545.448799,
+  "ended": 1789530545.609498,
+  "exitCode": 1,
+  "result": "",
+  "stderr": "{\"error\":{\"code\":\"session_failed\",\"message\":\"session request ended failed\",\"sessionRequestId\":\"act-1789530545471-85u12w\",\"reply\":{\"schemaVersion\":1,\"requestId\":\"act-1789530545471-85u12w\",\"status\":\"failed\",\"result\":{\"status\":\"failed\",\"steps\":[{\"index\":0,\"kind\":\"click_point\",\"status\":\"not_delivered\",\"error\":{\"code\":\"unknown_observation\",\"message\":\"observation 4ec04beb-928a-47f0-8542-d7325144560c is not usable: observation 4ec04beb-928a-47f0-8542-d7325144560c was invalidated\"}}]}}}}\n",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530545.435113,
+    "canvasClicks": 2,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530545.5841079,
+    "canvasClicks": 2,
+    "clicks": 0,
+    "events": [
+      {
+        "at": 1789530481.102971,
+        "kind": "canvas"
+      },
+      {
+        "at": 1789530513.033342,
+        "kind": "canvas"
+      }
+    ],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  }
+}

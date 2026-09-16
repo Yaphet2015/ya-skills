@@ -1,0 +1,14 @@
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-use-probe-guard.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+SyntaxError: Export named 'projectDriverError' not found in module '/Users/phaethon/workspace/personal/ya-skills/scripts/probes/computer-use-agentic.ts'.
+-------------------------------
+
+
+ 0 pass
+ 1 fail
+ 1 error
+Ran 1 test across 1 file. [76.00ms]

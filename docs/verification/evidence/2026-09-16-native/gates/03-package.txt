@@ -1,0 +1,6 @@
+$ bun scripts/package-release.ts --version "0.22.0"
+generated /Users/phaethon/workspace/personal/ya-skills/skills/computer-use/references/api.d.ts (24 declarations)
+generated /Users/phaethon/workspace/personal/ya-skills/skills/computer-e2e/references/api.d.ts (31 declarations)
+   [6ms]  bundle  69 modules
+  [69ms] compile  dist/yk
+packaged ya-skills-v0.22.0-macos-arm64.tar.gz from /Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills

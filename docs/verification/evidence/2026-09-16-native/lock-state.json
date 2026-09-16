@@ -1,0 +1,5 @@
+{
+  "CGSSessionScreenIsLocked": true,
+  "kCGSessionLoginDoneKey": true,
+  "note": "Read-only CGSessionCopyCurrentDictionary probe; native input paused pending unlock."
+}

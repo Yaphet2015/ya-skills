@@ -1,0 +1,95 @@
+{
+  "command": [
+    "session",
+    "close",
+    "--session",
+    "2f06f4f9-67e2-4d7b-b3d3-5ff38f335c44"
+  ],
+  "started": 1789530480.368578,
+  "ended": 1789530480.530139,
+  "exitCode": 0,
+  "result": {
+    "schemaVersion": 1,
+    "session": {
+      "id": "2f06f4f9-67e2-4d7b-b3d3-5ff38f335c44",
+      "target": {
+        "pid": 46143,
+        "windowId": "29121"
+      },
+      "state": "closed",
+      "hostPid": 46184,
+      "generation": "5002d013-f5bc-45c8-9c1f-f12ba7f7a609",
+      "idleTimeoutMs": 120000
+    },
+    "cleanup": {
+      "driverTerminated": true,
+      "leaseReleased": true,
+      "unresolvedRequests": []
+    }
+  },
+  "stderr": "",
+  "before": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530480.334739,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  },
+  "after": {
+    "activationChanges": [
+      {
+        "at": 1789530417.474409,
+        "pid": 20223
+      },
+      {
+        "at": 1789530468.025089,
+        "pid": 1383
+      }
+    ],
+    "at": 1789530480.4848409,
+    "canvasClicks": 0,
+    "clicks": 0,
+    "events": [],
+    "frontmostPid": 1383,
+    "initialFrontmostPid": 1383,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "keyEvents": 0,
+    "pid": 46143,
+    "scale": 2,
+    "screenScales": [
+      2,
+      2
+    ],
+    "scrollEvents": 0,
+    "value": "",
+    "windowId": 29121,
+    "windowX": 80,
+    "windowY": 100
+  }
+}
