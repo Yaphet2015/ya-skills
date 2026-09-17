@@ -1,6 +1,6 @@
 ---
 name: ultra-simplify
-description: Use when the user asks for a massive simplification pass: LOC down 40%+, god files split, helpers unified, if-chains flattened, PRs delivered.
+description: Use when the user asks for a massive simplification pass
 ---
 
 # Ultra Simplify
