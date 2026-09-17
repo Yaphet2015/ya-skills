@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/Yaphet2015/ya-skills/compare/v0.23.0...v0.24.0) (2026-09-17)
+
+
+### Features
+
+* **computer-use:** complete AX form acceptance tooling ([a996c12](https://github.com/Yaphet2015/ya-skills/commit/a996c12da104ffc38b0de0272eccd095934e904d))
+
 ## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
 
 
