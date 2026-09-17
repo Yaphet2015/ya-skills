@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.26.0](https://github.com/Yaphet2015/ya-skills/compare/v0.25.1...v0.26.0) (2026-09-17)
+
+
+### Features
+
+* **cli:** per-command -h usage and checkbox install picker ([5c76c75](https://github.com/Yaphet2015/ya-skills/commit/5c76c750c1684d1033f1d05771b29cbaa60e5c22))
+
+
+### Bug Fixes
+
+* **release:** guard could never skip — gh needs GH_REPO pre-checkout, and poll longer for the 45MB asset upload ([302881d](https://github.com/Yaphet2015/ya-skills/commit/302881d369bcfbbc4da56d3bfdf14df6f952b323))
+
 ## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
 
 
