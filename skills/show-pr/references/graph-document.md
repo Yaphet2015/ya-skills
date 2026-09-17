@@ -308,7 +308,7 @@ Optional in the format, but write one for anything that is not trivial: more tha
 
 A walkthrough is a short guided tour of the diagrams. It has two to twelve steps. Each step shows one diagram, points at one part of it, and says a few words about it.
 
-Every step is one change, never a description of the diagram: the heading names the thing and what happened to it, built from change words such as added, removed, replaced, now, moved and split, and the body is one line on what that means for behaviour, with the numbers when they matter. The headline change is step one. Write it all for a smart twelve-year-old, in short common words and active voice. The skill page has the rule in full, with examples of a step written well and the same step written badly.
+Every step is one change, never a description of the diagram: the heading names the thing and what happened to it, built from change words such as added, removed, replaced, now, moved and split, and the body is one line on what that means for behaviour, with the numbers when they matter. The headline change is step one. Write it all in the report tone on the skill page (STE100 in Chinese, ADHD, expand every name). The skill page has the rule in full, with a BAD/GOOD of the same facts.
 
 Each step has:
 

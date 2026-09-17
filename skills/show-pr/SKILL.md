@@ -61,7 +61,23 @@ A follow-up such as "rename that node" or "add the queue" is: edit `.show-pr/gra
 
 - **Chinese**: `title`, `summary`, lane `label`/`subtitle`, node `label`/`subtitle`/`summary`/`group`/`badges`, edge `label`/`summary`, flow `title`/`summary`, participant `label`, message `label`/`note`, view `title`/`summary`, walkthrough `heading`/`body`, stats chip `label`/`value`, mermaid `title`/`summary` and the labels inside mermaid `code`, repro `title`/`note`/`result`/`steps`/`expected`, evidence `title`/`note`, design `title`/`context`/`options`/`rationale`, testStep `title`/`steps`/`expected`.
 - **English (unchanged)**: every id (`lanes[].id`, `nodes[].id`, `edges[].id`, `flows/messages/views/steps ids — the id regex `^[A-Za-z0-9][A-Za-z0-9._:/-]*$` rejects CJK), every `kind`, every `delta` (`added`/`modified`/`removed`/`unchanged`), every `emphasis`/`tone`, every file path, code identifiers inside prose (module/function names like `sessionActions`, IPC channels like `quick:command`, protocols like `STOMP`), and the commands inside repro `command`/`steps` — commands are typed as they run, never translated. The report chrome (导览 / 上一步 / 下一步 / 新增·修改·移除·未变 badges / legend / the five section titles) is hardcoded in the build tool — never put it in the document.
-- Write prose for a smart twelve-year-old: short common words, one idea per line, active voice, numbers as digits. This holds in Chinese: 用短句和常用词，一行为一件事。
+- **Tone** — three layers, all of them. Layout will not save an unexplained name.
+
+  1. ASD-STE100 Simplified Technical English, expressed in Chinese. Short sentences. One idea each. Active voice. Numbers as digits. Same word for the same thing. Subject and object stay visible.
+  2. Write as if the reader has ADHD. First sentence is the change. No stacked clauses. No throat-clearing. A skimmer must get the point in one glance.
+  3. Granularity, not format. Every sentence bottoms out at primitives the reader already owns: a person, a row, a request, a list, "先做 A，再做 B". A sentence that names a function, module, or mechanism without expanding it in the same breath is a defect.
+
+  Keep the English identifier. Expand it in the same sentence. `file:line` is a footnote after the plain claim, never the vehicle.
+
+  This applies to every Chinese field listed above. Card `label` and walkthrough `heading` stay short (heading ≤48). They may keep the name. The matching `summary` / `body` / `context` / `rationale` / `note` / `expected` must expand it. Length limits do not excuse jargon: cut a clause, do not compress. Header `summary` does not keep line breaks — split ideas with periods, not semicolons.
+
+  Same facts, two granularities:
+
+  BAD (compact, correct, unreadable):
+  > sendBroadcastBulk 认领队列文档并按批发送；抑制名单前移，载荷抽成共享库。
+
+  GOOD:
+  > 新函数 sendBroadcastBulk 会先把这一路广播从队列里拿走。然后每 500 封打一次 Postmark。不许再发的邮箱名单先一次性拉全，再开始发任何一批。拼请求体的代码放到两边都能用的同一份库里。
 
 ## What makes a document worth reading
 

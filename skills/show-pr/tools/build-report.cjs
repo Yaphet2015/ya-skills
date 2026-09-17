@@ -101,11 +101,11 @@ const html = `<!doctype html>
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
   /* ---------- report sections (independent block at the bottom of the page, below main) ---------- */
-  #sections { border-top: 1px solid var(--border); margin-top: 26px; padding: 26px 36px 60px; }
-  .report-sec { margin-bottom: 34px; max-width: 1080px; }
+  #sections { border-top: 1px solid var(--border); padding: 26px 36px 60px; }
+  .report-sec { margin: 0 auto 34px; max-width: 880px; width: 100%; }
   .report-sec > h2 { font-size: 15px; margin: 0 0 4px; }
   .report-sec > .phint { margin: 0 0 14px; }
-  .rcard { border: 1px solid var(--border); background: var(--surface2); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; max-width: 880px; }
+  .rcard { border: 1px solid var(--border); background: var(--surface2); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
   .steps-list { margin: 10px 0 0; padding-left: 22px; }
   .steps-list li { font-size: 12.5px; color: var(--sub); line-height: 1.7; margin-bottom: 4px; }
   .rtitle { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
@@ -127,6 +127,7 @@ const html = `<!doctype html>
   .chiptag { font-size: 10px; color: var(--hero); margin-left: 8px; }
   .expected { font-size: 12.5px; color: #86efac; margin: 8px 0 0; line-height: 1.6; }
   .mermaid { background: #0d1119; border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow-x: auto; text-align: center; color: var(--text); }
+  .mermaid svg { display: block; margin-inline: auto; }
 </style>
 </head>
 <body>
