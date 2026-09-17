@@ -144,11 +144,13 @@ Global options:
 - `-v`, `--version` — show the installed `yk` version.
 
 - `yk list` — list skills in the local catalog.
-- `yk install [skill...]` — install selected skills into the current repository.
+- `yk install [skill...]` — install selected skills into the current repository. Without skill names on an interactive terminal, `yk` shows a checkbox picker over the same catalog view as `yk list`: arrow keys move, `space` toggles, `Enter` confirms the selection, a second `Enter` installs (dependencies included); `Esc`/`Ctrl+C` cancels.
 - `yk install -g [skill...]` — install selected skills into user-level targets. `--global` is also supported.
 - `yk uninstall <skill...>` — remove selected skills from existing skill targets in the current repository.
 - `yk uninstall -g <skill...>` — remove selected skills from existing user-level targets. `--global` is also supported.
 - `yk <domain> <action> [...args]` — run an underlying function (e.g. `yk pbench capture`).
+
+**Help is layered** — `yk -h` lists every registered function domain (`demo`, `pbench`, `computer-use`, `computer-e2e`), `yk <domain> -h` lists that domain's actions, and `yk <domain> <action> -h` prints the command's real flags (e.g. `yk computer-use act -h` shows the six one-action forms; `yk pbench run -h` shows the `--agent` and `--manual` paths).
 
 **Install target detection** — `yk install` uses the current working repository by default. With `-g` or `--global`, it uses the user's home directory. Within the selected root:
 

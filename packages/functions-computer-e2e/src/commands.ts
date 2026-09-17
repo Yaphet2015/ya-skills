@@ -3,7 +3,7 @@
 // the SDK on help/parse-error paths.
 
 import type { FunctionCommand } from "@ya-skills/core";
-import { parseE2EArgs } from "./args.js";
+import { E2E_HISTORY_USAGE, E2E_REPORT_USAGE, E2E_RUN_USAGE, parseE2EArgs } from "./args.js";
 import { formatReport, readHistory, readRun } from "./history.js";
 import { supervise } from "./supervisor.js";
 
@@ -14,7 +14,8 @@ export function createComputerE2ECommands(): FunctionCommand[] {
       domain,
       action: "run",
       description:
-        "Run explicit .e2e.ts suites sequentially: yk computer-e2e run <file...> [--param k=v]... [--out-dir DIR] [--timeout-ms N] [--require-version V].",
+        "Run explicit .e2e.ts suites sequentially; each suite runs in a self-spawned worker with events.jsonl as the single source of truth.",
+      usage: [E2E_RUN_USAGE],
       run: async (args: string[]) => {
         const request = parseE2EArgs("run", args);
         const controller = new AbortController();
@@ -54,7 +55,8 @@ export function createComputerE2ECommands(): FunctionCommand[] {
     {
       domain,
       action: "history",
-      description: "List recorded runs as JSON: yk computer-e2e history [--out-dir DIR] [--limit N].",
+      description: "List recorded runs as JSON, newest first.",
+      usage: [E2E_HISTORY_USAGE],
       run: async (args: string[]) => {
         const request = parseE2EArgs("history", args);
         return JSON.stringify(await readHistory(request.outDir, request.limit), null, 2);
@@ -63,7 +65,8 @@ export function createComputerE2ECommands(): FunctionCommand[] {
     {
       domain,
       action: "report",
-      description: "Render one run's Markdown report: yk computer-e2e report <run-dir>.",
+      description: "Render one run's Markdown report from its recorded events.",
+      usage: [E2E_REPORT_USAGE],
       run: async (args: string[]) => {
         const request = parseE2EArgs("report", args);
         return formatReport(readRun(request.runDir));

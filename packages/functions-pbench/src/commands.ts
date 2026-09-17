@@ -37,6 +37,9 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "capture",
       description: "Create a persistent pbench authoring transaction from a coding-agent session.",
+      usage: [
+        "yk pbench capture [--source codex|claude] [--input JSONL] [--session-id ID] [--title TITLE] [--workspace PATH] [--yes]"
+      ],
       run: async (args) => {
         const parsed = parseArgs(args);
         const source = getString(parsed, "source") ?? "codex";
@@ -75,6 +78,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "validate",
       description: "Validate a pbench transaction or case bundle.",
+      usage: ["yk pbench validate (--transaction PATH | --case PATH) [--strict] [--workspace PATH]"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const transaction = getString(parsed, "transaction");
@@ -99,6 +103,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "export-replay",
       description: "Export a public-only pbench replay capsule for an agent.",
+      usage: ["yk pbench export-replay --case CASE --out DIR [--workspace PATH] [--force]"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const caseInput = requireString(parsed, "case", "yk pbench export-replay requires --case <case-dir-or-case-id>");
@@ -122,6 +127,10 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "run",
       description: "Run a pbench case through a harness-managed agent and private validator.",
+      usage: [
+        "yk pbench run --case CASE --agent AGENT [--workspace PATH] [--profile NAME]",
+        "yk pbench run --case CASE --manual [--workspace PATH] [--profile NAME] [--contaminated]"
+      ],
       run: async (args) => {
         const parsed = parseArgs(args);
         const caseInput = requireString(parsed, "case", "yk pbench run requires --case <case-dir-or-case-id>");
@@ -168,6 +177,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "start",
       description: "Prepare a pbench case for a skill-mediated benchmark run.",
+      usage: ["yk pbench start --case CASE [--workspace PATH] [--profile NAME] [--contaminated]"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const caseInput = requireString(parsed, "case", "yk pbench start requires --case <case-dir-or-case-id>");
@@ -197,6 +207,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "finish",
       description: "Finish a skill-mediated pbench run with private validation.",
+      usage: ["yk pbench finish --run RUN-ID"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const runId = requireString(parsed, "run", "yk pbench finish requires --run <run-id>");
@@ -207,6 +218,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "finalize",
       description: "Finalize a strict-validated pbench transaction.",
+      usage: ["yk pbench finalize --transaction PATH"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const transaction = requireString(parsed, "transaction", "yk pbench finalize requires --transaction <path>");
@@ -217,6 +229,9 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "report",
       description: "Aggregate pbench run artifacts into a benchmark report.",
+      usage: [
+        "yk pbench report [--case CASE] [--workspace PATH] [--profile NAME] [--format markdown|json] [--include-untrusted]"
+      ],
       run: async (args) => {
         const parsed = parseArgs(args);
         const workspaceRoot = await dependencies.resolveWorkspaceRoot({
@@ -248,6 +263,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "audit",
       description: "Audit pbench case quality without running private validators.",
+      usage: ["yk pbench audit [--case CASE] [--workspace PATH]"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const caseInput = getString(parsed, "case");
@@ -272,6 +288,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "workspace-init",
       description: "Initialize a pbench workspace.",
+      usage: ["yk pbench workspace-init PATH"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const path = parsed.positionals[0];
@@ -285,6 +302,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       domain: "pbench",
       action: "project-link",
       description: "Link the current project to a pbench workspace.",
+      usage: ["yk pbench project-link --workspace PATH"],
       run: async (args) => {
         const parsed = parseArgs(args);
         const workspace = requireString(parsed, "workspace", "yk pbench project-link requires --workspace <path>");

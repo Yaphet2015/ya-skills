@@ -1,10 +1,11 @@
 // Strict input validation for `yk computer-e2e`. Everything is rejected
 // before any worker, SDK, or run directory exists.
 
-export const E2E_USAGE =
-  "usage: yk computer-e2e run <file.e2e.ts...> [--param k=v]... [--out-dir DIR] [--timeout-ms N] [--require-version V]\n" +
-  "       yk computer-e2e history [--out-dir DIR] [--limit N]\n" +
-  "       yk computer-e2e report <run-dir>";
+export const E2E_RUN_USAGE =
+  "yk computer-e2e run <file.e2e.ts...> [--param k=v]... [--out-dir DIR] [--timeout-ms N] [--require-version V]";
+export const E2E_HISTORY_USAGE = "yk computer-e2e history [--out-dir DIR] [--limit N]";
+export const E2E_REPORT_USAGE = "yk computer-e2e report <run-dir>";
+export const E2E_USAGE = `usage: ${E2E_RUN_USAGE}\n       ${E2E_HISTORY_USAGE}\n       ${E2E_REPORT_USAGE}`;
 
 export type E2ERequest =
   | {

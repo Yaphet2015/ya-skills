@@ -23,6 +23,8 @@ export type FunctionCommand = {
   domain: string;
   action: string;
   description: string;
+  /** Per-command usage lines shown by `yk <domain> <action> -h`; omitted commands fall back to `[...args]`. */
+  usage?: string[];
   run(args: string[]): Promise<string | void> | string | void;
 };
 

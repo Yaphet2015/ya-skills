@@ -24,7 +24,7 @@ import { COMMAND_DEADLINE_MS } from "./consts.js";
 import { runDoctor } from "./runtime.js";
 import { observeCommand, type ObserveCommandRequest } from "./observe-command.js";
 import { batchCommand, type BatchCommandRequest } from "./batch-command.js";
-import { parseSessionArgs, runOnSession, sessionCommand, type SessionTransportDeps } from "./session-command.js";
+import { parseSessionArgs, runOnSession, sessionCommand, SESSION_USAGE_LINES, type SessionTransportDeps } from "./session-command.js";
 import { execCommand } from "./exec-command.js";
 import { sessionRoot } from "@ya-skills/computer-session";
 import { createAutoLeases } from "@ya-skills/computer-runtime";
@@ -371,6 +371,7 @@ export function createComputerUseCommands(
       domain,
       action: "doctor",
       description: "Check platform, runtime files, driver load, and read-only permission status.",
+      usage: ["yk computer-use doctor"],
       run: async (args: string[]) => {
         parseRequest("doctor", args); // strict: unknown flags are input errors
         const report = await runDoctor();
@@ -381,14 +382,19 @@ export function createComputerUseCommands(
         return json;
       }
     },
-    { domain, action: "apps", description: "List running apps (pid, name) with optional --name substring filter.", run: run("apps") },
-    { domain, action: "windows", description: "List windows for a --pid (windowId as decimal string, title).", run: run("windows") },
-    { domain, action: "perceive", description: "Read AX elements (and optional screenshot) of a window for the next decision.", run: run("perceive") },
+    { domain, action: "apps", description: "List running apps (pid, name) with optional --name substring filter.", usage: ["yk computer-use apps [--name SUBSTRING]"], run: run("apps") },
+    { domain, action: "windows", description: "List windows for a --pid (windowId as decimal string, title).", usage: ["yk computer-use windows --pid PID"], run: run("windows") },
+    { domain, action: "perceive", description: "Read AX elements (and optional screenshot) of a window for the next decision.", usage: ["yk computer-use perceive --pid PID [--window ID] [--shot] [--activate] [--out-dir DIR]"], run: run("perceive") },
     {
       domain,
       action: "observe",
       description:
         "Independent AX/image observation: returns observationId, per-channel validity, and image geometry for visual clicks.",
+      usage: [
+        "yk computer-use observe (--pid PID | --session ID) [--window ID] [--mode auto|ax|image|both]",
+        "                              [--max-dimension PX] [--out-dir DIR]",
+        "                              [--select-text TEXT [--select-match exact|contains] [--select-role ROLE]]"
+      ],
       run: run("observe")
     },
     {
@@ -396,6 +402,7 @@ export function createComputerUseCommands(
       action: "session",
       description:
         "Persistent sessions: open/status/cancel/close. Reuses one driver across commands; request ids are deduped, never replayed.",
+      usage: SESSION_USAGE_LINES,
       run: run("session")
     },
     {
@@ -403,6 +410,7 @@ export function createComputerUseCommands(
       action: "exec",
       description:
         "Run a JavaScript flow (--file, --request-id) inside a persistent session (--session): awaits, loops, local waits, explicit state.",
+      usage: ["yk computer-use exec --session ID --file FILE --request-id ID [--timeout-ms N] [--max-actions N]"],
       run: run("exec")
     },
     {
@@ -410,8 +418,25 @@ export function createComputerUseCommands(
       action: "batch",
       description:
         "Run a bounded ordered action batch from a JSON file (--file, --request-id); deduped by request id, never replayed.",
+      usage: [
+        "yk computer-use batch (--pid PID | --session ID) --file FILE --request-id ID",
+        "                       [--window ID] [--out-dir DIR] [--max-actions N<=20] [--timeout-ms N<=120000]"
+      ],
       run: run("batch")
     },
-    { domain, action: "act", description: "Perform one background action (click/set-value/type/key/scroll), then re-perceive.", run: run("act") }
+    {
+      domain,
+      action: "act",
+      description: "Perform one background action (click/set-value/type/key/scroll), then re-perceive.",
+      usage: [
+        "yk computer-use act (--pid PID | --session ID) [--window ID] [--shot] [--activate] with exactly one action:",
+        "  --click-text TEXT | --click-contains TEXT [--click-role ROLE]   AX text click",
+        "  --click-x PX --click-y PY --observation UUID                      visual click (from observe)",
+        "  --set-value VALUE --element-token TOKEN                          set AX value",
+        "  --type TEXT | --key KEY                                           keyboard input",
+        "  --scroll up|down|left|right [--amount N] [--x PX] [--y PY]        scroll"
+      ],
+      run: run("act")
+    }
   ];
 }

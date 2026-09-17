@@ -2,19 +2,18 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, isAbsolute } from "node:path";
-import { stdin as input, stdout as output } from "node:process";
-import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import {
   installSkills,
   loadCatalog,
   uninstallSkills,
-  type CatalogSkill,
   type FunctionCommand,
   type SkillCatalog
 } from "@ya-skills/core";
 import { runWorkerFromConfig } from "@ya-skills/functions-computer-e2e";
 import { driverWorkerMain, execWorkerMain, hostMain } from "@ya-skills/computer-session";
+import { selectSkillsInteractively } from "./interactive.js";
+import { formatSkillLine, shouldColor, skillNameWidth } from "./skill-list.js";
 import { createCliFunctionRegistry } from "./function-registry.js";
 import packageJson from "../../../package.json" with { type: "json" };
 
@@ -48,7 +47,7 @@ async function main(argv: string[]) {
   }
 
   if (!command || isHelpFlag(command)) {
-    printHelp();
+    printHelp(createCliFunctionRegistry().list());
     return;
   }
 
@@ -111,43 +110,16 @@ async function main(argv: string[]) {
 
 async function listSkills() {
   const catalog = await loadDefaultCatalog();
-  const nameWidth = catalog.skills.reduce((width, skill) => Math.max(width, skill.name.length), 0);
+  const nameWidth = skillNameWidth(catalog.skills);
   const color = shouldColor();
   for (const skill of catalog.skills) {
     console.log(formatSkillLine(skill, nameWidth, color));
   }
 }
 
-function formatSkillLine(skill: CatalogSkill, nameWidth: number, color: boolean): string {
-  const name = skill.name.padEnd(nameWidth);
-  let body = skill.description;
-  if (skill.dependsOn.length > 0) {
-    body += ` · ${skill.dependsOn.join(", ")}`;
-  }
-  if (!color) {
-    return `${name}  ${body}`;
-  }
-  return `${boldCyan(name)}  ${dim(body)}`;
-}
-
-function shouldColor(): boolean {
-  return Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
-}
-
-function boldCyan(value: string): string {
-  return `\x1b[1;36m${value}\x1b[0m`;
-}
-
-function dim(value: string): string {
-  return `\x1b[2m${value}\x1b[0m`;
-}
-
 async function installCommand(skillNames: string[], projectDir: string) {
   const catalog = await loadDefaultCatalog();
   const selected = skillNames.length > 0 ? skillNames : await promptForSkills(catalog);
-  if (selected.length === 0) {
-    throw new Error("No skills selected");
-  }
 
   const result = await installSkills({
     catalog,
@@ -178,27 +150,12 @@ async function promptForSkills(catalog: SkillCatalog): Promise<string[]> {
     throw new Error("yk install requires skill names when stdin is not interactive");
   }
 
-  for (const [index, skill] of catalog.skills.entries()) {
-    console.log(`${index + 1}. ${skill.name} - ${skill.description}`);
+  const result = await selectSkillsInteractively(catalog);
+  if (result.canceled) {
+    console.log("yk install canceled.");
+    process.exit(result.reason === "interrupt" ? 130 : 1);
   }
-
-  const rl = createInterface({ input, output });
-  try {
-    const answer = await rl.question("Select skills by number or name, separated by commas: ");
-    return answer
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => {
-        const index = Number(item);
-        if (Number.isInteger(index) && index >= 1 && index <= catalog.skills.length) {
-          return catalog.skills[index - 1].name;
-        }
-        return item;
-      });
-  } finally {
-    rl.close();
-  }
+  return result.selected;
 }
 
 async function loadDefaultCatalog(): Promise<SkillCatalog> {
@@ -225,7 +182,8 @@ function catalogCandidates(): string[] {
   ];
 }
 
-function printHelp() {
+function printHelp(commands: FunctionCommand[]) {
+  const domains = [...new Set(commands.map((command) => command.domain))];
   console.log(`yk
 
 Usage:
@@ -241,6 +199,9 @@ Commands:
   yk install [options] [skill...]
   yk uninstall [options] <skill...>
   yk <domain> <action> [...args]
+
+Function domains: ${domains.join(", ")}
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
 `);
 }
 
@@ -263,7 +224,7 @@ Usage:
 Options:
   -g, --global    Install into user-level skill targets.
 
-Install selected skills into this repository by default. If no skills are provided, yk prompts interactively.
+Install selected skills into this repository by default. Without skill names on an interactive terminal, yk shows a checkbox picker over the catalog (same view as yk list): arrows move, space toggles, Enter confirms, a second Enter installs; Esc or Ctrl+C cancels.
 `);
 }
 
@@ -302,10 +263,14 @@ function printFunctionHelp(domain: string, action: string, commands: FunctionCom
     throw new Error(`Unknown function command: ${domain} ${action}`);
   }
 
+  const usage = command.usage?.length
+    ? command.usage.map((line) => `  ${line}`).join("\n")
+    : `  yk ${domain} ${action} [...args]`;
+
   console.log(`yk ${domain} ${action}
 
 Usage:
-  yk ${domain} ${action} [...args]
+${usage}
 
 ${command.description}
 `);

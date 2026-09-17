@@ -18,11 +18,14 @@ import {
 } from "@ya-skills/computer-session";
 import { createComputerSession, selectWindow, type ComputerSession, type Target } from "@ya-skills/computer-runtime";
 
-export const SESSION_USAGE = `usage: yk computer-use session <open|status|cancel|close>
-  open   --pid P [--window ID] [--idle-timeout-ms N (<=120000)]
-  status --session ID
-  cancel --session ID --request-id REQUEST
-  close  --session ID`;
+export const SESSION_USAGE_LINES = [
+  "yk computer-use session <open|status|cancel|close>",
+  "  open   --pid P [--window ID] [--idle-timeout-ms N (<=120000)]",
+  "  status --session ID",
+  "  cancel --session ID --request-id REQUEST",
+  "  close  --session ID"
+];
+export const SESSION_USAGE = `usage: ${SESSION_USAGE_LINES[0]}\n${SESSION_USAGE_LINES.slice(1).join("\n")}`;
 
 function jsonError(code: string, message: string, extra: Record<string, unknown> = {}): Error {
   return new Error(JSON.stringify({ error: { code, message, ...extra } }));
