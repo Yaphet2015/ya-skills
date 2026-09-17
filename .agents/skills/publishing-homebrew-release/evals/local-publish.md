@@ -19,12 +19,13 @@ Local packaging path, not Release Please:
 1. Confirm clean `main` that matches `origin/main`, on macOS arm64.
 2. Choose the next version after the latest GitHub Release. Do not overwrite an existing tag.
 3. Bump `package.json` `version`, commit, and push that commit first.
-4. Run `bun run typecheck`, `bun run test`, and `bun run build:binary:macos-arm64`.
-5. Package `yk` plus `skills/` into `ya-skills-v<version>-macos-arm64.tar.gz` and `.sha256`.
-6. Create tag `v<version>` and a GitHub Release with those two assets.
-7. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb` URL, sha256, and `--version` assertion. Do not add a formula `version` line.
-8. Close or refresh the open Release Please PR. Do not merge it.
-9. After success, delete local packaging leftovers. Do not leave `ya-skills-v*-macos-arm64.tar.gz`, `.sha256`, `dist/yk`, or a packaging staging dir in the repo.
+4. Run `bun run typecheck` and `bun run test`.
+5. Package with `bun run package:release -- --version <version>`. The tarball contains `yk`, `skills/`, and `runtime/`.
+6. Run the packaged lane the release runner gates on (`YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts tests/computer-session-release.test.ts tests/computer-lane-release-packaging.test.ts`), then `bun run build` and `bun run smoke`. The tag-triggered CI skips itself, so these local gates are the only gates.
+7. Create tag `v<version>` and a GitHub Release with those two assets.
+8. Update `Yaphet2015/homebrew-tap` `Formula/ya-skills.rb` URL, sha256, and `--version` assertion. Do not add a formula `version` line.
+9. Close or refresh the open Release Please PR. Do not merge it.
+10. After success, delete local packaging leftovers. Do not leave `ya-skills-v*-macos-arm64.tar.gz`, `.sha256`, `dist/yk`, `dist/release/`, or another packaging staging dir in the repo.
 
 Prompt B must refuse overwrite and skip-tests. It still ships the next version after a fresh verify.
 
