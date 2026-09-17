@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-17",
+  "authorization": "User explicitly allowed temporary use of the current desktop while away.",
+  "desktop": "current user desktop, reserved for this run; not an independent login session",
+  "bun": "1.4.0",
+  "sdk": {
+    "name": "@trycua/cua-driver",
+    "version": "0.27.0"
+  },
+  "fixtureSource": "scripts/probes/fixtures/computer-use-ax-form.swift",
+  "fixtureSourceSha256": "65288081df1645c91da34a33f887789fe83e60c8e038937aa23622dba60a2ad0",
+  "fixtureBinarySha256": "8ea1c9878a92e69441b1f9897b6f141f85655784cfbde87e575fbd5bd27895b9",
+  "invocation": "bun /private/tmp/yk-ax-form-audited.ts --allow-native --test-desktop user-authorized-idle-desktop --fixture-binary /private/tmp/ya-ax-form-fixture-20260917 --out-dir /private/tmp/yk-ax-form-20260917-02",
+  "audit": "Saved harness wraps SDK prototype methods, forwards original arguments and returns original results, and does not retry. No production adapter was replaced.",
+  "cleanup": {
+    "sessionClosed": true,
+    "fixtureExitCode": 0,
+    "forcedTermination": false,
+    "knownFixtureProcessesAfterRun": []
+  },
+  "verification": {
+    "targetedTestsPassed": 13,
+    "assertions": 46,
+    "typecheck": "passed",
+    "swiftCompile": "passed"
+  }
+}

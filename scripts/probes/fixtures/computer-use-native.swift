@@ -1,14 +1,30 @@
 // Opt-in AppKit fixture for computer-use native acceptance. Never launched by
 // the default test suite. Usage: fixture <absolute-output-dir> [--block-press]
+// [--allow-pointer] (the latter also requires YK_INPUT_TEST_DESKTOP=1)
 // The panel cannot become key/main, even when background input reaches it.
 import AppKit
 
 guard CommandLine.arguments.count >= 2, CommandLine.arguments[1].hasPrefix("/") else {
-    fputs("usage: fixture <absolute-output-dir> [--block-press]\n", stderr)
+    fputs("usage: fixture <absolute-output-dir> [--block-press] [--allow-pointer]\n", stderr)
     exit(2)
 }
 let outputDirectory = CommandLine.arguments[1]
-let blockPress = CommandLine.arguments.dropFirst(2).contains("--block-press")
+let fixtureArguments = Array(CommandLine.arguments.dropFirst(2))
+let knownArguments: Set<String> = ["--block-press", "--allow-pointer"]
+guard fixtureArguments.allSatisfy({ knownArguments.contains($0) }) else {
+    fputs("usage: fixture <absolute-output-dir> [--block-press] [--allow-pointer]\n", stderr)
+    exit(2)
+}
+let blockPress = fixtureArguments.contains("--block-press")
+// Pointer delivery is opt-in for an independent test desktop. The default
+// fixture is click-through and ordered behind other windows, so merely
+// launching it cannot intercept a user's physical click.
+let allowPointer = fixtureArguments.contains("--allow-pointer")
+let independentDesktopAuthorized = ProcessInfo.processInfo.environment["YK_INPUT_TEST_DESKTOP"] == "1"
+guard !allowPointer || independentDesktopAuthorized else {
+    fputs("error: --allow-pointer requires YK_INPUT_TEST_DESKTOP=1 on an independent test desktop\n", stderr)
+    exit(2)
+}
 try FileManager.default.createDirectory(atPath: outputDirectory, withIntermediateDirectories: true)
 let app = NSApplication.shared
 app.setActivationPolicy(.prohibited)
@@ -95,6 +111,7 @@ let panel = NonKeyPanel(
 )
 panel.title = "YK native acceptance fixture"
 panel.hidesOnDeactivate = false
+panel.ignoresMouseEvents = !allowPointer
 let button: NSButton = blockPress
     ? BlockingButton(title: "Block Increment", target: handler, action: #selector(Handler.clicked(_:)))
     : NSButton(title: "Increment", target: handler, action: #selector(Handler.clicked(_:)))
@@ -118,6 +135,9 @@ func publish() {
         "windowId": panel.windowNumber,
         "initialFrontmostPid": initialFrontmost,
         "frontmostPid": NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1,
+        "independentDesktopAuthorized": independentDesktopAuthorized,
+        "pointerInputAllowed": allowPointer,
+        "ignoresMouseEvents": panel.ignoresMouseEvents,
         "activationChanges": activations,
         "isKeyWindow": panel.isKeyWindow,
         "isMainWindow": panel.isMainWindow,
@@ -148,7 +168,13 @@ let observer = NSWorkspace.shared.notificationCenter.addObserver(
         }
     }
 }
-panel.orderFrontRegardless()
+if allowPointer {
+    // Coordinate actions are only valid on the explicitly authorized,
+    // independent test desktop.
+    panel.orderFrontRegardless()
+} else {
+    panel.orderBack(nil)
+}
 MainActor.assumeIsolated { publish() }
 Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
     MainActor.assumeIsolated {

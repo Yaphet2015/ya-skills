@@ -1,0 +1,106 @@
+{
+  "pid": 54986,
+  "windowId": "36825",
+  "snapshotId": "s00000001",
+  "appName": "computer-use-ax-form-fixture",
+  "windowTitle": "YK AX form fixture",
+  "treeMarkdown": "- [0] AXWindow \"YK AX form fixture\" [actions=[raise]]\n  - AXStaticText = \"Name\" (Name label)\n  - AXStaticText = \"Email\" (Email label)\n  - AXStaticText = \"Message\" (Message label)\n  - [1] AXTextField (Name) [id=ax-form-name actions=[showmenu,confirm]]\n  - [2] AXTextField (Email) [id=ax-form-email actions=[showmenu,confirm]]\n  - [3] AXTextField (Message) [id=ax-form-message actions=[showmenu,confirm]]\n  - [4] AXButton \"Submit AX form\" (Submit AX form) [actions=[press]]\n  - AXStaticText = \"waiting\" (AX form result)\n  - AXStaticText = \"YK AX form fixture\"\n",
+  "elements": [
+    {
+      "elementIndex": "0",
+      "role": "AXWindow",
+      "depth": 0,
+      "elementToken": "s00000001:0",
+      "label": "YK AX form fixture",
+      "actions": [
+        "AXRaise"
+      ],
+      "frame": {
+        "x": 80,
+        "y": 528,
+        "w": 620,
+        "h": 452
+      }
+    },
+    {
+      "elementIndex": "1",
+      "role": "AXTextField",
+      "depth": 1,
+      "elementToken": "s00000001:1",
+      "label": "Name",
+      "enabled": true,
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ],
+      "parentIndex": "0",
+      "frame": {
+        "x": 259,
+        "y": 622,
+        "w": 382,
+        "h": 34
+      }
+    },
+    {
+      "elementIndex": "2",
+      "role": "AXTextField",
+      "depth": 1,
+      "elementToken": "s00000001:2",
+      "label": "Email",
+      "enabled": true,
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ],
+      "parentIndex": "0",
+      "frame": {
+        "x": 259,
+        "y": 682,
+        "w": 382,
+        "h": 34
+      }
+    },
+    {
+      "elementIndex": "3",
+      "role": "AXTextField",
+      "depth": 1,
+      "elementToken": "s00000001:3",
+      "label": "Message",
+      "enabled": true,
+      "actions": [
+        "AXShowMenu",
+        "AXConfirm"
+      ],
+      "parentIndex": "0",
+      "frame": {
+        "x": 259,
+        "y": 742,
+        "w": 382,
+        "h": 34
+      }
+    },
+    {
+      "elementIndex": "4",
+      "role": "AXButton",
+      "depth": 1,
+      "elementToken": "s00000001:4",
+      "label": "Submit AX form",
+      "enabled": true,
+      "actions": [
+        "AXPress"
+      ],
+      "parentIndex": "0",
+      "frame": {
+        "x": 259,
+        "y": 818,
+        "w": 182,
+        "h": 38
+      }
+    }
+  ],
+  "elementCount": "5",
+  "totalElementCount": "5",
+  "returnedElementCount": "5",
+  "elementsComplete": false,
+  "images": []
+}

@@ -41,9 +41,28 @@ describe("strict AX-only setValue", () => {
   });
 
   test("rejects before native dispatch when the backend has no AX-only operation", async () => {
-    let calls = 0;
+    const fallbackCalls: string[] = [];
     const session = createSessionWithBackend(
-      { load: async () => ({}), create: fakeBackendFactory({ setValue: undefined }) },
+      {
+        load: async () => ({}),
+        create: fakeBackendFactory({
+          // A missing AX operation must fail closed. These spies make the
+          // regression meaningful: no keyboard or click fallback may run.
+          setValue: undefined,
+          clickToken: async () => {
+            fallbackCalls.push("clickToken");
+            return { isError: false };
+          },
+          type: async () => {
+            fallbackCalls.push("type");
+            return { isError: false };
+          },
+          key: async () => {
+            fallbackCalls.push("key");
+            return { isError: false };
+          }
+        })
+      },
       {}
     );
     try {
@@ -54,7 +73,7 @@ describe("strict AX-only setValue", () => {
       expect(error).toBeInstanceOf(ComputerError);
       expect((error as ComputerError).code).toBe("ax_only_unsupported");
       expect((error as ComputerError).actionOutcome).toBe("not_delivered");
-      expect(calls).toBe(0);
+      expect(fallbackCalls).toEqual([]);
     } finally {
       await session.close();
     }

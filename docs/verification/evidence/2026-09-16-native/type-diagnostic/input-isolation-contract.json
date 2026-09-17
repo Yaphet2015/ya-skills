@@ -1,0 +1,628 @@
+{
+  "source": {
+    "sdk": "@trycua/cua-driver",
+    "version": "0.27.0",
+    "method": "CuaDriver.listToolsJson()",
+    "snapshot": "/tmp/ya-input-contract/tools.json",
+    "snapshotSha256": "f3c4aefcbab8fbef9ed4ea3b689edeb0df0dacf713147729f340fd2a3e641832",
+    "note": "Read-only contract snapshot; no fixture or desktop input was used."
+  },
+  "tools": [
+    {
+      "name": "click",
+      "description": "Click against a target pid. **Prefer `element_token` over pixel coordinates** — the token works on backgrounded / minimized / hidden / off-Space windows, identifies one exact snapshot element, and tells you what you're clicking via the cached element's role + label. Reach for `x, y` only when the target is a canvas / video / WebGL / custom-drawn surface that doesn't appear in the AX tree.\n\nTwo addressing modes:\n\n- element_token, or element_index + snapshot_id (from get_window_state): AX action path. Works on backgrounded/hidden windows. No cursor move, no focus steal. The snapshot cache is scoped per (pid, window_id) and is replaced by the next snapshot of the same window — re-snapshot every turn before clicking.\n\n- x, y (window-local screenshot pixels, top-left origin of the PNG returned by get_window_state): CGEvent path. Synthesizes mouse events and posts to pid. Use modifier for cmd/shift/option/ctrl. Needs a visible on-screen window to anchor the conversion.\n\nbutton: \"left\" (default), \"right\", or \"middle\". Defaults to left so the field is fully back-compat — omit it and you get the legacy left-click behaviour. Pixel path: routes through the CGEvent left/right/middle mouse-button primitives. AX path: \"right\" maps to AXShowMenu (same surface as the dedicated `right_click` tool); \"middle\" has no AX equivalent and falls back to a pixel middle-click at the element's center.\naction: press (default), show_menu, pick, confirm, cancel, open.\nfrom_zoom: set true after a zoom call to auto-translate zoom-image pixel coordinates to full-window space.",
+      "input": {
+        "required": [],
+        "properties": {
+          "target": {
+            "description": "Exact capture/input target selected independently for each action.\n\n`display_id=\"primary\"` is the portable desktop target in this release.\nPlatforms that cannot address another display reject it explicitly rather\nthan silently changing coordinate spaces.",
+            "oneOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "kind": {
+                    "const": "window",
+                    "type": "string"
+                  },
+                  "pid": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "window_id": {
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "pid",
+                  "window_id"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "display_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "desktop",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "display_id"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "pid": {
+            "description": "Target process ID.",
+            "type": "integer"
+          },
+          "window_id": {
+            "description": "Target window ID. Required for element_index. Optional when element_token is supplied (the token carries it).",
+            "type": "integer"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "x": {
+            "description": "X in screenshot pixels. A window target uses the get_window_state PNG; a desktop target uses the native get_desktop_state PNG. The driver reverses Retina backing scale and any window-image downscale.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Y in screenshot pixels from the image selected by target.",
+            "type": "number"
+          },
+          "delivery_mode": {
+            "description": "Best-effort-background ladder rung (default \"background\"). \"background\": perform the AX action or post the CGEvent without fronting. \"foreground\": briefly front the window, act, let transient UI settle, then restore the prior frontmost app. Requires window_id. Modified clicks require \"foreground\" so macOS observes physical modifier-key state. A generic click has no independent postcondition read-back, except selection of list-like AX rows whose AXSelected state can be confirmed; otherwise confirm the effect from a fresh state snapshot. Use the agent loop: background AX (element_index) → snapshot → background pixel (x/y) → snapshot → delivery_mode:\"foreground\".",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "action": {
+            "description": "AX action: press, show_menu, pick, confirm, cancel, open.",
+            "type": "string"
+          },
+          "button": {
+            "description": "Mouse button. Default: \"left\" — omit for legacy left-click behaviour. Pixel path uses the matching CGEvent primitive; AX path maps \"right\" to AXShowMenu and falls back to a pixel middle-click at the element's center for \"middle\".",
+            "enum": [
+              "left",
+              "right",
+              "middle"
+            ],
+            "type": "string"
+          },
+          "count": {
+            "description": "Click count (pixel path only). Default 1.",
+            "type": "integer"
+          }
+        }
+      },
+      "output": {
+        "route": {
+          "enum": [
+            "accessibility",
+            "synthetic_events",
+            "global_input",
+            "system_api",
+            "dom",
+            "trusted_input"
+          ],
+          "type": "string"
+        },
+        "delivery": {
+          "additionalProperties": false,
+          "properties": {
+            "delivered_count": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "mode": {
+              "enum": [
+                "background",
+                "foreground",
+                "not_applicable",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "effect": {
+          "enum": [
+            "confirmed",
+            "partial",
+            "unverifiable",
+            "suspected_noop",
+            "refused"
+          ],
+          "type": "string"
+        },
+        "escalation": {
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "enum": [
+                "route_unavailable",
+                "delivery_failed",
+                "effect_unconfirmed",
+                "suspected_noop",
+                "permission_required"
+              ],
+              "type": "string"
+            },
+            "target": {
+              "enum": [
+                "pixel",
+                "foreground",
+                "page",
+                "session"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "reason"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "risk": {
+        "class": "r1",
+        "enforcement": "active",
+        "operation_sensitive": false,
+        "version": "1"
+      }
+    },
+    {
+      "name": "press_key",
+      "description": "Press and release a single key. Follows the same `delivery_mode` ladder as click/type_text — it does NOT raise the window by default:\n• `background` (default): post to the pid WITHOUT fronting/raising — the auth-message path (Chromium-safe). With element_index it focuses that AX element first. `window_id` only targets; it does not raise.\n• `foreground`: guard and briefly front the exact window, focus an addressed AX element when supplied, send a genuine HID key transition so Chromium content, inline editors, and native menu equivalents receive it, then restore prior frontmost. Requires window_id.\n\nA key press is confirmed only when a bounded native AX value/selection read-back changes on the same control. Otherwise a successfully attempted post remains effect:\"unverifiable\" without implying delivery failure or recommending foreground. Key names: return, tab, escape, up/down/left/right, space, delete, home, end, pageup, pagedown, f1-f12, plus any letter or digit. Modifiers array: cmd, shift, option/alt, ctrl, fn.",
+      "input": {
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "description": "Exact capture/input target selected independently for each action.\n\n`display_id=\"primary\"` is the portable desktop target in this release.\nPlatforms that cannot address another display reject it explicitly rather\nthan silently changing coordinate spaces.",
+                "oneOf": [
+                  {
+                    "additionalProperties": true,
+                    "properties": {
+                      "kind": {
+                        "const": "window",
+                        "type": "string"
+                      },
+                      "pid": {
+                        "format": "uint32",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "window_id": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "pid",
+                      "window_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "properties": {
+                      "display_id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "desktop",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "display_id"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "window_id": {
+            "description": "Target window. Required for delivery_mode:\"foreground\". Does NOT itself raise the window — raising is gated on delivery_mode.",
+            "type": "integer"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "x": {
+            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_index.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Screenshot-pixel Y (see x).",
+            "type": "number"
+          },
+          "key": {
+            "description": "Key name: return, tab, escape, up, down, etc.",
+            "type": "string"
+          },
+          "modifiers": {
+            "description": "Modifier keys: cmd, shift, option/alt, ctrl, fn.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "delivery_mode": {
+            "description": "Best-effort-background ladder rung (default \"background\"). \"background\": inject without fronting or raising the target — no focus steal. \"foreground\": briefly front the target, act, then restore the prior frontmost — the explicit last resort when a background attempt didn't land. Re-call with \"foreground\" only for the action that needs it.",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "default": "window",
+            "description": "Use desktop with no pid/window_id to send the key to the frontmost application.",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "output": {
+        "route": {
+          "enum": [
+            "accessibility",
+            "synthetic_events",
+            "global_input",
+            "system_api",
+            "dom",
+            "trusted_input"
+          ],
+          "type": "string"
+        },
+        "delivery": {
+          "additionalProperties": false,
+          "properties": {
+            "delivered_count": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "mode": {
+              "enum": [
+                "background",
+                "foreground",
+                "not_applicable",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "effect": {
+          "enum": [
+            "confirmed",
+            "partial",
+            "unverifiable",
+            "suspected_noop",
+            "refused"
+          ],
+          "type": "string"
+        },
+        "escalation": {
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "enum": [
+                "route_unavailable",
+                "delivery_failed",
+                "effect_unconfirmed",
+                "suspected_noop",
+                "permission_required"
+              ],
+              "type": "string"
+            },
+            "target": {
+              "enum": [
+                "pixel",
+                "foreground",
+                "page",
+                "session"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "reason"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "risk": {
+        "class": "r1",
+        "enforcement": "active",
+        "operation_sensitive": false,
+        "version": "1"
+      }
+    },
+    {
+      "name": "type_text",
+      "description": "Insert text into the target pid via `AXSetAttribute(kAXSelectedText)`. Works for standard Cocoa text fields and text views. No keystrokes are synthesized — special keys (Return / Escape / arrows) go through `press_key` / `hotkey`. For Chromium / Electron inputs that don't implement `kAXSelectedText`, the tool falls back to CGEvent character synthesis automatically when the estimated route stays within the daemon transport budget. Longer synthesized routes are refused before character events and return a safe chunk size; one-call AX insertion remains uncapped.\n\nOptional `element_index` + `window_id` (from the last `get_window_state` snapshot) directs the write to a specific field. Without `element_index`, the write goes to the pid's currently focused element.\n\nWEB CONTENT (Chromium/WebKit/Electron — browser tabs, Slack, VS Code, X's compose box): AXValue is not independent proof that the renderer/DOM observed an AX write or synthesized keystrokes. The driver detects this at the element level (an AXWebArea ancestor) and refuses to trust AXValue-only read-back there — type_text returns effect:\"unverifiable\" + escalation, never a false \"confirmed\" (a browser's own native address bar/toolbar stays trusted). For a browser TAB the reliable path is the `page` tool (drives the DOM via CDP); for an embedded web view use this tool's px form: pass x,y (no element_index) to pixel-click the field then type, in one call. NOTE: a px focus-click won't reliably open+focus a CLOSED control; AX-press to open/activate it first (works in the background), then px-type. Always confirm via the screenshot; if px-background still drops, escalate to delivery_mode:\"foreground\".",
+      "input": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "description": "Exact capture/input target selected independently for each action.\n\n`display_id=\"primary\"` is the portable desktop target in this release.\nPlatforms that cannot address another display reject it explicitly rather\nthan silently changing coordinate spaces.",
+                "oneOf": [
+                  {
+                    "additionalProperties": true,
+                    "properties": {
+                      "kind": {
+                        "const": "window",
+                        "type": "string"
+                      },
+                      "pid": {
+                        "format": "uint32",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "window_id": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "pid",
+                      "window_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "properties": {
+                      "display_id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "desktop",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "display_id"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pid": {
+            "description": "Target process ID.",
+            "type": "integer"
+          },
+          "window_id": {
+            "description": "CGWindowID. Required when element_index is used. Optional when element_token is supplied (the token carries it).",
+            "type": "integer"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "x": {
+            "description": "Screenshot-pixel X of the field to type into — the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Screenshot-pixel Y of the field (see x).",
+            "type": "number"
+          },
+          "text": {
+            "description": "Text to insert at the target's cursor.",
+            "type": "string"
+          },
+          "delivery_mode": {
+            "description": "Best-effort-background ladder rung (default \"background\"). \"background\": AX insert, then CGEvent keystrokes if needed — no focus steal; native controls can be confirmed via AXValue read-back, while web-content writes remain effect:\"unverifiable\". \"foreground\": briefly front the window, type, restore the prior frontmost — the explicit last resort for focus-sensitive surfaces (e.g. WhatsApp/Catalyst) where background keystrokes don't land. Re-call with \"foreground\" when a background attempt remains unverifiable and a fresh snapshot shows the text did not appear.",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "default": "window",
+            "description": "Use desktop with no pid/window_id to type into the frontmost application.",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "output": {
+        "route": {
+          "enum": [
+            "accessibility",
+            "synthetic_events",
+            "global_input",
+            "system_api",
+            "dom",
+            "trusted_input"
+          ],
+          "type": "string"
+        },
+        "delivery": {
+          "additionalProperties": false,
+          "properties": {
+            "delivered_count": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "mode": {
+              "enum": [
+                "background",
+                "foreground",
+                "not_applicable",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "effect": {
+          "enum": [
+            "confirmed",
+            "partial",
+            "unverifiable",
+            "suspected_noop",
+            "refused"
+          ],
+          "type": "string"
+        },
+        "escalation": {
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "enum": [
+                "route_unavailable",
+                "delivery_failed",
+                "effect_unconfirmed",
+                "suspected_noop",
+                "permission_required"
+              ],
+              "type": "string"
+            },
+            "target": {
+              "enum": [
+                "pixel",
+                "foreground",
+                "page",
+                "session"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "reason"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "risk": {
+        "class": "r1",
+        "enforcement": "active",
+        "operation_sensitive": false,
+        "version": "1"
+      }
+    }
+  ]
+}

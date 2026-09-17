@@ -1,0 +1,735 @@
+{
+  "sourceDoctorOk": {
+    "ok": true,
+    "platform": "darwin",
+    "arch": "arm64",
+    "sdk": {
+      "loaded": true,
+      "version": "0.27.0"
+    },
+    "driver": {
+      "created": true,
+      "sameProcess": true
+    },
+    "permissions": {
+      "accessibility": true,
+      "screenRecording": true
+    },
+    "hints": []
+  },
+  "compiledDoctorOk": {
+    "ok": true,
+    "platform": "darwin",
+    "arch": "arm64",
+    "sdk": {
+      "loaded": true,
+      "version": "0.27.0"
+    },
+    "driver": {
+      "created": true,
+      "sameProcess": true
+    },
+    "permissions": {
+      "accessibility": true,
+      "screenRecording": true
+    },
+    "hints": []
+  },
+  "symlinkDoctorOk": {
+    "ok": true,
+    "platform": "darwin",
+    "arch": "arm64",
+    "sdk": {
+      "loaded": true,
+      "version": "0.27.0"
+    },
+    "driver": {
+      "created": true,
+      "sameProcess": true
+    },
+    "permissions": {
+      "accessibility": true,
+      "screenRecording": true
+    },
+    "hints": []
+  },
+  "sourceAppsExit": 0,
+  "compiledAppsExit": 0,
+  "symlinkAppsExit": 0,
+  "sourceInstallExit": 0,
+  "compiledInstallExit": 0,
+  "symlinkInstallExit": 0,
+  "projectScriptRan": false,
+  "outputMentionsFakeDependency": false,
+  "sourceLoaderPaths": [
+    "dyld[63341]: <2345CA3D-AF13-39AA-8CB4-6D9FB982A26A> /Users/phaethon/workspace/personal/ya-skills/node_modules/.bun/@trycua+cua-driver-darwin-arm64@0.27.0/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node",
+    "dyld[63341]: <363F31AF-1740-3170-83A9-55D5B018D348> /Users/phaethon/workspace/personal/ya-skills/node_modules/.bun/@trycua+cua-driver-darwin-arm64@0.27.0/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib"
+  ],
+  "compiledLoaderPaths": [
+    "dyld[63589]: <2345CA3D-AF13-39AA-8CB4-6D9FB982A26A> /Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node",
+    "dyld[63589]: <363F31AF-1740-3170-83A9-55D5B018D348> /Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib"
+  ],
+  "symlinkLoaderPaths": [
+    "dyld[63828]: <2345CA3D-AF13-39AA-8CB4-6D9FB982A26A> /Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node",
+    "dyld[63828]: <363F31AF-1740-3170-83A9-55D5B018D348> /Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib"
+  ],
+  "symlinkRealpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+  "packagedSidecar": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver/dist/index.js",
+  "persistentSession": {
+    "target": {
+      "pid": 612,
+      "windowId": "29981"
+    },
+    "source": {
+      "status": "passed",
+      "ownershipStatus": "passed_current_session",
+      "responsibilityStatus": "observed_current_session",
+      "lifecycleStatus": "passed",
+      "readonlyAxStatus": "degraded",
+      "mode": "source",
+      "startedAt": "2026-09-16T09:19:05.558Z",
+      "target": {
+        "pid": 612,
+        "windowId": "29981"
+      },
+      "openCommand": null,
+      "opened": {
+        "info": {
+          "id": "2040afd5-8d1f-4bc6-a221-79370dd037fe",
+          "target": {
+            "pid": 612,
+            "windowId": "29981"
+          },
+          "state": "idle",
+          "hostPid": 64091,
+          "generation": "79f4a76c-4240-4840-9f74-fb2ae540ecc1",
+          "idleTimeoutMs": 60000
+        },
+        "hostPid": 64091,
+        "socketPath": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/ya-skills-cu-phaethon/s-2040afd58d1f.sock",
+        "metadataPath": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-permissions-install-Wz0Dwb/persistent-source/sessions/2040afd5-8d1f-4bc6-a221-79370dd037fe/session.json",
+        "configPath": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-cu-hostcfg-S6d8tR/host.json"
+      },
+      "ownershipBeforeClose": {
+        "lease": {
+          "generation": "79f4a76c-4240-4840-9f74-fb2ae540ecc1",
+          "pid": 64091,
+          "processStart": "Wed Sep 16 17:19:05 2026",
+          "sessionId": "2040afd5-8d1f-4bc6-a221-79370dd037fe",
+          "kind": "session",
+          "workerPids": [
+            64093
+          ]
+        },
+        "host": {
+          "pid": 64091,
+          "alive": true,
+          "identity": {
+            "pid": 64091,
+            "ppid": 63332,
+            "pgid": 64091,
+            "uid": 501,
+            "comm": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+          },
+          "processChain": [
+            {
+              "pid": 64091,
+              "ppid": 63332,
+              "pgid": 64091,
+              "uid": 501,
+              "comm": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+            },
+            {
+              "pid": 63332,
+              "ppid": 23052,
+              "pgid": 63332,
+              "uid": 501,
+              "comm": "/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+            },
+            {
+              "pid": 23052,
+              "ppid": 22616,
+              "pgid": 23052,
+              "uid": 501,
+              "comm": "coldx"
+            },
+            {
+              "pid": 22616,
+              "ppid": 22615,
+              "pgid": 22616,
+              "uid": 501,
+              "comm": "-/bin/zsh"
+            },
+            {
+              "pid": 22615,
+              "ppid": 4610,
+              "pgid": 22615,
+              "uid": 0,
+              "comm": "/usr/bin/login"
+            }
+          ],
+          "responsiblePid": 4610,
+          "responsibleIdentity": {
+            "pid": 4610,
+            "ppid": 1,
+            "pgid": 4610,
+            "uid": 501,
+            "comm": "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+          },
+          "codeSigning": {
+            "path": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+            "realpath": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+            "output": "Executable=/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun\nIdentifier=bun\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20500 size=123311 flags=0x10000(runtime) hashes=3843+7 location=embedded\nCandidateCDHash sha256=e954e4093beecf241f32b9ce07b270a39d3297d4\nCandidateCDHashFull sha256=e954e4093beecf241f32b9ce07b270a39d3297d4101477f274dabb7df4132b3b\nExecutable Segment base=0\nExecutable Segment limit=61276160\nExecutable Segment flags=0x1\nCDHash=e954e4093beecf241f32b9ce07b270a39d3297d4\nSignature size=8976\nAuthority=Developer ID Application: Jarred Sumner (7FRXF46ZSN)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTeamIdentifier=7FRXF46ZSN\nRuntime Version=15.2.0",
+            "exitCode": 0
+          }
+        },
+        "drivers": [
+          {
+            "pid": 64093,
+            "alive": true,
+            "identity": {
+              "pid": 64093,
+              "ppid": 64091,
+              "pgid": 64093,
+              "uid": 501,
+              "comm": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+            },
+            "processChain": [
+              {
+                "pid": 64093,
+                "ppid": 64091,
+                "pgid": 64093,
+                "uid": 501,
+                "comm": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+              },
+              {
+                "pid": 64091,
+                "ppid": 63332,
+                "pgid": 64091,
+                "uid": 501,
+                "comm": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+              },
+              {
+                "pid": 63332,
+                "ppid": 23052,
+                "pgid": 63332,
+                "uid": 501,
+                "comm": "/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+              },
+              {
+                "pid": 23052,
+                "ppid": 22616,
+                "pgid": 23052,
+                "uid": 501,
+                "comm": "coldx"
+              },
+              {
+                "pid": 22616,
+                "ppid": 22615,
+                "pgid": 22616,
+                "uid": 501,
+                "comm": "-/bin/zsh"
+              }
+            ],
+            "responsiblePid": 4610,
+            "responsibleIdentity": {
+              "pid": 4610,
+              "ppid": 1,
+              "pgid": 4610,
+              "uid": 501,
+              "comm": "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+            },
+            "codeSigning": {
+              "path": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+              "realpath": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+              "output": "Executable=/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun\nIdentifier=bun\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20500 size=123311 flags=0x10000(runtime) hashes=3843+7 location=embedded\nCandidateCDHash sha256=e954e4093beecf241f32b9ce07b270a39d3297d4\nCandidateCDHashFull sha256=e954e4093beecf241f32b9ce07b270a39d3297d4101477f274dabb7df4132b3b\nExecutable Segment base=0\nExecutable Segment limit=61276160\nExecutable Segment flags=0x1\nCDHash=e954e4093beecf241f32b9ce07b270a39d3297d4\nSignature size=8976\nAuthority=Developer ID Application: Jarred Sumner (7FRXF46ZSN)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTeamIdentifier=7FRXF46ZSN\nRuntime Version=15.2.0",
+              "exitCode": 0
+            }
+          }
+        ],
+        "diagnostics": {
+          "driverInitCount": 1,
+          "deliveries": 0,
+          "liveExecWorkers": 0,
+          "liveExecWorkerPids": []
+        }
+      },
+      "readonlyNative": {
+        "operation": "session observe --mode ax",
+        "inputFlags": [],
+        "activationCalls": [],
+        "observation": {
+          "status": "completed",
+          "ax": {
+            "status": "degraded",
+            "total": 0,
+            "returned": 0,
+            "complete": false
+          },
+          "image": {
+            "status": "unavailable"
+          }
+        },
+        "statusBeforeClose": {
+          "id": "2040afd5-8d1f-4bc6-a221-79370dd037fe",
+          "target": {
+            "pid": 612,
+            "windowId": "29981"
+          },
+          "state": "idle",
+          "hostPid": 64091,
+          "generation": "79f4a76c-4240-4840-9f74-fb2ae540ecc1",
+          "idleTimeoutMs": 60000
+        }
+      },
+      "close": {
+        "reply": {
+          "schemaVersion": 1,
+          "info": {
+            "id": "2040afd5-8d1f-4bc6-a221-79370dd037fe",
+            "target": {
+              "pid": 612,
+              "windowId": "29981"
+            },
+            "state": "closed",
+            "hostPid": 64091,
+            "generation": "79f4a76c-4240-4840-9f74-fb2ae540ecc1",
+            "idleTimeoutMs": 60000
+          },
+          "cleanup": {
+            "driverTerminated": true,
+            "leaseReleased": true,
+            "unresolvedRequests": []
+          }
+        },
+        "hostGone": true,
+        "driverGone": [
+          true
+        ],
+        "socketExists": false,
+        "leaseAfterClose": null,
+        "metadata": {
+          "id": "2040afd5-8d1f-4bc6-a221-79370dd037fe",
+          "target": {
+            "pid": 612,
+            "windowId": "29981"
+          },
+          "state": "closed",
+          "hostPid": 64091,
+          "generation": "79f4a76c-4240-4840-9f74-fb2ae540ecc1",
+          "idleTimeoutMs": 60000
+        },
+        "cleanupSafe": true
+      }
+    },
+    "compiled": {
+      "status": "passed",
+      "ownershipStatus": "passed_current_session",
+      "responsibilityStatus": "observed_current_session",
+      "lifecycleStatus": "passed",
+      "readonlyAxStatus": "degraded",
+      "mode": "compiled",
+      "startedAt": "2026-09-16T09:19:06.102Z",
+      "target": {
+        "pid": 612,
+        "windowId": "29981"
+      },
+      "openCommand": {
+        "argv": [
+          "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+          "computer-use",
+          "session",
+          "open",
+          "--pid",
+          "612",
+          "--window",
+          "29981",
+          "--idle-timeout-ms",
+          "60000"
+        ],
+        "cwd": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-permissions-install-Wz0Dwb/hostile-cwd",
+        "exitCode": 0,
+        "signal": null,
+        "timedOut": false,
+        "spawnError": null,
+        "loaderPaths": [],
+        "processIdentity": {
+          "pid": 64131,
+          "ppid": 63332,
+          "pgid": 63332,
+          "uid": 501,
+          "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+        },
+        "processChain": [
+          {
+            "pid": 64131,
+            "ppid": 63332,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+          },
+          {
+            "pid": 63332,
+            "ppid": 23052,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+          },
+          {
+            "pid": 23052,
+            "ppid": 22616,
+            "pgid": 23052,
+            "uid": 501,
+            "comm": "coldx"
+          },
+          {
+            "pid": 22616,
+            "ppid": 22615,
+            "pgid": 22616,
+            "uid": 501,
+            "comm": "-/bin/zsh"
+          },
+          {
+            "pid": 22615,
+            "ppid": 4610,
+            "pgid": 22615,
+            "uid": 0,
+            "comm": "/usr/bin/login"
+          }
+        ],
+        "responsiblePid": 4610,
+        "envShape": {
+          "path": "/usr/bin:/bin",
+          "nodePath": "",
+          "nodeOptions": "",
+          "bunOptions": ""
+        }
+      },
+      "opened": {
+        "info": {
+          "id": "ae91f3b8-6a29-495c-8324-557d9f5d56bc",
+          "target": {
+            "pid": 612,
+            "windowId": "29981"
+          },
+          "state": "idle",
+          "hostPid": 64139,
+          "generation": "1bc403e5-072e-46f7-9630-edbbecc5d8ce",
+          "idleTimeoutMs": 60000
+        },
+        "hostPid": 64139,
+        "socketPath": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/ya-skills-cu-phaethon/s-ae91f3b86a29.sock",
+        "metadataPath": "/Users/phaethon/Library/Caches/ya-skills/computer-use/sessions/ae91f3b8-6a29-495c-8324-557d9f5d56bc/session.json",
+        "configPath": null
+      },
+      "ownershipBeforeClose": {
+        "lease": {
+          "generation": "1bc403e5-072e-46f7-9630-edbbecc5d8ce",
+          "pid": 64139,
+          "processStart": "Wed Sep 16 17:19:06 2026",
+          "sessionId": "ae91f3b8-6a29-495c-8324-557d9f5d56bc",
+          "kind": "session",
+          "workerPids": [
+            64141
+          ]
+        },
+        "host": {
+          "pid": 64139,
+          "alive": true,
+          "identity": {
+            "pid": 64139,
+            "ppid": 1,
+            "pgid": 64139,
+            "uid": 501,
+            "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+          },
+          "processChain": [
+            {
+              "pid": 64139,
+              "ppid": 1,
+              "pgid": 64139,
+              "uid": 501,
+              "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+            }
+          ],
+          "responsiblePid": 4610,
+          "responsibleIdentity": {
+            "pid": 4610,
+            "ppid": 1,
+            "pgid": 4610,
+            "uid": 501,
+            "comm": "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+          },
+          "codeSigning": {
+            "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+            "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+            "output": "Executable=/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk\nIdentifier=a.out\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20400 size=499774 flags=0x20002(adhoc,linker-signed) hashes=15615+0 location=embedded\nCandidateCDHash sha256=dde6780a01fe98a975ae976543dd28d98b9de99e\nCandidateCDHashFull sha256=dde6780a01fe98a975ae976543dd28d98b9de99e534296231e606ccf6cec6457\nExecutable Segment base=0\nExecutable Segment limit=61882368\nExecutable Segment flags=0x1\nCDHash=dde6780a01fe98a975ae976543dd28d98b9de99e\nSignature=adhoc\nTeamIdentifier=not set",
+            "exitCode": 0
+          }
+        },
+        "drivers": [
+          {
+            "pid": 64141,
+            "alive": true,
+            "identity": {
+              "pid": 64141,
+              "ppid": 64139,
+              "pgid": 64141,
+              "uid": 501,
+              "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+            },
+            "processChain": [
+              {
+                "pid": 64141,
+                "ppid": 64139,
+                "pgid": 64141,
+                "uid": 501,
+                "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+              },
+              {
+                "pid": 64139,
+                "ppid": 1,
+                "pgid": 64139,
+                "uid": 501,
+                "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+              }
+            ],
+            "responsiblePid": 4610,
+            "responsibleIdentity": {
+              "pid": 4610,
+              "ppid": 1,
+              "pgid": 4610,
+              "uid": 501,
+              "comm": "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+            },
+            "codeSigning": {
+              "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+              "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+              "output": "Executable=/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk\nIdentifier=a.out\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20400 size=499774 flags=0x20002(adhoc,linker-signed) hashes=15615+0 location=embedded\nCandidateCDHash sha256=dde6780a01fe98a975ae976543dd28d98b9de99e\nCandidateCDHashFull sha256=dde6780a01fe98a975ae976543dd28d98b9de99e534296231e606ccf6cec6457\nExecutable Segment base=0\nExecutable Segment limit=61882368\nExecutable Segment flags=0x1\nCDHash=dde6780a01fe98a975ae976543dd28d98b9de99e\nSignature=adhoc\nTeamIdentifier=not set",
+              "exitCode": 0
+            }
+          }
+        ],
+        "diagnostics": {
+          "driverInitCount": 1,
+          "deliveries": 0,
+          "liveExecWorkers": 0,
+          "liveExecWorkerPids": []
+        }
+      },
+      "readonlyNative": {
+        "operation": "session observe --mode ax",
+        "inputFlags": [],
+        "activationCalls": [],
+        "observation": {
+          "status": "completed",
+          "ax": {
+            "status": "degraded",
+            "total": 0,
+            "returned": 0,
+            "complete": false
+          },
+          "image": {
+            "status": "unavailable"
+          }
+        },
+        "statusBeforeClose": {
+          "id": "ae91f3b8-6a29-495c-8324-557d9f5d56bc",
+          "target": {
+            "pid": 612,
+            "windowId": "29981"
+          },
+          "state": "idle",
+          "hostPid": 64139,
+          "generation": "1bc403e5-072e-46f7-9630-edbbecc5d8ce",
+          "idleTimeoutMs": 60000
+        }
+      },
+      "close": {
+        "reply": {
+          "schemaVersion": 1,
+          "info": {
+            "id": "ae91f3b8-6a29-495c-8324-557d9f5d56bc",
+            "target": {
+              "pid": 612,
+              "windowId": "29981"
+            },
+            "state": "closed",
+            "hostPid": 64139,
+            "generation": "1bc403e5-072e-46f7-9630-edbbecc5d8ce",
+            "idleTimeoutMs": 60000
+          },
+          "cleanup": {
+            "driverTerminated": true,
+            "leaseReleased": true,
+            "unresolvedRequests": []
+          }
+        },
+        "hostGone": true,
+        "driverGone": [
+          true
+        ],
+        "socketExists": false,
+        "leaseAfterClose": null,
+        "metadata": {
+          "id": "ae91f3b8-6a29-495c-8324-557d9f5d56bc",
+          "target": {
+            "pid": 612,
+            "windowId": "29981"
+          },
+          "state": "closed",
+          "hostPid": 64139,
+          "generation": "1bc403e5-072e-46f7-9630-edbbecc5d8ce",
+          "idleTimeoutMs": 60000
+        },
+        "cleanupSafe": true
+      }
+    },
+    "status": "passed",
+    "ownershipStatus": "passed_current_session",
+    "responsibilityStatus": "observed_current_session",
+    "lifecycleStatus": "passed",
+    "readonlyAxStatus": [
+      "degraded",
+      "degraded"
+    ]
+  },
+  "processAttribution": {
+    "directDoctorProcesses": [
+      {
+        "process": [
+          {
+            "pid": 63341,
+            "ppid": 63332,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+          },
+          {
+            "pid": 63332,
+            "ppid": 23052,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+          },
+          {
+            "pid": 23052,
+            "ppid": 22616,
+            "pgid": 23052,
+            "uid": 501,
+            "comm": "coldx"
+          },
+          {
+            "pid": 22616,
+            "ppid": 22615,
+            "pgid": 22616,
+            "uid": 501,
+            "comm": "-/bin/zsh"
+          },
+          {
+            "pid": 22615,
+            "ppid": 4610,
+            "pgid": 22615,
+            "uid": 0,
+            "comm": "/usr/bin/login"
+          }
+        ],
+        "responsiblePid": 4610
+      },
+      {
+        "process": [
+          {
+            "pid": 63589,
+            "ppid": 63332,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+          },
+          {
+            "pid": 63332,
+            "ppid": 23052,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+          },
+          {
+            "pid": 23052,
+            "ppid": 22616,
+            "pgid": 23052,
+            "uid": 501,
+            "comm": "coldx"
+          },
+          {
+            "pid": 22616,
+            "ppid": 22615,
+            "pgid": 22616,
+            "uid": 501,
+            "comm": "-/bin/zsh"
+          },
+          {
+            "pid": 22615,
+            "ppid": 4610,
+            "pgid": 22615,
+            "uid": 0,
+            "comm": "/usr/bin/login"
+          }
+        ],
+        "responsiblePid": 4610
+      },
+      {
+        "process": [
+          {
+            "pid": 63828,
+            "ppid": 63332,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-permissions-install-Wz0Dwb/bin/yk-link"
+          },
+          {
+            "pid": 63332,
+            "ppid": 23052,
+            "pgid": 63332,
+            "uid": 501,
+            "comm": "/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun"
+          },
+          {
+            "pid": 23052,
+            "ppid": 22616,
+            "pgid": 23052,
+            "uid": 501,
+            "comm": "coldx"
+          },
+          {
+            "pid": 22616,
+            "ppid": 22615,
+            "pgid": 22616,
+            "uid": 501,
+            "comm": "-/bin/zsh"
+          },
+          {
+            "pid": 22615,
+            "ppid": 4610,
+            "pgid": 22615,
+            "uid": 0,
+            "comm": "/usr/bin/login"
+          }
+        ],
+        "responsiblePid": 4610
+      }
+    ],
+    "responsibleProcesses": [
+      {
+        "pid": 4610,
+        "identity": {
+          "pid": 4610,
+          "ppid": 1,
+          "pgid": 4610,
+          "uid": 501,
+          "comm": "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+        }
+      }
+    ],
+    "status": "bounded ps PID/PPID chain plus libSystem responsible-PID lookup",
+    "tccConclusion": "doctor permissions describe the process that made the check. Persistent host/driver attribution is separately observed under persistentSession. Neither result is a TCC database, revocation, or fresh-machine proof."
+  }
+}

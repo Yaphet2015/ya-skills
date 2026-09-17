@@ -1,0 +1,164 @@
+{
+  "source": {
+    "sdk": "@trycua/cua-driver",
+    "version": "0.27.0",
+    "method": "CuaDriver.listToolsJson()",
+    "snapshot": "/tmp/ya-input-contract/tools.json",
+    "snapshotSha256": "f3c4aefcbab8fbef9ed4ea3b689edeb0df0dacf713147729f340fd2a3e641832",
+    "note": "Read-only candidate contract snapshot; no fixture or desktop input was used."
+  },
+  "candidates": [
+    {
+      "name": "move_cursor",
+      "description": "Move a cursor to (x, y). In window scope (default), moves only the agent cursor overlay. With scope=desktop, moves the real OS pointer in native get_desktop_state screenshot coordinates.",
+      "input": {
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "description": "Exact capture/input target selected independently for each action.\n\n`display_id=\"primary\"` is the portable desktop target in this release.\nPlatforms that cannot address another display reject it explicitly rather\nthan silently changing coordinate spaces.",
+                "oneOf": [
+                  {
+                    "additionalProperties": true,
+                    "properties": {
+                      "kind": {
+                        "const": "window",
+                        "type": "string"
+                      },
+                      "pid": {
+                        "format": "uint32",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "window_id": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "pid",
+                      "window_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "properties": {
+                      "display_id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "desktop",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "display_id"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preferred per-call target. New callers should set this field."
+          },
+          "cursor_id": {
+            "description": "Cursor instance to move. Default: 'default'.",
+            "type": "string"
+          },
+          "session": {
+            "description": "For multi-call work, prefer a short public session label and repeat it on every call that accepts it. Omit it to use the authenticated transport's implicit lifecycle session.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "set_agent_cursor_enabled",
+      "description": "Show or hide the agent cursor owned by a session.",
+      "input": {
+        "required": [
+          "session",
+          "enabled"
+        ],
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "name": "set_value",
+      "description": "Set a value on a UI element. Two modes depending on element role:\n\n- **AXPopUpButton / select dropdown**: finds the child option whose title or value matches `value` (case-insensitive) and AXPresses it directly — the native macOS popup menu is never opened, so focus is never stolen. Use this for HTML <select> elements in Safari or any native NSPopUpButton.\n\n- **All other elements**: writes AXValue directly (sliders, steppers, date pickers, native text fields that expose settable AXValue).\n\nFor free-form text entry into web inputs, prefer `type_text_chars` which synthesises key events — AXValue writes are ignored by WebKit.",
+      "input": {
+        "required": [
+          "pid",
+          "value"
+        ],
+        "properties": {
+          "pid": {
+            "type": "integer"
+          },
+          "value": {
+            "description": "New value. AX will coerce to the element's native type.",
+            "type": "string"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "window_id": {
+            "description": "CGWindowID for the window whose get_window_state produced the element_index. Required when element_index is used; optional when element_token is supplied (the token carries it).",
+            "type": "integer"
+          },
+          "session": {
+            "description": "For multi-call work, prefer a short public session label and repeat it on every call that accepts it. Omit it to use the authenticated transport's implicit lifecycle session.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  ],
+  "assessment": {
+    "set_value": "Potential AXValue-only native-control path; not exposed by the product adapter and not proven for every text field or web renderer.",
+    "set_agent_cursor_enabled": "Controls the session-owned agent cursor overlay; contract does not claim to change input routing or isolate user devices.",
+    "move_cursor": "Window scope is agent overlay; desktop scope moves the real OS pointer and is forbidden on the user desktop."
+  }
+}

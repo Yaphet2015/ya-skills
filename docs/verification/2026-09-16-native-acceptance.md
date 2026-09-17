@@ -138,7 +138,7 @@
 
 [完整门禁日志](evidence/2026-09-16-native/gates)。默认跳过项与前轮相同，打包相关跳过项已在后续门禁补跑；未执行通用应用枚举的 native opt-in 测试。
 
-重建后的原生 fixture 位于 [computer-use-native.swift](../../scripts/probes/fixtures/computer-use-native.swift)。它要求显式输出目录，支持 `--block-press` 的真实 AX 阻塞握手，并保持 canBecomeKey/canBecomeMain 为 false；不接入默认测试。
+重建后的原生 fixture 位于 [computer-use-native.swift](../../scripts/probes/fixtures/computer-use-native.swift)。它要求显式输出目录，支持 `--block-press` 的真实 AX 阻塞握手，并保持 canBecomeKey/canBecomeMain 为 false。默认模式设置 `ignoresMouseEvents=true` 并 `orderBack(nil)`；坐标测试必须额外传 `--allow-pointer`，且设置 `YK_INPUT_TEST_DESKTOP=1`，只用于独立测试桌面。不接入默认测试。
 
 ## 清理
 

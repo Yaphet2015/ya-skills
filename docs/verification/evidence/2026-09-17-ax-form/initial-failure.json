@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "probe": "computer-use-ax-form",
+  "mode": "native",
+  "status": "failed",
+  "driverStarted": true,
+  "fixtureStarted": true,
+  "nativeActionsAttempted": false,
+  "inputIsolation": "not_attempted",
+  "desktopInputSent": "not_attempted",
+  "testDesktop": "user-authorized-idle-desktop",
+  "outDir": "/private/tmp/yk-ax-form-20260917-01",
+  "observations": {},
+  "setValue": [],
+  "actions": [],
+  "initialState": {
+    "schemaVersion": 1,
+    "pid": 54773,
+    "windowId": "36821",
+    "initialFrontmostPid": 4610,
+    "frontmostPid": 4610,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "ignoresMouseEvents": true,
+    "firstResponderClass": "NSTextView",
+    "submitCount": 0,
+    "result": "waiting",
+    "fields": {
+      "email": "",
+      "message": "",
+      "name": ""
+    }
+  },
+  "target": {
+    "pid": 54773,
+    "windowId": "36821"
+  },
+  "reason": "AX observation is not complete: truncated",
+  "cleanup": {
+    "sessionClosed": true,
+    "fixtureQuitRequested": true,
+    "fixtureExitCode": 0,
+    "forcedTermination": false
+  }
+}

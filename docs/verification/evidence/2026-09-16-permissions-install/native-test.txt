@@ -1,0 +1,10 @@
+$ PATH=/usr/bin:/bin NODE_PATH= NODE_OPTIONS= BUN_OPTIONS= YK_CU_NATIVE_TESTS=1 /tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun test tests/computer-use-native.test.ts
+bun test v1.3.14 (0d9b296a)
+
+tests/computer-use-native.test.ts:
+(pass) compiled yk native (opt-in via YK_CU_NATIVE_TESTS=1) > loads the SDK sidecar in-process from a hostile cwd and reads real apps [691.44ms]
+
+ 1 pass
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [709.00ms]

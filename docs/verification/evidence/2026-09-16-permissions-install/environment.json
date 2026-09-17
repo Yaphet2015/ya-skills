@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-09-16T09:19:03.147Z",
+  "repoDir": "/Users/phaethon/workspace/personal/ya-skills",
+  "bun": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+  "releaseDir": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills",
+  "packagedYk": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+  "sourceCli": "/Users/phaethon/workspace/personal/ya-skills/packages/cli/src/cli.ts",
+  "packagedCatalog": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/skills",
+  "platform": "darwin",
+  "arch": "arm64",
+  "probePid": 63332,
+  "probeExecPath": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+  "probeExecRealpath": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+  "probeResponsiblePid": 4610,
+  "bunVersion": "1.3.14",
+  "cwd": "/Users/phaethon/workspace/personal/ya-skills",
+  "home": "/Users/phaethon",
+  "artifacts": [
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+      "exists": true,
+      "kind": "file",
+      "mode": "755",
+      "bytes": 64455410,
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+    },
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver/dist/index.js",
+      "exists": true,
+      "kind": "file",
+      "mode": "644",
+      "bytes": 1549,
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver/dist/index.js"
+    },
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node",
+      "exists": true,
+      "kind": "file",
+      "mode": "755",
+      "bytes": 1712416,
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node"
+    },
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib",
+      "exists": true,
+      "kind": "file",
+      "mode": "755",
+      "bytes": 51118560,
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib"
+    },
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/node_modules/@trycua/cua-driver/dist/index.js",
+      "exists": true,
+      "kind": "file",
+      "mode": "644",
+      "bytes": 1549,
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/node_modules/.bun/@trycua+cua-driver@0.27.0/node_modules/@trycua/cua-driver/dist/index.js"
+    },
+    {
+      "path": "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-permissions-install-Wz0Dwb/bin/yk-link",
+      "exists": true,
+      "kind": "symlink",
+      "mode": "755",
+      "bytes": 70,
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk"
+    }
+  ],
+  "pathChecks": {
+    "sanitizedPath": "/usr/bin:/bin",
+    "bunOnSanitizedPath": false,
+    "nodeOnSanitizedPath": false,
+    "npmOnSanitizedPath": false
+  },
+  "codeSigning": [
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk",
+      "output": "Executable=/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/yk\nIdentifier=a.out\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20400 size=499774 flags=0x20002(adhoc,linker-signed) hashes=15615+0 location=embedded\nCandidateCDHash sha256=dde6780a01fe98a975ae976543dd28d98b9de99e\nCandidateCDHashFull sha256=dde6780a01fe98a975ae976543dd28d98b9de99e534296231e606ccf6cec6457\nExecutable Segment base=0\nExecutable Segment limit=61882368\nExecutable Segment flags=0x1\nCDHash=dde6780a01fe98a975ae976543dd28d98b9de99e\nSignature=adhoc\nTeamIdentifier=not set",
+      "exitCode": 0
+    },
+    {
+      "path": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+      "realpath": "/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun",
+      "output": "Executable=/private/tmp/ya-skills-bun-1.3.14/bun-darwin-aarch64/bun\nIdentifier=bun\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20500 size=123311 flags=0x10000(runtime) hashes=3843+7 location=embedded\nCandidateCDHash sha256=e954e4093beecf241f32b9ce07b270a39d3297d4\nCandidateCDHashFull sha256=e954e4093beecf241f32b9ce07b270a39d3297d4101477f274dabb7df4132b3b\nExecutable Segment base=0\nExecutable Segment limit=61276160\nExecutable Segment flags=0x1\nCDHash=e954e4093beecf241f32b9ce07b270a39d3297d4\nSignature size=8976\nAuthority=Developer ID Application: Jarred Sumner (7FRXF46ZSN)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTeamIdentifier=7FRXF46ZSN\nRuntime Version=15.2.0",
+      "exitCode": 0
+    },
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node",
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node",
+      "output": "Executable=/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node\nIdentifier=libuniffi_runtime_napi.dylib\nFormat=Mach-O universal (x86_64 arm64)\nCodeDirectory v=20400 size=6936 flags=0x20002(adhoc,linker-signed) hashes=213+0 location=embedded\nCandidateCDHash sha256=bc5cc07aa6a7bf4d59f888c9660d781f455ddde9\nCandidateCDHashFull sha256=bc5cc07aa6a7bf4d59f888c9660d781f455ddde95e359d7c4e20362fb6009cf0\nExecutable Segment base=0\nExecutable Segment limit=622592\nExecutable Segment flags=0x0\nCDHash=bc5cc07aa6a7bf4d59f888c9660d781f455ddde9\nSignature=adhoc\nTeamIdentifier=not set",
+      "exitCode": 0
+    },
+    {
+      "path": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib",
+      "realpath": "/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib",
+      "output": "Executable=/Users/phaethon/workspace/personal/ya-skills/dist/release/ya-skills/runtime/computer-use/node_modules/@trycua/cua-driver-darwin-arm64/libcua_driver_sdk.dylib\nIdentifier=libcua_driver_sdk\nFormat=Mach-O universal (x86_64 arm64)\nCodeDirectory v=20500 size=48509 flags=0x10000(runtime) hashes=1510+2 location=embedded\nCandidateCDHash sha256=6839e6512c6ee9155ef03304793abd0e1c18d3a0\nCandidateCDHashFull sha256=6839e6512c6ee9155ef03304793abd0e1c18d3a002642c22a982cc76d7bb5098\nExecutable Segment base=0\nExecutable Segment limit=17170432\nExecutable Segment flags=0x0\nCDHash=6839e6512c6ee9155ef03304793abd0e1c18d3a0\nSignature size=9044\nAuthority=Developer ID Application: Cua AI, Inc. (YCK386LBJ7)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTeamIdentifier=YCK386LBJ7\nRuntime Version=26.5.0",
+      "exitCode": 0
+    }
+  ]
+}

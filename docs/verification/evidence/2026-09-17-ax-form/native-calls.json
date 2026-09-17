@@ -1,0 +1,125 @@
+{
+  "note": "Transparent call-through SDK prototype audit; arguments and results forwarded unchanged, no retries.",
+  "enums": {
+    "route": {
+      "0": "Accessibility",
+      "1": "SyntheticEvents",
+      "2": "GlobalInput",
+      "3": "SystemApi",
+      "4": "Dom",
+      "5": "TrustedInput",
+      "Accessibility": 0,
+      "SyntheticEvents": 1,
+      "GlobalInput": 2,
+      "SystemApi": 3,
+      "Dom": 4,
+      "TrustedInput": 5
+    },
+    "effect": {
+      "0": "Confirmed",
+      "1": "Partial",
+      "2": "Unverifiable",
+      "3": "SuspectedNoop",
+      "4": "Refused",
+      "Confirmed": 0,
+      "Partial": 1,
+      "Unverifiable": 2,
+      "SuspectedNoop": 3,
+      "Refused": 4
+    },
+    "delivery": {
+      "0": "Background",
+      "1": "Foreground",
+      "2": "NotApplicable",
+      "3": "Unknown",
+      "Background": 0,
+      "Foreground": 1,
+      "NotApplicable": 2,
+      "Unknown": 3
+    }
+  },
+  "calls": [
+    {
+      "method": "callTool",
+      "tool": "set_value",
+      "result": {
+        "text": "✅ Set AXValue on [1] AXTextField.",
+        "images": [],
+        "structuredJson": "{\"delivery\":{\"mode\":\"background\"},\"effect\":\"confirmed\",\"evidence\":[{\"kind\":\"value_readback\"}],\"route\":\"accessibility\"}",
+        "isError": false,
+        "action": {
+          "effect": 0,
+          "route": 0,
+          "delivery": {
+            "mode": 0
+          },
+          "evidence": [
+            {
+              "kind": 0
+            }
+          ]
+        },
+        "degraded": false,
+        "rawJson": "{\"content\":[{\"text\":\"✅ Set AXValue on [1] AXTextField.\",\"type\":\"text\"}],\"structuredContent\":{\"delivery\":{\"mode\":\"background\"},\"effect\":\"confirmed\",\"evidence\":[{\"kind\":\"value_readback\"}],\"route\":\"accessibility\"}}"
+      }
+    },
+    {
+      "method": "callTool",
+      "tool": "set_value",
+      "result": {
+        "text": "✅ Set AXValue on [2] AXTextField.",
+        "images": [],
+        "structuredJson": "{\"delivery\":{\"mode\":\"background\"},\"effect\":\"confirmed\",\"evidence\":[{\"kind\":\"value_readback\"}],\"route\":\"accessibility\"}",
+        "isError": false,
+        "action": {
+          "effect": 0,
+          "route": 0,
+          "delivery": {
+            "mode": 0
+          },
+          "evidence": [
+            {
+              "kind": 0
+            }
+          ]
+        },
+        "degraded": false,
+        "rawJson": "{\"content\":[{\"text\":\"✅ Set AXValue on [2] AXTextField.\",\"type\":\"text\"}],\"structuredContent\":{\"delivery\":{\"mode\":\"background\"},\"effect\":\"confirmed\",\"evidence\":[{\"kind\":\"value_readback\"}],\"route\":\"accessibility\"}}"
+      }
+    },
+    {
+      "method": "callTool",
+      "tool": "set_value",
+      "result": {
+        "text": "✅ Set AXValue on [3] AXTextField.",
+        "images": [],
+        "structuredJson": "{\"delivery\":{\"mode\":\"background\"},\"effect\":\"confirmed\",\"evidence\":[{\"kind\":\"value_readback\"}],\"route\":\"accessibility\"}",
+        "isError": false,
+        "action": {
+          "effect": 0,
+          "route": 0,
+          "delivery": {
+            "mode": 0
+          },
+          "evidence": [
+            {
+              "kind": 0
+            }
+          ]
+        },
+        "degraded": false,
+        "rawJson": "{\"content\":[{\"text\":\"✅ Set AXValue on [3] AXTextField.\",\"type\":\"text\"}],\"structuredContent\":{\"delivery\":{\"mode\":\"background\"},\"effect\":\"confirmed\",\"evidence\":[{\"kind\":\"value_readback\"}],\"route\":\"accessibility\"}}"
+      }
+    },
+    {
+      "method": "click",
+      "result": {
+        "effect": 2,
+        "route": 0,
+        "delivery": {
+          "mode": 0
+        }
+      }
+    }
+  ]
+}

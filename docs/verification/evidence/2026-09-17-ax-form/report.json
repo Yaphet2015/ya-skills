@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "probe": "computer-use-ax-form",
+  "mode": "native",
+  "status": "passed",
+  "driverStarted": true,
+  "fixtureStarted": true,
+  "nativeActionsAttempted": true,
+  "inputIsolation": "unverified",
+  "desktopInputSent": "unknown",
+  "testDesktop": "user-authorized-idle-desktop",
+  "outDir": "/private/tmp/yk-ax-form-20260917-02",
+  "observations": {
+    "initial": "observation-initial.json",
+    "afterWrites": "observation-after-writes.json",
+    "final": "observation-final.json"
+  },
+  "setValue": [
+    {
+      "field": "name",
+      "route": "accessibility",
+      "effect": "confirmed",
+      "delivery": {
+        "mode": "background"
+      }
+    },
+    {
+      "field": "email",
+      "route": "accessibility",
+      "effect": "confirmed",
+      "delivery": {
+        "mode": "background"
+      }
+    },
+    {
+      "field": "message",
+      "route": "accessibility",
+      "effect": "confirmed",
+      "delivery": {
+        "mode": "background"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "phase": "started",
+      "kind": "set_value"
+    },
+    {
+      "phase": "finished",
+      "kind": "set_value",
+      "outcome": "delivered"
+    },
+    {
+      "phase": "started",
+      "kind": "set_value"
+    },
+    {
+      "phase": "finished",
+      "kind": "set_value",
+      "outcome": "delivered"
+    },
+    {
+      "phase": "started",
+      "kind": "set_value"
+    },
+    {
+      "phase": "finished",
+      "kind": "set_value",
+      "outcome": "delivered"
+    },
+    {
+      "phase": "started",
+      "kind": "click"
+    },
+    {
+      "phase": "finished",
+      "kind": "click",
+      "outcome": "delivered"
+    }
+  ],
+  "initialState": {
+    "schemaVersion": 1,
+    "pid": 55482,
+    "windowId": "36838",
+    "initialFrontmostPid": 4610,
+    "frontmostPid": 4610,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "ignoresMouseEvents": true,
+    "initialMouseX": 2730.7109375,
+    "initialMouseY": -339.625,
+    "mouseX": 2730.7109375,
+    "mouseY": -339.625,
+    "sampledPointerChanged": false,
+    "firstResponderClass": "NSTextView",
+    "submitCount": 0,
+    "result": "waiting",
+    "fields": {
+      "email": "",
+      "message": "",
+      "name": ""
+    }
+  },
+  "target": {
+    "pid": 55482,
+    "windowId": "36838"
+  },
+  "finalState": {
+    "schemaVersion": 1,
+    "pid": 55482,
+    "windowId": "36838",
+    "initialFrontmostPid": 4610,
+    "frontmostPid": 4610,
+    "isKeyWindow": false,
+    "isMainWindow": false,
+    "isOnActiveSpace": true,
+    "ignoresMouseEvents": true,
+    "initialMouseX": 2730.7109375,
+    "initialMouseY": -339.625,
+    "mouseX": 2730.7109375,
+    "mouseY": -339.625,
+    "sampledPointerChanged": false,
+    "firstResponderClass": "NSTextView",
+    "submitCount": 1,
+    "result": "submitted",
+    "fields": {
+      "email": "ada@example.test",
+      "message": "AX form submission",
+      "name": "Ada Lovelace"
+    }
+  },
+  "submit": {
+    "outcome": "delivered",
+    "route": "unavailable",
+    "postcondition": "submitted"
+  },
+  "cleanup": {
+    "sessionClosed": true,
+    "fixtureQuitRequested": true,
+    "fixtureExitCode": 0,
+    "forcedTermination": false
+  }
+}

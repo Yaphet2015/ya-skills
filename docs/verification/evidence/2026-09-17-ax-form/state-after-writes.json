@@ -1,0 +1,33 @@
+{
+  "fields": {
+    "email": "ada@example.test",
+    "message": "AX form submission",
+    "name": "Ada Lovelace"
+  },
+  "firstResponderClass": "NSTextView",
+  "frontmostPid": 4610,
+  "ignoresMouseEvents": true,
+  "initialFrontmostPid": 4610,
+  "initialMouseX": 2730.7109375,
+  "initialMouseY": -339.625,
+  "isKeyWindow": false,
+  "isMainWindow": false,
+  "isOnActiveSpace": true,
+  "mouseX": 2730.7109375,
+  "mouseY": -339.625,
+  "pid": 55482,
+  "result": "waiting",
+  "sampledPointerChanged": false,
+  "scale": 2,
+  "schemaVersion": 1,
+  "screenScales": [
+    2,
+    2
+  ],
+  "submitCount": 0,
+  "windowHeight": 452,
+  "windowId": 36838,
+  "windowWidth": 620,
+  "windowX": 80,
+  "windowY": 100
+}
