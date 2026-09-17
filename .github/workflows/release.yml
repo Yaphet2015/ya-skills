@@ -13,10 +13,35 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      - name: Skip if the release already has the local asset
+        id: guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The local publishing path (.agents/skills/publishing-homebrew-release)
+          # creates the tag, release, and assets in one command. If that asset is
+          # already published, the local path owns this release and this workflow
+          # must not rebuild over it.
+          asset="ya-skills-v${GITHUB_REF_NAME#v}-macos-arm64.tar.gz"
+          skip=false
+          for _ in 1 2 3 4 5 6; do
+            if gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx "${asset}"; then
+              skip=true
+              break
+            fi
+            sleep 10
+          done
+          echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
+          if [ "${skip}" = true ]; then
+            echo "Release ${GITHUB_REF_NAME} already ships ${asset}; the local path owns this release. Skipping."
+          fi
+
       - name: Check out repository
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Set up Bun
+        if: steps.guard.outputs.skip != 'true'
         run: |
           bun_zip="${RUNNER_TEMP}/bun.zip"
           bun_dir="${RUNNER_TEMP}/bun"
@@ -28,36 +53,47 @@ jobs:
           "${bun_dir}/bun-darwin-aarch64/bun" --revision
 
       - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
         run: bun install --frozen-lockfile --registry=https://registry.npmjs.org
 
       - name: Typecheck
+        if: steps.guard.outputs.skip != 'true'
         run: bun run typecheck
 
       - name: Test (default suite, desktop-free)
+        if: steps.guard.outputs.skip != 'true'
         run: bun test
 
       - name: Package release asset
+        if: steps.guard.outputs.skip != 'true'
         run: |
           version="${GITHUB_REF_NAME#v}"
           bun run package:release -- --version "${version}"
 
       - name: Release closed loop (packaged yk, no desktop)
+        if: steps.guard.outputs.skip != 'true'
         run: YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts tests/computer-session-release.test.ts tests/computer-lane-release-packaging.test.ts
 
       - name: Build node target
+        if: steps.guard.outputs.skip != 'true'
         run: bun run build
 
       - name: Smoke
+        if: steps.guard.outputs.skip != 'true'
         run: bun run smoke
 
       - name: Publish release
+        if: steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           asset="ya-skills-v${version}-macos-arm64.tar.gz"
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" "${asset}" "${asset}.sha256" --clobber
+          # First uploader wins: never overwrite an already published asset.
+          if gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx "${asset}"; then
+            echo "${asset} already published; keeping it."
+          elif gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${asset}" "${asset}.sha256"
           else
             gh release create "${GITHUB_REF_NAME}" "${asset}" "${asset}.sha256" \
               --title "${GITHUB_REF_NAME}" \
