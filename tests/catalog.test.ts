@@ -380,6 +380,18 @@ test("show-pr validator rejects missing evidence files and unlisted design choic
   await rm(outDir, { recursive: true, force: true });
 });
 
+test("root catalog exposes the ultra-simplify skill", async () => {
+  const catalog = await loadCatalog(resolve("skills"));
+  const ultraSimplify = catalog.byName.get("ultra-simplify");
+
+  expect(ultraSimplify?.description).toContain("simplification");
+  expect(ultraSimplify?.functions).toEqual([]);
+
+  const skill = await readFile(resolve("skills", "ultra-simplify", "SKILL.md"), "utf8");
+  expect(skill).toContain("40%");
+  expect(skill).toContain("No excuses. No waiting for the user's decisions.");
+});
+
 test("root catalog does not expose demo-only skills", async () => {
   const catalog = await loadCatalog(resolve("skills"));
 
