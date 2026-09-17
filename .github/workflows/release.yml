@@ -17,14 +17,18 @@ jobs:
         id: guard
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           # The local publishing path (.agents/skills/publishing-homebrew-release)
           # creates the tag, release, and assets in one command. If that asset is
           # already published, the local path owns this release and this workflow
           # must not rebuild over it.
+          # Poll long enough for the local path's 45 MB asset upload to finish
+          # after the tag push; without GH_REPO, gh cannot resolve the repo
+          # pre-checkout and this guard never skips.
           asset="ya-skills-v${GITHUB_REF_NAME#v}-macos-arm64.tar.gz"
           skip=false
-          for _ in 1 2 3 4 5 6; do
+          for _ in $(seq 1 15); do
             if gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx "${asset}"; then
               skip=true
               break
