@@ -69,6 +69,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
 | **validator** | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
 | **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |
+| **ultra-simplify** | 自主执行全库大简化冲刺：总 LOC 至少降 40%、拆巨型文件、统一重复助手函数、削平 if 嵌套链，完成后交付 PR。 | `yk install ultra-simplify` |
 
 > `pbench-runner` 是内部资产，会由 `yk pbench run --manual`（或兼容的 `start` 命令）自动安装，无需从目录手动安装。
 

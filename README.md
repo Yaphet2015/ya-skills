@@ -70,6 +70,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
 | **show-pr** | Manually invoke `show-pr` to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, per-case test coverage with real results, verification screenshots or video, a decision-point design doc, and suggested manual tests in one HTML page. It never triggers implicitly. | `yk install show-pr` |
 | **svg-icons** | Generate family-consistent 24-grid SVG icons from a JSON drawing language (max two inks, composed marks like folder-plus-pencil). Invoke with `/svg-icons`. | `yk install svg-icons` |
+| **ultra-simplify** | Run an autonomous whole-codebase simplification sprint: LOC down 40%+ overall, god files split, helpers unified, if-chains flattened — then deliver PRs. | `yk install ultra-simplify` |
 
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 
