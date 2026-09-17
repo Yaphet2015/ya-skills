@@ -219,12 +219,15 @@ describe("core lifecycle lane: hosted deadlines and durable state", () => {
       idleTimeoutMs: 60_000,
       batchResult: async (request) => {
         batchCalls += 1;
-        await sleep(70);
+        // 150 ms fixture latency vs the 300 ms batch budget below leaves
+        // ~150 ms of slack for real journal + IPC overhead between dispatches
+        // (loaded CI runners need far more than the old 70/100 = 30 ms slack).
+        await sleep(150);
         return { status: "completed", steps: [{ index: 0, kind: request.actions[0]!.kind, status: "delivered" as const }] };
       }
     });
     try {
-      const reply = await host.batch(keyBatch(["A", "B", "C"], 100));
+      const reply = await host.batch(keyBatch(["A", "B", "C"], 300));
       const result = reply.result as { status: string; steps: Array<{ status: string }> };
       expect(batchCalls).toBe(2);
       expect(result.status).toBe("interrupted");

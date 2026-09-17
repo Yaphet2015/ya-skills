@@ -29,13 +29,17 @@ describe("exec lifecycle (C3)", () => {
       driver: "fake",
       idleTimeoutMs: 60_000,
       batchResult: async (request) => {
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        // 1500 ms fixture latency vs the 1000 ms exec budget below: the
+        // dispatch must reliably be in flight when the timeout fires, even
+        // when a loaded CI runner needs a few hundred ms to spawn the script
+        // worker (the old 250/100 pair broke that premise on GitHub runners).
+        await new Promise((resolve) => setTimeout(resolve, 1500));
         return { status: "completed", steps: request.actions.map((action, index) => ({ index, kind: action.kind, status: "delivered" })) };
       }
     });
     try {
       const started = Date.now();
-      const timedOut = await host.exec({ code: "await computer.key('Return'); return 1;", timeoutMs: 100 });
+      const timedOut = await host.exec({ code: "await computer.key('Return'); return 1;", timeoutMs: 1000 });
       expect(Date.now() - started).toBeGreaterThanOrEqual(200);
       expect(timedOut.result.status).toBe("interrupted");
       const next = await host.exec({ code: "return 2;", timeoutMs: 1_000 });
