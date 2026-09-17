@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
+
+
+### Features
+
+* add ultra-simplify skill ([572d6f9](https://github.com/Yaphet2015/ya-skills/commit/572d6f931c114d4b15d811afb2ab2206816cd1ec))
+
 ## [0.8.0](https://github.com/Yaphet2015/ya-skills/compare/v0.7.0...v0.8.0) (2026-08-23)
 
 
