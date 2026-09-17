@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.1](https://github.com/Yaphet2015/ya-skills/compare/v0.25.0...v0.25.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **ci:** first-uploader-wins release assets; release.yml self-skips after a local publish ([36a0333](https://github.com/Yaphet2015/ya-skills/commit/36a0333b40110a217caf8784b517b58a1690927c))
+* rm unnecessary \: of skill description ([2113a61](https://github.com/Yaphet2015/ya-skills/commit/2113a614bd4db58977f9f1e3dba619ef25a2bc5a))
+
 ## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
 
 
