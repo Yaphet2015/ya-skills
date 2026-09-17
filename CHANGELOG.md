@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/Yaphet2015/ya-skills/compare/v0.24.0...v0.24.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* rm the bad \: in the description ([620fdc7](https://github.com/Yaphet2015/ya-skills/commit/620fdc7593a2abffc23c02ecb1fdd69e4cdf60a8))
+
 ## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
 
 
