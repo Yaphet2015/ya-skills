@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.3](https://github.com/Yaphet2015/ya-skills/compare/v0.25.2...v0.25.3) (2026-09-18)
+
+
+### Bug Fixes
+
+* **release:** sign compiled executable before packaging v0.25.3 ([adfc444](https://github.com/Yaphet2015/ya-skills/commit/adfc444320b0f3d69d5de6cc9087c9d069dd2f11))
+
 ## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
 
 
