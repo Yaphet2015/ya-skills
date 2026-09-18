@@ -60,6 +60,10 @@ sh(
 );
 
 // 2. Assemble the release directory.
+// Sign the finished executable so the signature covers the compiled payload.
+sh("sign yk", "codesign", ["--force", "--sign", "-", join(root, "dist", "yk")]);
+sh("verify yk signature", "codesign", ["--verify", "--strict", join(root, "dist", "yk")]);
+
 rmSync(outRoot, { recursive: true, force: true });
 mkdirSync(runtimeDir, { recursive: true });
 cpSync(join(root, "dist", "yk"), join(outRoot, "yk"));

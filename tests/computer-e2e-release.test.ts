@@ -42,6 +42,15 @@ function runYk(cwd: string, args: string[]): { code: number; stdout: string; std
 }
 
 describe("packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)", () => {
+  maybe("packaged executable has a valid code signature", () => {
+    const result = Bun.spawnSync(["/usr/bin/codesign", "--verify", "--strict", yk], {
+      stdout: "pipe",
+      stderr: "pipe"
+    });
+    expect(new TextDecoder().decode(result.stderr)).toBe("");
+    expect(result.exitCode).toBe(0);
+  });
+
   maybe("release artifacts must exist when YK_RELEASE_TESTS=1", () => {
     expect(required ? existsSync(yk) : true).toBe(true);
     expect(existsSync(join(outDir, "skills", "computer-e2e", "references", "api.d.ts"))).toBe(true);
