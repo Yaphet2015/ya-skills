@@ -1,0 +1,1098 @@
+$ bun test
+bun test v1.4.0 (34cbb9a40)
+
+tests/computer-ax-form-runner.test.ts:
+(pass) AX form acceptance runner guard > default invocation never enables native work [3.40ms]
+(pass) AX form acceptance runner guard > native work requires an explicit isolated desktop label [0.21ms]
+(pass) AX form acceptance runner guard > parses the explicit native flow without importing or starting a driver [1.80ms]
+(pass) AX form acceptance runner guard > rejects unknown flags and unsafe timeout values before native work [0.01ms]
+(pass) AX form acceptance runner guard > refuses an existing artifact directory without changing it [13.58ms]
+(pass) AX form observation acceptance > accepts the real equal-count incomplete AX projection [5.30ms]
+(pass) AX form observation acceptance > rejects degraded, explicitly truncated, and unequal-count views [0.09ms]
+
+tests/computer-e2e-cli.test.ts:
+(pass) parseE2EArgs run > files, params, out-dir, timeout, require-version parse cleanly [0.30ms]
+(pass) parseE2EArgs run > defaults: out-dir .computer-e2e/runs, timeout 900000, no params [0.01ms]
+(pass) parseE2EArgs run > run without files is an input error [0.02ms]
+(pass) parseE2EArgs run > duplicate param keys are rejected [0.04ms]
+(pass) parseE2EArgs run > params need key=value and a non-empty key [0.02ms]
+(pass) parseE2EArgs run > unknown flags are rejected before anything runs [0.01ms]
+(pass) parseE2EArgs run > single-value flags given twice are rejected [0.01ms]
+(pass) parseE2EArgs run > the budget must be a positive integer [0.20ms]
+(pass) parseE2EArgs run > missing values are input errors, not consumed positionals [0.01ms]
+(pass) parseE2EArgs run > flags after -- are still flags; bare dash tokens are files (shell expanded globs arrive as paths)
+(pass) parseE2EArgs history/report > history defaults and --limit [0.01ms]
+(pass) parseE2EArgs history/report > history rejects positionals and bad limits [0.02ms]
+(pass) parseE2EArgs history/report > report takes exactly one run directory [0.03ms]
+(pass) parseE2EArgs history/report > unknown actions are rejected
+(pass) api.d.ts generation > regenerating produces exactly the committed reference (no drift, no workspace mutation) [15.83ms]
+(pass) release pipelines > gates run in the fixed order (asserted by position, not just presence) [1.34ms]
+
+tests/video-transcript.test.ts:
+(pass) video-transcript script parses WebVTT captions and removes rolling overlap [74.54ms]
+(pass) video-transcript script writes Markdown output files [36.43ms]
+
+tests/computer-target-lease.test.ts:
+(pass) target lease (B3) > a live owner blocks a second acquirer (same-process simulates app-level lock) [6.42ms]
+(pass) target lease (B3) > session and one-shot lease users share the same app-level ownership [7.51ms]
+(pass) target lease (B3) > a semantically corrupt lease is blocked instead of overwritten [3.75ms]
+(pass) target lease (B3) > a dead owner's lease is reclaimed [2.93ms]
+104 |       const error = await acquireTargetLease(root, { pid: 500_000, windowId: 1n }, owner()).then(
+105 |         () => null,
+106 |         (e: unknown) => e
+107 |       );
+108 |       expect(error).toBeInstanceOf(LeaseError);
+109 |       expect((error as LeaseError).code).toBe("owner_identity_unknown");
+                                               ^
+error: expect(received).toBe(expected)
+
+Expected: "owner_identity_unknown"
+Received: "target_busy"
+
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-target-lease.test.ts:109:42)
+(fail) target lease (B3) > an alive-but-identity-changed holder reports owner_identity_unknown instead of stealing [3.45ms]
+(pass) target lease (B3) > releasing someone else's lease is a no-op [1.35ms]
+(pass) target lease (B3) > two real processes cannot both hold the app lease [106.95ms]
+
+tests/computer-runtime.test.ts:
+(pass) clickUnique (exactly-one delivery) > ambiguity never delivers [0.14ms]
+(pass) clickUnique (exactly-one delivery) > zero matches refuses with the description [0.25ms]
+(pass) clickUnique (exactly-one delivery) > a match without an elementToken fails instead of clicking undefined [0.04ms]
+(pass) clickUnique (exactly-one delivery) > two stale-token refusals stop after exactly two deliveries [0.08ms]
+(pass) clickUnique (exactly-one delivery) > non-stale errors stop immediately without retry [0.04ms]
+(pass) clickUnique (exactly-one delivery) > a stale refusal in prose (string message, errorCode field absent) is NOT stale [0.04ms]
+(pass) element normalization and privacy > numeric values become strings, nullish stays absent [0.02ms]
+(pass) element normalization and privacy > password field values are dropped from every output path [0.02ms]
+(pass) waitForElements > resolves once a fresh snapshot satisfies the predicate [0.14ms]
+(pass) waitForElements > only degraded_snapshot is a transient miss; other errors throw immediately [0.06ms]
+(pass) waitForElements > degraded snapshots are retried until the deadline, then rethrown [29.26ms]
+(pass) waitForElements > default poll interval is 500ms [0.08ms]
+(pass) waitForElements > a 60s wait may succeed at t=40s (waitFor is not capped at one 30s op) [0.21ms]
+(pass) waitForElements > timeout uses the injected clock and reports the description [0.11ms]
+(pass) session facade (fake backend) > type/key/scroll ToolResult.isError becomes action_refused and reports not_delivered [1.06ms]
+(pass) session facade (fake backend) > successful actions report delivered and clean results pass through [0.07ms]
+(pass) session facade (fake backend) > click resolves exactly one match through the backend token [0.16ms]
+(pass) session facade (fake backend) > ambiguous click matches never reach the backend click [0.08ms]
+(pass) session facade (fake backend) > windows and snapshot delegate to the backend unchanged [0.09ms]
+(pass) session facade (fake backend) > selectWindow ambiguity stays an error through the shared layer [0.06ms]
+
+tests/computer-observation-store.test.ts:
+(pass) ObservationStore > save + cross-process get round-trips metadata [1.43ms]
+(pass) ObservationStore > non-UUID ids and traversal attempts are rejected [0.44ms]
+(pass) ObservationStore > invalidate marks only the target's observations dead [1.42ms]
+(pass) ObservationStore > missing image file makes an observation unusable [0.59ms]
+(pass) ObservationStore > corrupt metadata JSON fails loud instead of returning junk [0.69ms]
+(pass) ObservationStore > metadata files are user-private (0600) [0.39ms]
+(pass) frameMatchesObservation (cross-command freshness) > identical geometry + identical PNG bytes match [1.31ms]
+(pass) frameMatchesObservation (cross-command freshness) > window move/resize refuses old coordinates [0.16ms]
+(pass) frameMatchesObservation (cross-command freshness) > identical geometry but re-encoded pixels conservatively refuses [0.55ms]
+
+tests/computer-use-out-dir-persistence.test.ts:
+(pass) computer-use one-shot observation artifacts > act reads an observation saved by observe in the same --out-dir [3.77ms]
+
+tests/computer-lane-runtime-freshness.test.ts:
+(pass) runtime lane same-epoch freshness > a naturally observed observation can click after same-epoch fresh-frame validation [1.19ms]
+
+tests/computer-runtime-ax-value.test.ts:
+(pass) strict AX-only setValue > sends only the token and value and requires a confirmed accessibility result [0.19ms]
+(pass) strict AX-only setValue > rejects before native dispatch when the backend has no AX-only operation [0.10ms]
+(pass) strict AX-only setValue > rejects a result without structured AX proof [0.07ms]
+(pass) strict AX-only setValue > poisons the session when the native result reports another route [0.08ms]
+(pass) strict AX-only setValue > rejects an empty token before starting an action [0.04ms]
+
+tests/computer-input-isolation.test.ts:
+(pass) input-isolation fixture gate > the read-only probe reports current fixtures separately from historical evidence [12.83ms]
+
+tests/computer-integration-release-loop.test.ts:
+(pass) release integration loop proof helpers > accepts only a body-level readiness frame with the reported child pid [0.26ms]
+19 | async function waitFor<T>(read: () => T | null, timeoutMs: number): Promise<T> {
+20 |   const deadline = Date.now() + timeoutMs;
+21 |   for (;;) {
+22 |     const value = read();
+23 |     if (value !== null) return value;
+24 |     if (Date.now() >= deadline) throw new Error(`condition did not become true within ${timeoutMs}ms`);
+                                               ^
+error: condition did not become true within 5000ms
+      at waitFor (/Users/phaethon/workspace/personal/ya-skills/tests/computer-integration-release-loop.test.ts:24:43)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-integration-release-loop.test.ts:64:29)
+(fail) release integration loop proof helpers > proves an owned TERM-ignoring descendant survives TERM before KILL escalation [5304.29ms]
+
+tests/computer-conditions.test.ts:
+(pass) evaluateCondition > element_exists matches by exact label [0.61ms]
+(pass) evaluateCondition > element_value requires exactly one match and the exact value [0.14ms]
+(pass) evaluateCondition > degraded or truncated AX never satisfies element conditions [0.04ms]
+(pass) evaluateCondition > window_exists is true when any channel answered [0.02ms]
+(pass) evaluateCondition > focused_element throws unsupported_condition — selected is not focus [0.11ms]
+
+tests/computer-lane-runtime-artifacts.test.ts:
+(pass) runtime lane screenshot privacy > saveScreenshot enforces 0600 on the created artifact [1.64ms]
+(pass) runtime lane screenshot privacy > existing permissive observation images are repaired before store use [3.79ms]
+(pass) runtime lane screenshot privacy > copied screenshot paths are private even when the source is permissive [2.86ms]
+(pass) runtime lane screenshot privacy > resize repairs an existing permissive source and derived path [2.63ms]
+(pass) runtime lane screenshot privacy > privacy validation fails loudly for a non-file path [0.81ms]
+
+tests/computer-integration-native-observation.test.ts:
+(pass) native observation deadline/cancellation propagation > per-call observe signal reaches the backend and aborts its wait [3.12ms]
+(pass) native observation deadline/cancellation propagation > per-call absolute deadline reaches the backend and bounds observation [21.50ms]
+
+tests/computer-use-native.test.ts:
+(skip) compiled yk native (opt-in via YK_CU_NATIVE_TESTS=1) > loads the SDK sidecar in-process from a hostile cwd and reads real apps
+
+tests/computer-observation.test.ts:
+(pass) projectObservation (channel projection) > degraded AX does not degrade the image channel [0.09ms]
+(pass) projectObservation (channel projection) > elementsComplete !== true is never reported complete [0.04ms]
+(pass) projectObservation (channel projection) > missing screenshot data with includeScreenshot semantics is not usable [0.03ms]
+(pass) projectObservation (channel projection) > frameValid=false demotes the image to degraded [0.03ms]
+(pass) projectObservation (channel projection) > geometry is only present when the screenshot channel is usable [0.05ms]
+(pass) projectObservation (channel projection) > selector filtering preserves total/returned and reports incompleteness [0.09ms]
+(pass) projectObservation (channel projection) > zero selector matches does not mean the window is empty [0.05ms]
+(pass) projectObservation (channel projection) > truncated AX is reported as truncated with reason [0.03ms]
+(pass) Computer.observe (mode control) > ax mode never requests a screenshot [0.33ms]
+(pass) Computer.observe (mode control) > auto mode with usable AX does not request a screenshot [0.13ms]
+706 |       return undefined;
+707 |     } catch (error) {
+708 |       // Fail loud: the screenshot bytes exist but the evidence artifact does
+709 |       // not. A "usable" image channel without a persisted file would be a
+710 |       // fabricated success (A2/A3 fail-loud contract).
+711 |       throw new ComputerError(
+                  ^
+error: the screenshot could not be persisted: EPERM: operation not permitted, open '/Users/phaethon/Library/Caches/ya-skills/computer-use/1789710760542-ebad5c94-cu.png'
+ actionOutcome: undefined,
+       code: "artifact_write_failed"
+
+      at persistImage (/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/src/session.ts:711:13)
+      at observe (/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/src/session.ts:805:23)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-observation.test.ts:145:41)
+(fail) Computer.observe (mode control) > auto mode with insufficient AX takes a second frame with the screenshot [1.78ms]
+706 |       return undefined;
+707 |     } catch (error) {
+708 |       // Fail loud: the screenshot bytes exist but the evidence artifact does
+709 |       // not. A "usable" image channel without a persisted file would be a
+710 |       // fabricated success (A2/A3 fail-loud contract).
+711 |       throw new ComputerError(
+                  ^
+error: the screenshot could not be persisted: EPERM: operation not permitted, open '/Users/phaethon/Library/Caches/ya-skills/computer-use/1789710760543-510d7e17-cu.png'
+ actionOutcome: undefined,
+       code: "artifact_write_failed"
+
+      at persistImage (/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/src/session.ts:711:13)
+      at observe (/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/src/session.ts:805:23)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-observation.test.ts:161:41)
+(fail) Computer.observe (mode control) > image mode ignores AX failures entirely [0.78ms]
+(pass) Computer.observe (mode control) > permission errors still throw in every mode [0.50ms]
+706 |       return undefined;
+707 |     } catch (error) {
+708 |       // Fail loud: the screenshot bytes exist but the evidence artifact does
+709 |       // not. A "usable" image channel without a persisted file would be a
+710 |       // fabricated success (A2/A3 fail-loud contract).
+711 |       throw new ComputerError(
+                  ^
+error: the screenshot could not be persisted: EPERM: operation not permitted, open '/Users/phaethon/Library/Caches/ya-skills/computer-use/1789710760545-be317e8e-cu.png'
+ actionOutcome: undefined,
+       code: "artifact_write_failed"
+
+      at persistImage (/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/src/session.ts:711:13)
+      at observe (/Users/phaethon/workspace/personal/ya-skills/packages/computer-runtime/src/session.ts:805:23)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-observation.test.ts:183:41)
+(fail) Computer.observe (mode control) > observations carry identity metadata and are persisted for later clicks [0.56ms]
+
+tests/pbench-exports.test.ts:
+(pass) pbench keeps its public package interface stable [0.21ms]
+
+tests/pbench-commands.test.ts:
+(pass) commands delegate manual runs with normalized options [0.62ms]
+(pass) commands default reports to Markdown and preserve explicit JSON [0.23ms]
+
+tests/computer-exec-terminal.test.ts:
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-0a0d6e6eb23c4a26.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-0a0d6e6eb23c4a26.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:17:24)
+(fail) exec terminal reduction > drains a multi-block terminal frame after the worker exits [6.24ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-b97ccc8d664d42f2.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-b97ccc8d664d42f2.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:38:24)
+(fail) exec terminal reduction > does not treat an unterminated terminal tail as completion [2.69ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-ff2e3a58cbf04933.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-ff2e3a58cbf04933.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:57:24)
+(fail) exec terminal reduction > fails closed when the control spool shrinks before EOF [2.52ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-2a241ca47bac4b71.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-2a241ca47bac4b71.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:79:24)
+(fail) exec terminal reduction > terminal receipt closes admission for every queued independent RPC [2.55ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-b489d3c82eb44eb9.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-b489d3c82eb44eb9.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:120:24)
+(fail) exec terminal reduction > keeps a dispatched RPC result and rejects only later queued work [2.65ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-25121ec6a9904361.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-25121ec6a9904361.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:155:24)
+(fail) exec terminal reduction > keeps an unawaited observe terminal reply decodable [2.49ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-c0e8194e33534097.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-c0e8194e33534097.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-terminal.test.ts:175:24)
+(fail) exec terminal reduction > does not turn an observe failure into an invalid action receipt [2.59ms]
+
+tests/pbench-adapters.test.ts:
+(pass) Codex and Claude sources normalize agent-specific transcripts [1.44ms]
+(pass) Codex and Claude runners honor launch inputs and normalize summaries [854.55ms]
+
+tests/computer-e2e-release.test.ts:
+(skip) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > packaged executable has a valid code signature
+(skip) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > release artifacts must exist when YK_RELEASE_TESTS=1
+(skip) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > install + run + history + report through the compiled yk
+(skip) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > external TS relative imports work; hostile package.json does not stop the run
+
+tests/pbench-authoring.test.ts:
+451 |     }
+452 |   }
+453 |   const { repoId, ref } = syncRepoCache(workspaceRoot, sourceRepoRoot, baselineCommit, caseId);
+454 |   const transactionRoot = pbenchCaptureRoot(home);
+455 |   await mkdir(transactionRoot, { recursive: true });
+456 |   const transactionPath = await mkdtemp(join(transactionRoot, `tx_${slug}_${stamp(options.now)}_`));
+                                      ^
+EPERM: operation not permitted, mkdtemp '/Users/phaethon/.ya-skills/pbench/tx_fix-the-fixture_20260918T055241Z_eSQhb4'
+    path: "/Users/phaethon/.ya-skills/pbench/tx_fix-the-fixture_20260918T055241Z_eSQhb4",
+ syscall: "mkdtemp",
+   errno: -1,
+    code: "EPERM"
+
+      at async captureWithSources (/Users/phaethon/workspace/personal/ya-skills/packages/functions-pbench/src/authoring.ts:456:33)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/pbench-authoring.test.ts:54:34)
+(fail) authoring captures through an injected registered session source [116.23ms]
+
+tests/computer-integration-e2e-cancellation.test.ts:
+(pass) computer-e2e integration cancellation > preserves an already-aborted caller signal without dispatch [1.64ms]
+(pass) computer-e2e integration cancellation > combines caller cancellation during the first action and blocks later dispatch in afterAll [353.23ms]
+
+tests/computer-lane-protocol-schema.test.ts:
+(pass) protocol lane deep schema validation > validates every declared observation field and nested geometry [1.85ms]
+(pass) protocol lane deep schema validation > restores only declared target ids and preserves arbitrary nested ids [1.81ms]
+(pass) protocol lane deep schema validation > validates exec receipts, logs, finite counters, and observations [2.59ms]
+(pass) protocol lane deep schema validation > decodes only a confirmed Accessibility set_value result [0.34ms]
+(pass) protocol lane deep schema validation > validates batch receipt and optional final observation shapes [0.63ms]
+(pass) protocol lane request and control boundaries > validates nested request actions without changing the operation contract [0.98ms]
+(pass) protocol lane request and control boundaries > keeps SessionInfo ids as decimal strings and validates its nested wire shape [0.26ms]
+
+tests/catalog.test.ts:
+(pass) loads valid skill manifests from a local catalog [6.59ms]
+(pass) fails loudly when a skill manifest name does not match its directory [1.75ms]
+(pass) resolves dependencies before requested skills [2.28ms]
+(pass) fails loudly when dependencies contain a cycle [2.05ms]
+(pass) root catalog exposes pbench as a thin capture and replay router [4.04ms]
+(pass) root catalog does not expose the internal pbench runner [1.37ms]
+(pass) root catalog exposes the video-transcript skill [1.31ms]
+(pass) root catalog exposes the design-grill skill [1.23ms]
+(pass) root catalog exposes the eli10 skill [1.18ms]
+(pass) root catalog exposes the validator skill [1.01ms]
+(pass) root catalog exposes the a-share-data skill [1.07ms]
+(pass) root catalog exposes the svg-icons skill without CLI functions [1.05ms]
+(pass) root catalog skill descriptions stay short enough to scan and route [1.13ms]
+(pass) root catalog exposes the show-pr skill as manual-only [1.41ms]
+(pass) show-pr tools validate and build offline [69.66ms]
+(pass) show-pr tools fail loudly without explicit paths [76.06ms]
+(pass) show-pr report embeds evidence and renders mermaid from the example document [37.03ms]
+(pass) show-pr report omits the mermaid bundle when the document has no mermaid [26.00ms]
+(pass) show-pr validator rejects missing evidence files and unlisted design choices [159.84ms]
+(pass) root catalog exposes the ultra-simplify skill [1.33ms]
+(pass) root catalog does not expose demo-only skills [0.92ms]
+(pass) yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs [22.58ms]
+(pass) root catalog exposes the computer-use skill with its command functions [1.03ms]
+(pass) root catalog exposes the computer-e2e skill, installable with all references [3.51ms]
+
+tests/computer-batch.test.ts:
+(pass) validateBatch (full pre-validation, no driver side effects) > the third step being invalid rejects the whole batch [0.04ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > default limit is 5 actions; explicit maxActions raises to the cap of 20 [0.06ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[]} is rejected with %s [0.01ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"explode"}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"type","text":""}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"set_value","elementToken":"","value":"x"}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"key","key":"Return","modifiers":[5]}]} is rejected with %s [0.01ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"scroll","spec":{"direction":"sideways","amount":1,"x":0,"y":0}}]} is rejected with %s [0.03ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"wait","condition":{"kind":"window_exists"},"timeoutMs":0}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"click_point","point":{"observationId":"nope","x":1,"y":1}}]} is rejected with %s [0.02ms]
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"click_point","point":{"observationId":"01234567-89ab-cdef-0123-456789abcdef","x":-1,"y":1}}]} is rejected with %s
+(pass) validateBatch (full pre-validation, no driver side effects) > invalid request {"actions":[{"kind":"key","key":"A"}],"timeoutMs":999999} is rejected with %s
+(pass) runBatch (serial execution with partial receipts) > the plan's reference case: unknown delivery stops the batch, no replay [0.23ms]
+(pass) runBatch (serial execution with partial receipts) > a known refusal fails the batch but keeps earlier receipts [0.05ms]
+(pass) runBatch (serial execution with partial receipts) > set_value is a distinct AX-only batch action [0.05ms]
+(pass) runBatch (serial execution with partial receipts) > two normal steps produce exactly ONE final observation [0.08ms]
+(pass) runBatch (serial execution with partial receipts) > click's internal AX lookup is not counted as an LLM observation [0.03ms]
+(pass) runBatch (serial execution with partial receipts) > a failed final observation keeps delivered receipts [0.04ms]
+(pass) runBatch (serial execution with partial receipts) > cancellation during final observation interrupts without claiming completion [0.09ms]
+(pass) runBatch (serial execution with partial receipts) > wait polls local AX until the condition is met, without LLM turns [0.11ms]
+(pass) runBatch (serial execution with partial receipts) > wait timing out fails the batch with condition_timeout [0.06ms]
+(pass) runBatch (serial execution with partial receipts) > focused_element before-conditions fail with unsupported_condition, nothing delivered [0.08ms]
+(pass) runBatch (serial execution with partial receipts) > a satisfied before-condition lets the step run [0.04ms]
+(pass) runBatch (serial execution with partial receipts) > the overall deadline interrupts before later steps [0.03ms]
+(pass) runBatch (serial execution with partial receipts) > aborting the signal stops before the next step [0.02ms]
+(pass) runBatch (serial execution with partial receipts) > click_point steps flow through computer.clickPoint [0.04ms]
+(pass) batch request typing through JSON (wire shape) > a request parsed from JSON validates identically [0.06ms]
+
+tests/install.test.ts:
+(pass) installs requested skills and dependencies into every detected target [3.43ms]
+(pass) overwrites an already installed skill with the catalog version [1.88ms]
+(pass) removes leftover files when overwriting an installed skill [1.85ms]
+(pass) uninstalls requested skills from every existing target without removing dependencies [3.50ms]
+(pass) fails loudly when uninstalling a skill that is not installed [0.70ms]
+
+tests/computer-integration-cli-boundaries.test.ts:
+49 |       }
+50 |     });
+51 |   });
+52 |   await new Promise<void>((resolve, reject) => {
+53 |     server.once("error", reject);
+54 |     server.listen(socketPath, () => {
+                ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-integration-cli-batch-nef4mZ/peer.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-integration-cli-batch-nef4mZ/peer.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/integration-cli-peer.ts:54:12)
+      at new Promise (1:11)
+      at startIntegrationCliPeer (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/integration-cli-peer.ts:52:9)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-integration-cli-boundaries.test.ts:39:24)
+(fail) public session CLI request envelopes > session batch uses the real encoder/client and keeps CLI metadata outside operation [1.56ms]
+49 |       }
+50 |     });
+51 |   });
+52 |   await new Promise<void>((resolve, reject) => {
+53 |     server.once("error", reject);
+54 |     server.listen(socketPath, () => {
+                ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-integration-cli-act-FWdmDv/peer.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-integration-cli-act-FWdmDv/peer.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/integration-cli-peer.ts:54:12)
+      at new Promise (1:11)
+      at startIntegrationCliPeer (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/integration-cli-peer.ts:52:9)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-integration-cli-boundaries.test.ts:73:24)
+(fail) public session CLI request envelopes > session act routes through the strict batch operation envelope [1.36ms]
+(pass) standalone batch final observation terminal truth > command_timeout during final observation is interrupted, not completed [3.11ms]
+(pass) standalone batch final observation terminal truth > cancellation during final observation is interrupted with delivered receipts [1.38ms]
+(pass) standalone batch final observation terminal truth > a successful final observation that crosses the deadline is still interrupted [143.16ms]
+
+tests/computer-lane-core-lifecycle.test.ts:
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-c81cd400482c4fea.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-c81cd400482c4fea.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:52:24)
+(fail) core lifecycle lane: exec admission and receipts > exec inner batch stops after its absolute deadline and retains not_run receipts [3.44ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-356a0e482c644da7.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-356a0e482c644da7.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:82:24)
+(fail) core lifecycle lane: exec admission and receipts > an unawaited inner batch cannot dispatch its later steps [2.88ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-f5bb75d603fa4551.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-f5bb75d603fa4551.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:113:24)
+(fail) core lifecycle lane: exec admission and receipts > aggregate overflow preserves unknown severity and the dispatched receipt [2.57ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-408cefbba97c4977.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-408cefbba97c4977.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:143:24)
+(fail) core lifecycle lane: exec admission and receipts > batch observations share the exec observation cap [2.54ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-67c918fbdc2448b7.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-67c918fbdc2448b7.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:163:24)
+(fail) core lifecycle lane: exec admission and receipts > mixed single and batch failures retain one run-level receipt per action [2.92ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-4febb94b0e474e1e.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-4febb94b0e474e1e.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:190:24)
+(fail) core lifecycle lane: exec admission and receipts > cancellation during final observation prevents state commit [2.69ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-762470cd6a964835.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-762470cd6a964835.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:216:24)
+(fail) core lifecycle lane: hosted deadlines and durable state > hosted batches keep one deadline across journal, actions, and final admission [2.62ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-5698f2d7404447bf.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-5698f2d7404447bf.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:246:25)
+(fail) core lifecycle lane: hosted deadlines and durable state > historical exec replies remain verifiable after the state head advances [2.62ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-6156925d6bce4ce1.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-6156925d6bce4ce1.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:273:24)
+(fail) core lifecycle lane: hosted deadlines and durable state > a crash after state rename is reconciled before the next admission [2.60ms]
+79 |       lastError = error;
+80 |     }
+81 |     if (Date.now() > deadline) {
+82 |       await stopProcessGroup(child, 2_000);
+83 |       await rm(configDir, { recursive: true, force: true }).catch(() => undefined);
+84 |       throw new Error(`session host did not become ready in ${BOOT_TIMEOUT_MS}ms: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+                     ^
+error: session host did not become ready in 20000ms: connect ENOENT /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/ya-skills-cu-phaethon/s-6e60b0ee96f1.sock
+      at openSession (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/open.ts:84:17)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:330:22)
+(fail) core lifecycle lane: lease and host process boundaries > a separate driver crash after the first known result preserves unknown and not_run receipts [20058.28ms]
+(pass) core lifecycle lane: lease and host process boundaries > a failed cleanup group blocks reclamation after its dead leader and host [8.72ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-47e7fca655fc440f.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-47e7fca655fc440f.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:383:24)
+(fail) core lifecycle lane: lease and host process boundaries > an unusable host closes its listener/path when explicitly finalized [6.16ms]
+420 |     const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolveExit, reject) => {
+421 |       child.once("error", reject);
+422 |       child.once("exit", (code, signal) => resolveExit({ code, signal }));
+423 |     });
+424 |     try {
+425 |       expect(exit.code).toBe(0);
+                              ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-lane-core-lifecycle.test.ts:425:25)
+(fail) core lifecycle lane: lease and host process boundaries > standalone opener returns while its detached host remains usable [20063.68ms]
+
+tests/computer-integration-e2e-spool.test.ts:
+(pass) computer-e2e integration spool drain > drains a newline-aligned burst larger than two chunks through the production reader [18.41ms]
+(pass) computer-e2e integration spool drain > drains a partial-frame boundary without false truncation or lost cleanup [7.98ms]
+(pass) computer-e2e integration spool drain > retains the worker-exit burst at a newline-aligned boundary [350.81ms]
+(pass) computer-e2e integration spool drain > retains the worker-exit burst at a partial-frame-boundary boundary [318.04ms]
+
+tests/computer-use-act.test.ts:
+(pass) window selection > ambiguity cannot send an action to a different document [0.08ms]
+(pass) window selection > no windows is an explicit error, not a silent success [0.02ms]
+(pass) window selection > requested window id must exist [0.02ms]
+(pass) window selection > a single window resolves without --window
+(pass) element privacy > password values are stripped from every output path [0.02ms]
+(pass) normalizeText > collapses whitespace for stable matching [0.02ms]
+(pass) act error envelopes > a timeout on act reports actionOutcome unknown and forbids replay [0.19ms]
+(pass) act error envelopes > a timeout on perceive stays a plain timeout, not an act-outcome error [0.05ms]
+(pass) act error envelopes > non-timeout act errors pass through untouched [0.04ms]
+(pass) artifact output rules > default cache dir is user-scoped, files private, relative --out-dir becomes absolute [0.67ms]
+
+tests/computer-exec-state.test.ts:
+(pass) validateJsonValue > accepts plain JSON trees [0.05ms]
+(pass) validateJsonValue > rejects %s state leaves [0.09ms]
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > rejects %s state leaves
+(pass) validateJsonValue > allows repeated acyclic references while still rejecting cycles [0.03ms]
+(pass) validateJsonValue > rejects circular references instead of hanging [0.01ms]
+(pass) validateJsonValue > enforces the byte budget [0.07ms]
+(pass) validateJsonValue > does not silently drop undefined fields (stringify would)
+(pass) state file commit/load > versions advance; stale writers conflict [1.17ms]
+(pass) state file commit/load > corrupt state files fail loud [0.66ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-04556f9c72424e66.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-04556f9c72424e66.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-state.test.ts:86:24)
+(fail) state through the host (C2) > the plan's reference case: failed commits do not advance state [2.43ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-1e95d19e27c54266.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-1e95d19e27c54266.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-state.test.ts:100:24)
+(fail) state through the host (C2) > repeated request ids do not re-run state increments [2.25ms]
+1521 |     }
+1522 |   };
+1523 | 
+1524 |   await new Promise<void>((resolve, reject) => {
+1525 |     server!.once("error", reject);
+1526 |     server!.listen(config.socketPath, () => resolve());
+                   ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-7943fe634675455c.sock
+ syscall: "listen",
+   errno: 1,
+ address: "/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-test-7943fe634675455c.sock",
+    code: "EPERM"
+
+      at <anonymous> (node:net:2065:34)
+      at listenInCluster (node:net:2177:24)
+      at listen (node:net:2054:20)
+      at <anonymous> (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1526:13)
+      at new Promise (1:11)
+      at startHost (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/host.ts:1524:9)
+      at async startTestHost (/Users/phaethon/workspace/personal/ya-skills/tests/helpers/session-worker.ts:156:22)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-exec-state.test.ts:129:24)
+(fail) state through the host (C2) > non-JSON state from a script is refused, not committed [3.80ms]
+
+tests/svg-icons-compiler.test.ts:
+(pass) compileToSvg draws a 24-grid line with the family stroke [2.27ms]
+(pass) compileToSvg rejects a third ink [0.07ms]
+(pass) compileToSvg splits two inks onto separate colored paths [0.06ms]
+(pass) compileToSvg paints a used glyph with ink 2 [0.09ms]
+(pass) compileToSvg rejects points outside the safe area [0.30ms]
+(pass) compiler source does not mention regen-icons [0.11ms]
+(pass) vendored library includes 225 drawings and compiles folder [19.90ms]
+(pass) cli --emit writes svg using the skill library directory [10.14ms]
+
+tests/computer-lane-e2e-supervisor.test.ts:
+(pass) computer-e2e lane supervisor ownership > missing owner is bounded and reported as uncertain [41.69ms]
+(pass) computer-e2e lane supervisor ownership > corrupt owner is bounded and reported as uncertain [41.84ms]
+(pass) computer-e2e lane supervisor ownership > a structurally invalid owner is also uncertain, not reclaimable [41.13ms]
+(pass) computer-e2e lane supervisor ownership > abort stops lock acquisition without deleting a live owner's lock [26.93ms]
+(pass) computer-e2e lane incremental fd3 spool > reads only the appended bounded chunk and preserves split UTF-8 frames [2.18ms]
+(pass) computer-e2e lane incremental fd3 spool > fails explicitly for a partial tail, truncation, and rotation [1.37ms]
+(pass) computer-e2e lane incremental fd3 spool > enforces the per-frame byte limit and malformed UTF-8 boundary [19.52ms]
+
+tests/pbench-replay.test.ts:
+(pass) replay rejects unknown runners before creating run state [0.30ms]
+(pass) manual replay delegates case validation through its lifecycle boundary [0.54ms]
+
+tests/computer-e2e-supervisor.test.ts:
+(pass) supervise (real child processes, no desktop) > a sync-hanging worker is hard-killed with its process group and never passes [80.11ms]
+(pass) supervise (real child processes, no desktop) > an async-hanging case is interrupted, recorded, and the worker is reaped [504.25ms]
+(pass) supervise (real child processes, no desktop) > passing and declared-skip cases give exit 2 with truthful counts and files [105.84ms]
+(pass) supervise (real child processes, no desktop) > an all-passing external suite exits 0 and its sdk metadata stays null [76.36ms]
+(pass) supervise (real child processes, no desktop) > stdout lies are not events: the fake run_finished line changes nothing [77.59ms]
+(pass) supervise (real child processes, no desktop) > a load error still produces a run directory and a failed report [64.73ms]
+(pass) supervise (real child processes, no desktop) > a failure stops later files from executing [67.31ms]
+(pass) supervise (real child processes, no desktop) > a same-group grandchild dies with the killed worker [409.67ms]
+(pass) supervise (real child processes, no desktop) > require-version mismatch is refused before any run directory exists [1.86ms]
+(pass) signal-driven stops (B2) > an aborted stopSignal SIGTERMs the RUNNING worker group; the summary is incomplete [759.32ms]
+(pass) cleanup failure honesty (B1) > a session cleanup failure cannot reduce to passed/exit 0 [102.42ms]
+(pass) zero-case honesty (N1) > events with run_finished and no cases reduce to exit 2, never 0 [0.08ms]
+(pass) terminal event honesty > run_finished payload exitCode matches the final reduction for a passing run [74.99ms]
+
+tests/computer-screenshot-scale.test.ts:
+(pass) resizeScreenshot (injected runner) > already-small images return the original without a derived file [0.10ms]
+(pass) resizeScreenshot (injected runner) > explicit resize derives a new file and verifies real dimensions [0.06ms]
+(pass) resizeScreenshot (injected runner) > a failed resize never returns the original as if it were scaled [0.07ms]
+(pass) resizeScreenshot (injected runner) > invalid derived dimensions are rejected [0.06ms]
+(pass) resizeScreenshot (injected runner) > invalid maxDimension is rejected before any spawn [0.04ms]
+(pass) resizeScreenshot (real sips, macOS only) > derives a genuinely smaller same-format PNG [301.03ms]
+
+tests/computer-request-journal.test.ts:
+(pass) RequestJournal > the first claim wins; the same id+hash replays nothing, a different hash conflicts [1.27ms]
+(pass) RequestJournal > two journal instances (like two processes) agree on ownership [0.76ms]
+(pass) RequestJournal > events append with strict sequences; a gap fails loud [0.90ms]
+(pass) RequestJournal > a started-without-finished record reads as running (crash view is the host's call) [0.86ms]
+(pass) RequestJournal > a truncated tail line fails loud, never silently succeeds [0.77ms]
+(pass) RequestJournal > invalid event types and payloads are rejected on append [0.57ms]
+(pass) RequestJournal > terminal observations with bigint window ids are serialized without losing the record [0.78ms]
+(pass) RequestJournal > reading an unknown request fails loud [0.21ms]
+(pass) canonicalRequestHash > operation content decides the hash; transport identity does not [0.04ms]
+(pass) canonicalRequestHash > bigint and string windowIds hash identically [0.02ms]
+
+tests/computer-use-api-generation.test.ts:
+(pass) computer-use api.d.ts generation (C4) > regenerating produces exactly the committed reference [12.57ms]
+(pass) computer-use api.d.ts generation (C4) > the exec surface is present; wire internals are absent [0.06ms]
+(pass) computer-use api.d.ts generation (C4) > a typed exec-script fixture compiles against the api [1192.42ms]
+(pass) computer-use api.d.ts generation (C4) > the example script exists next to the reference [0.62ms]
+
+tests/targets.test.ts:
+(pass) creates .agents/skills when a repo has no known skill target [1.45ms]
+(pass) uses existing .claude/skills target [0.47ms]
+(pass) uses existing .agents/skills target [0.40ms]
+(pass) installs to both known targets when both exist [0.65ms]
+(pass) detects existing uninstall targets without creating defaults [0.18ms]
+
+tests/computer-e2e-history.test.ts:
+(pass) reduceEvents > started-but-unfinished cases are interrupted; unstarted are not_run; no run_finished is incomplete [0.09ms]
+(pass) reduceEvents > terminal failure is failed with exit 1 [0.07ms]
+(pass) reduceEvents > explicit skips pass the run with exit 2 [0.02ms]
+(pass) reduceEvents > primary errors and cleanupErrors are reported separately [0.03ms]
+(pass) reduceEvents > an open action without its finished event is an unknown outcome, never passed [0.03ms]
+(pass) reduceEvents > artifact paths may not escape the run directory [0.06ms]
+(pass) reduceEvents > metadata accumulates runtime, application, and worker pids [0.03ms]
+(pass) reduceEvents > formatReport renders status, counts, and the incomplete warning [0.05ms]
+(pass) run directory records > two runs get independent directories with private permissions [0.60ms]
+(pass) run directory records > an empty history directory is an empty list, not an error [0.05ms]
+(pass) run directory records > a truncated tail keeps earlier events and reports incomplete [0.23ms]
+(pass) run directory records > a corrupt middle line refuses to report success [0.19ms]
+
+tests/computer-lane-runtime-admission.test.ts:
+(pass) runtime lane operation admission and close > close drains a lease-waiting mutation and final guard prevents dispatch [11.21ms]
+(pass) runtime lane operation admission and close > close waits for driver setup, then cleans the late backend exactly once [11.29ms]
+(pass) runtime lane operation admission and close > public close remains repeatable after admission has drained [0.12ms]
+
+tests/computer-use-session-cli.test.ts:
+(pass) parseRequest/session parsing (B4) > the plan's reference failures [0.13ms]
+(pass) parseRequest/session parsing (B4) > session subcommands parse strictly [0.12ms]
+(pass) parseRequest/session parsing (B4) > session-owned artifact paths cannot silently ignore --out-dir [0.03ms]
+(pass) parseRequest/session parsing (B4) > observe/batch/act accept --session without --pid [0.04ms]
+(pass) parseRequest/session parsing (B4) > session ids must be UUIDs for status/cancel/close
+(pass) session command orchestration (desktop-free) > session open resolves an omitted window through a read-only selector [0.25ms]
+(pass) session command orchestration (desktop-free) > unknown sessions fail with unknown_session, no host spawn [0.32ms]
+79 |       lastError = error;
+80 |     }
+81 |     if (Date.now() > deadline) {
+82 |       await stopProcessGroup(child, 2_000);
+83 |       await rm(configDir, { recursive: true, force: true }).catch(() => undefined);
+84 |       throw new Error(`session host did not become ready in ${BOOT_TIMEOUT_MS}ms: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+                     ^
+error: session host did not become ready in 20000ms: connect ENOENT /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/ya-skills-cu-phaethon/s-3867be56dcb3.sock
+      at openSession (/Users/phaethon/workspace/personal/ya-skills/packages/computer-session/src/open.ts:84:17)
+      at async <anonymous> (/Users/phaethon/workspace/personal/ya-skills/tests/computer-use-session-cli.test.ts:118:22)
+(fail) self-spawned session host closed loop (real subprocess, fake driver) > open -> observe -> batch -> status -> close reuses one driver [20035.39ms]
+
+tests/computer-lane-e2e-control.test.ts:
+(pass) computer-e2e control lane > case timeout aborts the runtime batch before its later actions [280.85ms]
+(pass) computer-e2e control lane > runSuite closes the real observation-store to point-click loop [8.81ms]
+
+tests/computer-point-click.test.ts:
+(pass) Computer.clickPoint (evidence-bound delivery) > an expired observation never reaches the driver [3.21ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > a valid observation maps through the geometry before delivery [5.14ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > same-epoch window movement refuses the old frame before delivery [3.10ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > out-of-image coordinates are refused before any driver call [2.56ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > an unstructured Tool error is unknown and cannot be replayed [2.34ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > a delivered clickPoint invalidates the observation for the next click [2.47ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > a type mutation between observe and clickPoint refuses the old observation [1.83ms]
+(pass) Computer.clickPoint (evidence-bound delivery) > unknown observations and cross-target observations are refused [1.32ms]
+(pass) action outcome classification (A4 refinement) > a known ToolResult refusal is not_delivered; an unknown native exception is unknown [0.31ms]
+
+tests/computer-use-packaging.test.ts:
+(skip) package:release runtime assembly > assembles the sidecar runtime with every required file and no symlinks
+(skip) package:release runtime assembly > compiled yk loads from a hostile package.json cwd without executing project scripts
+(pass) package:release runtime assembly > compiled yk build uses the pinned external + autoload + define flags [0.16ms]
+(pass) package:release runtime assembly > package:release script is the single packaging entrypoint both workflows call [0.70ms]
+
+tests/computer-session-release.test.ts:
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > release artifacts exist and include the generated skill api
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the packaged skill references match the generated api
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > help output lists the agentic actions and executes no project scripts
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > invalid exec requests fail cleanly without native load
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the internal exec worker completes pure JS + state + log against a test RPC peer
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the compiled exec loop proves body readiness before TERM/KILL cleanup
+(skip) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > same exec request-id replays nothing through a re-invoked CLI
+
+tests/computer-lane-protocol-roundtrip.test.ts:
+(pass) protocol lane wire round trips > FrameReader preserves Chinese text when every UTF-8 byte is split [0.11ms]
+45 |       return applyHandlers(handlers, emitter, args), !0;
+46 |   }
+47 |   let er;
+48 |   if (args.length > 0)
+49 |     er = args[0];
+50 |     throw er;
+                 ^
+error: Failed to listen at /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/cu-lane-protocol-roundtrip-x6MCGG/session.sock
+      at emitError (node:events:50:13)
+      at emitErrorNextTick (node:net:2139:12)
+(fail) protocol lane wire round trips > the real client preserves arbitrary exec return ids while restoring observation targets [1.85ms]
+
+tests/computer-runtime-action-classification.test.ts:
+(pass) native action error classification > structured Tool timeout and unknown codes are unknown and poison the session [0.40ms]
+(pass) native action error classification > a Tool class name without structured details is unknown and poisons the session [0.17ms]
+(pass) native action error classification > only explicit predispatch Tool codes remain not_delivered [0.32ms]
+(pass) native action error classification > InvalidArguments remains a predispatch refusal [0.17ms]
+(pass) native action error classification > AbortError after the native action seam is unknown and poisons the session [0.15ms]
+
+tests/functions.test.ts:
+(pass) dispatches an underlying function by domain and action [0.11ms]
+(pass) keeps a yk domain in its own package [0.02ms]
+(pass) fails loudly for unknown underlying functions [0.04ms]
+(pass) keeps pbench authoring commands in their own function package [0.05ms]
+
+tests/computer-use-runtime.test.ts:
+(pass) compiled SDK location > locates the SDK beside the real executable, not the cwd [4.48ms]
+(pass) compiled SDK location > uses the symlink-resolved executable location [8.13ms]
+(pass) compiled SDK location > rejects an executable path that resolves through a directory [0.09ms]
+(pass) platform gate > darwin arm64 is supported [0.03ms]
+(pass) platform gate > linux and x64 macs are rejected with a readable message [0.03ms]
+(pass) doctor report (session-backed) > ok when platform, sdk, same-process driver, and permissions all pass [0.33ms]
+(pass) doctor report (session-backed) > missing permissions keep doctor failing with a grant hint, never a dialog [0.09ms]
+(pass) doctor report (session-backed) > a foreign-pid driver is not same-process [0.07ms]
+(pass) doctor report (session-backed) > unsupported platform fails before any session is created [0.04ms]
+(pass) doctor report (session-backed) > missing runtime files point to reinstall, not to a dev checkout [0.15ms]
+(pass) doctor report (session-backed) > cleanup failures surface as hints without failing the report [0.07ms]
+
+tests/pbench.test.ts:
+(pass) pbench workspace handling > initializes and links a local workspace without creating a git repository [2.03ms]
+(pass) pbench case validation > rejects unsafe case-local paths before strict replay [1.11ms]
+(pass) pbench case validation > rejects case-local paths that end in parent directory traversal [0.43ms]
+(pass) pbench capture and replay flow > asks for confirmation with session and baseline details before capture [84.19ms]
+(pass) pbench capture and replay flow > capture command pre-fills private docs from session evidence without TODO authoring placeholders [134.45ms]
+(pass) pbench capture and replay flow > capture blocks strict validation only for the validator when correction history exists without failed verification evidence [125.01ms]
+(pass) pbench capture and replay flow > capture command warns when extracted replay evidence is empty [126.23ms]
+(pass) pbench capture and replay flow > generates a completion validator from a failed replayable verification command [214.53ms]
+(pass) pbench capture and replay flow > generated completion validator preserves captured repo-relative verification cwd [234.88ms]
+(pass) pbench capture and replay flow > unsafe verification cwd leaves validator unfinished and warns during capture [126.28ms]
+(pass) pbench capture and replay flow > captures a Codex session, strict-validates the baseline failure, then finalizes the case [243.17ms]
+(pass) pbench capture and replay flow > finalize rejects a bundle changed after strict validation [213.10ms]
+(pass) pbench capture and replay flow > stores capture authoring transactions under the ya-skills home cache [124.21ms]
+(pass) pbench capture and replay flow > extracts modern Codex payload messages, tool calls, and correction evidence [125.76ms]
+(pass) pbench capture and replay flow > uses session cwd and git baseline when capture is run from another repository [210.19ms]
+(pass) pbench capture and replay flow > finds a session by scanning Codex sessions when the index omits file paths [123.41ms]
+(pass) pbench capture and replay flow > resolves a session by id from its filename without reading competing session files [123.26ms]
+(pass) pbench capture and replay flow > captures a Claude Code session through the platform-agnostic source registry [122.95ms]
+(pass) pbench capture and replay flow > extracts Codex errors and approval/sandbox context as private artifacts [121.74ms]
+(pass) pbench capture and replay flow > detects Bun setup commands for Bun repositories [144.16ms]
+(pass) pbench capture and replay flow > writes public replay files and references them from the case manifest [122.63ms]
+(pass) pbench capture and replay flow > exports a public-only replay capsule without private evaluator files [127.08ms]
+(pass) pbench capture and replay flow > rejects public replay export when public files reference private evaluator paths [123.51ms]
+(pass) pbench capture and replay flow > rejects public replay export when public files reference absolute /private paths [124.14ms]
+(pass) pbench capture and replay flow > strict validation fails before replay when required replay environment is missing [124.47ms]
+(pass) pbench capture and replay flow > captures repo agent instructions and installed skill names into public replay context [149.55ms]
+(pass) pbench capture and replay flow > keeps unproven tracked changes private until replay-start authoring resolves them [122.34ms]
+(pass) pbench capture and replay flow > keeps unproven untracked files out of the public replay capsule [146.50ms]
+(pass) pbench capture and replay flow > does not capture repository-external files through untracked symlinks [124.78ms]
+(pass) pbench capture and replay flow > accepts baseline-only replay-start authoring [207.55ms]
+(pass) pbench capture and replay flow > accepts explicitly curated replay-start files [211.67ms]
+(pass) pbench capture and replay flow > rejects missing or unknown replay-start decisions [251.23ms]
+(pass) pbench capture and replay flow > writes bounded public command observations and private failure draft [125.33ms]
+(pass) pbench capture and replay flow > sanitizes private absolute paths from public command observations before replay [123.17ms]
+(pass) pbench capture and replay flow > writes key observations for failed and verification commands without skill bootstrap noise [123.21ms]
+(pass) pbench capture and replay flow > runs a finalized case with codex while keeping private evaluator paths away from the agent [1130.21ms]
+(pass) pbench capture and replay flow > runs a finalized case with the claude runner and records claude provenance [946.58ms]
+(pass) pbench capture and replay flow > records run profile and normalized metrics/events for an automatic run [597.34ms]
+(pass) pbench capture and replay flow > captures candidate untracked file contents and redacts required env values [1021.45ms]
+(pass) pbench capture and replay flow > run --manual prepares the skill-mediated worktree [348.55ms]
+(pass) pbench capture and replay flow > installs the manual runner into the worktree's existing Claude skill target [352.27ms]
+(pass) pbench capture and replay flow > installs and removes the manual runner across both existing skill targets [434.48ms]
+(pass) pbench capture and replay flow > preserves a skill target created by setup when removing the injected runner [415.53ms]
+(pass) pbench capture and replay flow > refuses to overwrite an existing runner skill [359.19ms]
+(pass) pbench capture and replay flow > candidate artifacts exclude the injected runner skill [426.36ms]
+(pass) pbench capture and replay flow > starts a skill-mediated run with public capsule, runner skill, and one-shot finish [427.85ms]
+(pass) pbench capture and replay flow > finish consumes the attempt when validation infrastructure fails [354.14ms]
+(pass) pbench capture and replay flow > rejects a second finish while the first attempt is marked finishing [342.62ms]
+(pass) pbench capture and replay flow > treats an atomic finishing marker as a consumed attempt after a crash [343.80ms]
+(pass) pbench capture and replay flow > allows only one concurrent finish to execute private validators [398.24ms]
+(pass) pbench capture and replay flow > preserves profile and writes normalized metrics for a skill-mediated run [422.18ms]
+(pass) pbench capture and replay flow > skill finish returns minimal signal with no run-dir pointer and redacts validator step output (P1.1) [419.95ms]
+(pass) pbench capture and replay flow > codex run keeps full validator outcomes, returns a summary path, and records workspace-write isolation [1018.54ms]
+(pass) pbench capture and replay flow > records harness-agnostic isolation, attempt, priorRunIds, and contaminated provenance (P1.2) [580.70ms]
+(pass) pbench capture and replay flow > prior attempts exclude in-flight and legacy pre-feature runs [385.53ms]
+(pass) pbench capture and replay flow > report surfaces isolation, attempt, and contaminated provenance [347.73ms]
+(pass) pbench capture and replay flow > skill finish copies the access-audit log and flags sensitive reads (P1.3-lite) [424.18ms]
+(pass) pbench capture and replay flow > skill finish writes no access-audit artifact when the agent kept no log [424.13ms]
+error: script "test" was terminated by signal SIGTERM (Polite quit request)

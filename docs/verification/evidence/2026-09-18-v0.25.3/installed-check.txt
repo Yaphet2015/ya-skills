@@ -1,0 +1,43 @@
+/opt/homebrew/opt/ya-skills/libexec/yk: valid on disk
+/opt/homebrew/opt/ya-skills/libexec/yk: satisfies its Designated Requirement
+yk
+
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
+Commands:
+  yk list
+  yk install [options] [skill...]
+  yk uninstall [options] <skill...>
+  yk <domain> <action> [...args]
+
+Function domains: demo, pbench, computer-use, computer-e2e
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
+
+Usage:
+0.25.3
+/opt/homebrew/bin/yk
+yk
+
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
+Commands:
+  yk list
+  yk install [options] [skill...]
+  yk uninstall [options] <skill...>
+  yk <domain> <action> [...args]
+
+Function domains: demo, pbench, computer-use, computer-e2e
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
+

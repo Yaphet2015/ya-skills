@@ -1,0 +1,5 @@
+$ bun build --target=node --external @trycua/cua-driver --outfile=packages/cli/dist/cli.js packages/cli/src/cli.ts
+Bundled 71 modules in 6ms
+
+  cli.js  0.56 MB  (entry point)
+

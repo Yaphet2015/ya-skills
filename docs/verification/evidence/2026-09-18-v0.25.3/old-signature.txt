@@ -1,0 +1,2 @@
+/opt/homebrew/Cellar/ya-skills/0.25.2/libexec/yk: invalid signature (code or signature have been modified)
+In architecture: arm64

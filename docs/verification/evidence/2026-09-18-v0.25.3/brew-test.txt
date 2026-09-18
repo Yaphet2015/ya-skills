@@ -1,0 +1,13 @@
+Fetching gem metadata from https://rubygems.org/.........
+Fetching drb 2.2.3
+Fetching minitest 6.0.6
+Installing drb 2.2.3
+Installing minitest 6.0.6
+Bundle complete! 38 Gemfile dependencies, 41 gems now installed.
+Bundled gems are installed into `../../../../../opt/homebrew/Library/Homebrew/vendor/bundle`
+3 installed gems you directly depend on are looking for funding.
+  Run `bundle fund` for details
+==> Testing yaphet2015/tap/ya-skills
+==> /opt/homebrew/Cellar/ya-skills/0.25.3/bin/yk --version
+==> /opt/homebrew/Cellar/ya-skills/0.25.3/bin/yk list
+==> /opt/homebrew/Cellar/ya-skills/0.25.3/bin/yk list

@@ -1,0 +1,2 @@
+ya-skills-v0.25.3-macos-arm64.tar.gz: OK
+29c2c842c609e5272ac4f9be7088dbcd28417bfdb072b6178d00954f3c5848cd  ya-skills-v0.25.3-macos-arm64.tar.gz

@@ -1,0 +1,9 @@
+==> Fetching downloads for: yaphet2015/tap/ya-skills
+==> Would upgrade 1 requested outdated package
+yaphet2015/tap/ya-skills 0.25.2 -> 0.25.3
+✔︎ Formula ya-skills (0.25.3)
+==> Upgrading yaphet2015/tap/ya-skills
+  0.25.2 -> 0.25.3 
+🍺  /opt/homebrew/Cellar/ya-skills/0.25.3: 450 files, 121.4MB, built in 1 second
+==> Upgraded 1 requested outdated package
+yaphet2015/tap/ya-skills 0.25.2 -> 0.25.3

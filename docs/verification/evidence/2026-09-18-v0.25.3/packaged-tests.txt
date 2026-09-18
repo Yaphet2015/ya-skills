@@ -1,0 +1,25 @@
+bun test v1.4.0 (34cbb9a40)
+
+tests/computer-e2e-release.test.ts:
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > packaged executable has a valid code signature [35.84ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > release artifacts must exist when YK_RELEASE_TESTS=1 [0.08ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > install + run + history + report through the compiled yk [1211.05ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > external TS relative imports work; hostile package.json does not stop the run [78.78ms]
+
+tests/computer-session-release.test.ts:
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > release artifacts exist and include the generated skill api [0.05ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the packaged skill references match the generated api [0.08ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > help output lists the agentic actions and executes no project scripts [19.19ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > invalid exec requests fail cleanly without native load [19.41ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the internal exec worker completes pure JS + state + log against a test RPC peer [22.08ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the compiled exec loop proves body readiness before TERM/KILL cleanup [2193.51ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > same exec request-id replays nothing through a re-invoked CLI [40.93ms]
+
+tests/computer-lane-release-packaging.test.ts:
+(pass) release lane: packaged live fake session > deduplicates a live request through a separate packaged driver process [120.17ms]
+(pass) release lane: packaged live fake session > a symlinked packaged executable self-spawns its driver worker [117.73ms]
+
+ 13 pass
+ 0 fail
+ 74 expect() calls
+Ran 13 tests across 3 files. [3.88s]
