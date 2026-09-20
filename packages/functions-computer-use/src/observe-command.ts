@@ -2,18 +2,14 @@
 // module resolves the target, runs one observation, and prints the
 // schemaVersion-1 envelope. Desktop work goes through the shared session.
 
-import { join } from "node:path";
 import {
-  bigintSafeReplacer,
-  createComputerSession,
-  createObservationStore,
-  defaultArtifactsDir,
   selectWindow,
-  type ComputerSession,
   type ObserveOptions,
   type Target
 } from "@ya-skills/computer-runtime";
 import { COMMAND_DEADLINE_MS } from "./consts.js";
+import { createDefaultSessionFactory, type TimedCreateSession } from "./session-factory.js";
+import { jsonError, stringifyJson } from "./output.js";
 
 export interface ObserveCommandRequest {
   pid: number;
@@ -25,28 +21,15 @@ export interface ObserveCommandRequest {
 }
 
 export function observeCommand(
-  deps: { createSession?: (options: { deadlineAt: number; artifactsDir?: string }) => ComputerSession } = {}
+  deps: { createSession?: TimedCreateSession } = {}
 ): (request: ObserveCommandRequest) => Promise<string> {
-  const createSession =
-    deps.createSession ??
-    ((options: { deadlineAt: number; artifactsDir?: string }) => {
-      const artifactsDir = options.artifactsDir ?? defaultArtifactsDir();
-      return createComputerSession({
-        ...options,
-        artifactsDir,
-        observationStore: createObservationStore(join(artifactsDir, "observations"))
-      });
-    });
+  const createSession = deps.createSession ?? createDefaultSessionFactory();
   return async (request) => {
     const platform = process.platform === "darwin" && process.arch === "arm64";
     if (!platform) {
-      throw new Error(
-        JSON.stringify({
-          error: {
-            code: "unsupported_platform",
-            message: `computer-use requires macOS arm64 (this machine: ${process.platform} ${process.arch})`
-          }
-        })
+      throw jsonError(
+        "unsupported_platform",
+        `computer-use requires macOS arm64 (this machine: ${process.platform} ${process.arch})`
       );
     }
     const session = createSession({
@@ -63,10 +46,7 @@ export function observeCommand(
         ...(request.selector !== undefined ? { selector: request.selector } : {})
       };
       const observation = await session.computer.observe(target, options);
-      return JSON.stringify(
-        { schemaVersion: 1, target, observation },
-        bigintSafeReplacer
-      );
+      return stringifyJson({ schemaVersion: 1, target, observation });
     } finally {
       try {
         await session.close();

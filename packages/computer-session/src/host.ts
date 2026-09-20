@@ -1,8 +1,9 @@
 // Session host (B2/B3): the single local owner of one desktop target. It
 // listens on the private session socket, keeps the driver worker in a
-// dedicated process, dedupes requests through the runtime RequestJournal,
+// dedicated process, dedupes requests through the request ledger,
 // holds the application-level target lease, and stays responsive for
-// status/cancel/close while a business operation is running.
+// status/cancel/close while a business operation is running. Hosted exec
+// state and terminal results share an immutable transaction commit.
 //
 // Ownership rules (review findings 2/3/5): a session only releases its
 // target lease when the driver worker is PROVEN terminated (state "closed").
@@ -15,24 +16,24 @@
 import { createServer, type Server, type Socket } from "node:net";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
   acquireTargetLease,
   canonicalRequestHash,
   ComputerError,
   createRequestJournal,
+  createRequestLedger,
+  createExecutionScope,
   validateBatch,
   DEFAULT_BATCH_TIMEOUT_MS,
   processStartTime,
   type LeaseHandle,
+  type RequestOutcome,
   type RequestJournal
 } from "@ya-skills/computer-runtime";
 import {
-  decodeReply,
   decodeRequest,
   encodeControl,
-  encodeRequest,
   FrameReader
 } from "./protocol.js";
 import type {
@@ -44,18 +45,16 @@ import type {
   SessionState
 } from "./types.js";
 import { assertSocketPathLength, sessionPaths, validateSessionId } from "./paths.js";
+import type { StopResult } from "./process.js";
+import type { DriverMethod } from "./driver-worker.js";
+import { buildHostDriver } from "./host-driver.js";
+import type { DriverHandle, HostConfig } from "./host-types.js";
+import { executeHostedBatch as runHostedBatch } from "./host-batch.js";
 import {
-  spawnInternalWorker,
-  stopProcessGroup,
-  TERM_GRACE_MS,
-  type StopResult
-} from "./process.js";
-import { buildDriverSession, type DriverMethod, type DriverSessionLike } from "./driver-worker.js";
-import {
-  execStateHash,
-  loadExecState,
-  loadExecStateVersion
-} from "./exec-state.js";
+  classifyExecStateCommit,
+  createExecStateRecovery,
+  type StateCommitDisposition
+} from "./host-recovery.js";
 
 export const MAX_IDLE_TIMEOUT_MS = 120_000;
 export const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
@@ -63,208 +62,6 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
 const SHUTDOWN_INFLIGHT_BUDGET_MS = 10_000;
 /** Bounded wait for a `close` control to observe the final state. */
 const CLOSE_CONTROL_BUDGET_MS = 10_000;
-
-export interface HostConfig {
-  schemaVersion: 1;
-  sessionId: string;
-  generation: string;
-  target: { pid: number; windowId: string };
-  root: string;
-  socketPath: string;
-  idleTimeoutMs: number;
-  /** Per-session request journal directory (session-private since B3/F7). */
-  requestsDir: string;
-  /** Internal test injection only (absolute module path). */
-  driver?: { kind: "module"; path: string; export?: string };
-  /** In-process driver session (tests); overrides `driver`. */
-  inProcessDriver?: DriverSessionLike;
-}
-
-export interface DriverHandle {
-  ready: Promise<void>;
-  initCount: number;
-  pid(): number | null;
-  call(method: DriverMethod, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
-  alive(): boolean;
-  stop(graceMs?: number): Promise<StopResult>;
-}
-
-// ---- subprocess driver handle (production) -------------------------------
-
-async function subprocessDriver(
-  config: HostConfig,
-  onAction: (event: { phase: "started" | "finished"; kind: string; outcome?: string }) => void
-): Promise<DriverHandle> {
-  const { writeFile, mkdtemp, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const configDir = await mkdtemp(join(tmpdir(), "yk-cu-drv-"));
-  const workerConfig = join(configDir, "driver.json");
-  await writeFile(
-    workerConfig,
-    JSON.stringify({
-      sessionId: config.sessionId,
-      target: config.target,
-      ...(config.driver ? { driver: config.driver } : {})
-    })
-  );
-  const { child } = spawnInternalWorker("__computer-driver-worker", workerConfig, {
-    env: { YK_CU_SESSION_ROOT: config.root }
-  });
-  const stdoutReader = new FrameReader();
-  const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
-  let initCount = 0;
-  let exited = false;
-  let readyResolve!: () => void;
-  const ready = new Promise<void>((resolve) => (readyResolve = resolve));
-  child.stdout!.on("data", (chunk: Buffer) => {
-    // Streaming UTF-8 (F17): a multibyte sequence split across chunk
-    // boundaries survives intact.
-    let frames: string[];
-    try {
-      frames = stdoutReader.push(chunk);
-    } catch {
-      child.kill("SIGKILL");
-      return;
-    }
-    for (const line of frames) {
-      if (line.trim() === "") continue;
-      let message: Record<string, unknown>;
-      try {
-        message = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      if (message.event === "ready") {
-        initCount = Number(message.driverInitCount ?? 1);
-        readyResolve();
-        continue;
-      }
-      if (message.event === "action") {
-        onAction({
-          phase: message.phase === "finished" ? "finished" : "started",
-          kind: typeof message.kind === "string" ? message.kind : "unknown",
-          outcome: typeof message.outcome === "string" ? message.outcome : undefined
-        });
-        continue;
-      }
-      const id = typeof message.id === "string" ? message.id : null;
-      if (id && pending.has(id)) {
-        const waiter = pending.get(id)!;
-        pending.delete(id);
-        if (message.ok === true) waiter.resolve(message.result);
-        else {
-          const error = message.error as { code?: string; message?: string } | undefined;
-          waiter.reject(new ComputerError(error?.code ?? "driver_error", error?.message ?? "driver call failed"));
-        }
-      }
-    }
-  });
-  child.on("exit", () => {
-    exited = true;
-    void rm(configDir, { recursive: true, force: true }).catch(() => undefined);
-    readyResolve();
-    const error = new ComputerError("driver_worker_exited", "the driver worker exited unexpectedly", "unknown");
-    for (const waiter of pending.values()) waiter.reject(error);
-    pending.clear();
-  });
-  await ready;
-  if (exited || child.pid === undefined) {
-    throw new ComputerError("driver_worker_failed", "the driver worker exited before becoming ready");
-  }
-  return {
-    ready,
-    get initCount() {
-      return initCount;
-    },
-    pid: () => child.pid ?? null,
-    call(method, args, signal) {
-      return new Promise((resolve, reject) => {
-        if (exited) {
-          reject(new ComputerError("driver_worker_exited", "the driver worker is gone", "unknown"));
-          return;
-        }
-        if (signal?.aborted) {
-          reject(new ComputerError("aborted", "the driver call was aborted", "not_delivered"));
-          return;
-        }
-        const id = randomUUID();
-        const onAbort = () => {
-          try {
-            child.stdin?.write(`${JSON.stringify({ control: "cancel", requestId: id })}\n`);
-          } catch {
-            // The worker exit path below classifies delivery as unknown.
-          }
-        };
-        signal?.addEventListener("abort", onAbort, { once: true });
-        pending.set(id, {
-          resolve: (value) => {
-            signal?.removeEventListener("abort", onAbort);
-            resolve(value);
-          },
-          reject: (error) => {
-            signal?.removeEventListener("abort", onAbort);
-            reject(error);
-          }
-        });
-        try {
-          child.stdin!.write(
-            `${JSON.stringify({ id, method, args }, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n`
-          );
-        } catch (error) {
-          pending.delete(id);
-          signal?.removeEventListener("abort", onAbort);
-          reject(new ComputerError("driver_worker_exited", `could not send driver request: ${error instanceof Error ? error.message : String(error)}`, "unknown"));
-        }
-      });
-    },
-    alive: () => !exited,
-    stop(graceMs = TERM_GRACE_MS) {
-      return stopProcessGroup(child, graceMs);
-    }
-  };
-}
-
-// ---- in-process driver handle (tests) ------------------------------------
-
-async function inProcessDriver(
-  config: HostConfig,
-  onAction: (event: { phase: "started" | "finished"; kind: string; outcome?: string }) => void
-): Promise<DriverHandle> {
-  const session =
-    config.inProcessDriver ??
-    (await buildDriverSession({
-      sessionId: config.sessionId,
-      target: config.target,
-      onAction,
-      ...(config.driver ? { driver: config.driver } : {})
-    }));
-  let closed = false;
-  return {
-    ready: Promise.resolve(),
-    initCount: session.initCount ?? 1,
-    pid: () => null,
-    async call(method, args, signal) {
-      if (closed) throw new ComputerError("driver_worker_exited", "the driver worker is closed", "unknown");
-      return session.call(method, args, signal);
-    },
-    alive: () => !closed,
-    async stop() {
-      closed = true;
-      let cleanupFailed = false;
-      try {
-        await session.close();
-      } catch {
-        cleanupFailed = true;
-      }
-      return {
-        exited: !cleanupFailed,
-        signal: null,
-        code: cleanupFailed ? null : 0,
-        groupSurvivors: cleanupFailed ? 0 : null
-      };
-    }
-  };
-}
 
 // ---- host -----------------------------------------------------------------
 
@@ -293,28 +90,7 @@ export interface CleanupReport {
   unresolvedRequests: string[];
 }
 
-type StateCommitDisposition = "committed" | "abandoned" | "uncertain";
-
-function classifyExecStateCommit(result: unknown): StateCommitDisposition {
-  if (typeof result !== "object" || result === null) return "uncertain";
-  const value = result as {
-    status?: unknown;
-    stateCommitted?: unknown;
-    error?: { code?: unknown };
-  };
-  if (value.stateCommitted === true) return "committed";
-  // The runner checks the request signal after the durable intent and before
-  // the synchronous state rename. A terminal cancellation with no commit is
-  // therefore conclusive; all other false values remain crash-uncertain.
-  if (value.status === "interrupted" && value.error?.code === "request_cancelled") {
-    return "abandoned";
-  }
-  return "uncertain";
-}
-
-function isMissingStateHistory(error: unknown): boolean {
-  return error instanceof Error && /missing committed state history version/.test(error.message);
-}
+export type { DriverHandle, HostConfig } from "./host-types.js";
 
 export async function startHost(config: HostConfig, deps: HostDeps = {}): Promise<Host> {
   validateSessionId(config.sessionId);
@@ -332,10 +108,14 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   const journal = deps.journal?.(config) ?? createRequestJournal(join(paths.directory, "requests"));
 
   let activeRequestId: string | undefined;
-  let inFlight: { requestId: string; abort: AbortController } | null = null;
+  const { ledger: stateLedger, validateLedgerTransaction, validateRecoveredExecState, validateStateBeforeAdmission } = createExecStateRecovery(
+    stateDir,
+    journal,
+    () => activeRequestId
+  );
+  let inFlight: { requestId: string; abort: Pick<AbortController, "signal" | "abort"> } | null = null;
   let deliveries = 0;
-  const requestOutcomes = new Map<string, { status: SessionReply["status"]; result?: unknown; error?: { code: string; message: string } }>();
-  const unresolvedRequests = new Set<string>();
+  const requests = createRequestLedger(journal);
   const liveExecWorkers = new Set<number>();
   /** Process groups retained after failed worker cleanup. This survives host
    * death through the lease record and blocks unsafe target reclamation. */
@@ -355,19 +135,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
   const listenerCloseWaiters: (() => void)[] = [];
   let listenerClosed = false;
   let closeRequested = false;
-  const journalSeq = new Map<string, number>();
-  const appendJournalEvent = async (
-    requestId: string,
-    type: "request_started" | "action_started" | "action_finished" | "state_commit_intent" | "request_finished",
-    payload: Record<string, unknown>
-  ): Promise<void> => {
-    // Do not advance the sequence until the append succeeds. This prevents a
-    // failed persistence attempt from making a subsequent recovery read look
-    // valid while silently skipping an event.
-    const seq = journalSeq.get(requestId) ?? 0;
-    await journal.append(requestId, { seq, time: Date.now(), type, payload });
-    journalSeq.set(requestId, seq + 1);
-  };
+  const appendJournalEvent = requests.append;
 
   const driverMode = deps.driver ?? (config.inProcessDriver ? "in-process" : "subprocess");
 
@@ -390,7 +158,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         );
   let driver: DriverHandle;
   try {
-    driver = driverMode === "in-process" ? await inProcessDriver(config, () => undefined) : await subprocessDriver(config, () => undefined);
+    driver = await buildHostDriver(config, driverMode, () => undefined);
   } catch (error) {
     await lease.release().catch(() => undefined);
     throw error;
@@ -601,12 +369,12 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         state.value = "closed";
       }
       if (inFlight !== null) {
-        const outcome = requestOutcomes.get(inFlight.requestId) ?? {
+        const outcome = requests.cached(inFlight.requestId) ?? {
           status: "unknown" as const,
           error: { code: "session_closing", message: `session closed (${reason}) with the request in flight` }
         };
         if (outcome.status !== "completed") {
-          unresolvedRequests.add(inFlight.requestId);
+          requests.fail(inFlight.requestId, outcome.error);
           try {
             await recordOutcome(inFlight.requestId, { status: "unknown", error: outcome.error });
           } catch {
@@ -636,301 +404,36 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     return shutdownPromise;
   };
 
-  /** Execute a hosted batch one action at a time. The runtime still owns
-   * selector/condition semantics, but the host owns the durable boundary:
-   * action_finished is acknowledged before the next native input is sent.
-   * This also gives cancellation a boundary between actions instead of
-   * handing an opaque multi-step call to the driver worker. */
-  const executeHostedBatch = async (
-    requestId: string,
-    request: ReturnType<typeof validateBatch>,
-    signal: AbortSignal,
-    absoluteDeadlineAt: number,
-    finishedActions?: Set<number>
-  ): Promise<{ status: "completed" | "interrupted" | "failed"; steps: Array<Record<string, unknown>>; observation?: unknown; observationError?: { code: string; message: string } }> => {
-    const steps: Array<Record<string, unknown>> = [];
-    const fillNotRun = async (from: number, error: { code: string; message: string }): Promise<void> => {
-      for (let index = from; index < request.actions.length; index++) {
-        steps[index] = {
-          index,
-          kind: request.actions[index]!.kind,
-          status: "not_run",
-          error
-        };
-        await appendJournalEvent(requestId, "action_finished", {
-          index,
-          kind: request.actions[index]!.kind,
-          outcome: "not_run",
-          error
-        });
-        finishedActions?.add(index);
-      }
-    };
-    const deadlineAt = Math.min(absoluteDeadlineAt, Date.now() + (request.timeoutMs ?? DEFAULT_BATCH_TIMEOUT_MS));
-    for (const [index, action] of request.actions.entries()) {
-      const boundary = signal.aborted
-        ? { code: "request_cancelled", message: "the batch was cancelled before this action was dispatched" }
-        : Date.now() >= deadlineAt
-          ? { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" }
-          : null;
-      if (boundary !== null) {
-        await fillNotRun(index, boundary);
-        return { status: "interrupted", steps };
-      }
-      await appendJournalEvent(requestId, "action_started", { index, kind: action.kind });
-      const afterJournal = signal.aborted
-        ? { code: "request_cancelled", message: "the batch was cancelled before this action was dispatched" }
-        : Date.now() >= deadlineAt
-          ? { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" }
-          : null;
-      if (afterJournal !== null) {
-        await fillNotRun(index, afterJournal);
-        return { status: "interrupted", steps };
-      }
-      // Recompute the remaining budget after every journal await. Never pass
-      // a stale relative timeout to a fresh driver call.
-      const remaining = deadlineAt - Date.now();
-      let raw: unknown;
-      try {
-        raw = await driver.call(
-          "batch",
-          {
-            request: {
-              actions: [action],
-              timeoutMs: Math.max(1, Math.min(remaining, 120_000)),
-              maxActions: 1
-            }
-          },
-          signal
-        );
-      } catch (error) {
-        const failure = {
-          code: error instanceof ComputerError ? error.code : "driver_worker_exited",
-          message: error instanceof Error ? error.message : String(error)
-        };
-        const receipt = { index, kind: action.kind, status: "unknown", error: failure };
-        steps[index] = receipt;
-        await appendJournalEvent(requestId, "action_finished", { index, kind: action.kind, outcome: "unknown", error: failure });
-        finishedActions?.add(index);
-        await fillNotRun(index + 1, { code: "not_run_after_unknown", message: "the preceding action had unknown delivery; remaining actions were not dispatched" });
-        return { status: "interrupted", steps };
-      }
-      const result = raw as { status?: unknown; steps?: Array<Record<string, unknown>> } | null;
-      const local = result?.steps?.[0];
-      const localStatus = typeof local?.status === "string" ? local.status : "unknown";
-      const receipt: Record<string, unknown> = {
-        ...(local ?? {}),
-        index,
-        kind: action.kind,
-        status: localStatus
-      };
-      steps[index] = receipt;
-      await appendJournalEvent(requestId, "action_finished", {
-        index,
-        kind: action.kind,
-        outcome: localStatus,
-        ...(local?.error !== undefined ? { error: local.error } : {})
-      });
-      finishedActions?.add(index);
-      if (localStatus !== "delivered" && localStatus !== "satisfied") {
-        await fillNotRun(index + 1, {
-          code: typeof (local?.error as { code?: unknown } | undefined)?.code === "string"
-            ? (local?.error as { code: string }).code
-            : localStatus === "unknown" ? "unknown_delivery" : "action_failed",
-          message: typeof (local?.error as { message?: unknown } | undefined)?.message === "string"
-            ? (local?.error as { message: string }).message
-            : `the action ended with ${localStatus}`
-        });
-        return {
-          status: localStatus === "unknown" || result?.status === "interrupted" ? "interrupted" : "failed",
-          steps
-        };
-      }
-      const afterAction = signal.aborted
-        ? { code: "request_cancelled", message: "the batch was cancelled after this action" }
-        : Date.now() >= deadlineAt
-          ? { code: "batch_deadline", message: "batch timeout budget exhausted after this action" }
-          : null;
-      if (afterAction !== null) {
-        await fillNotRun(index + 1, afterAction);
-        return { status: "interrupted", steps };
-      }
-    }
-    if (request.observe !== undefined) {
-      const beforeObservation = signal.aborted
-        ? { code: "request_cancelled", message: "the batch was cancelled before final observation" }
-        : Date.now() >= deadlineAt
-          ? { code: "batch_deadline", message: "batch timeout budget exhausted before final observation" }
-          : null;
-      if (beforeObservation !== null) return { status: "interrupted", steps, observationError: beforeObservation };
-      try {
-        const observation = await driver.call(
-          "observe",
-          { options: request.observe, deadlineAt },
-          signal
-        );
-        if (signal.aborted || Date.now() >= deadlineAt) {
-          return {
-            status: "interrupted",
-            steps,
-            observationError: signal.aborted
-              ? { code: "request_cancelled", message: "the batch was cancelled during final observation" }
-              : { code: "batch_deadline", message: "batch timeout budget exhausted during final observation" }
-          };
-        }
-        return { status: "completed", steps, observation };
-      } catch (error) {
-        const cancelled = signal.aborted || error instanceof ComputerError && (error.code === "aborted" || error.code === "request_cancelled");
-        const expired = Date.now() >= deadlineAt;
-        return {
-          status: cancelled || expired ? "interrupted" : "completed",
-          steps,
-          observationError: {
-            code: cancelled ? "request_cancelled" : expired ? "batch_deadline" : error instanceof ComputerError ? error.code : "final_observe_failed",
-            message: cancelled
-              ? "the batch was cancelled during final observation"
-              : expired
-                ? "batch timeout budget exhausted during final observation"
-                : error instanceof Error ? error.message : String(error)
-          }
-        };
-      }
-    }
-    return { status: "completed", steps };
-  };
-
   const recordOutcome = async (
     requestId: string,
-    outcome: { status: SessionReply["status"]; result?: unknown; error?: { code: string; message: string } },
+    outcome: RequestOutcome,
     stateCommitDisposition?: StateCommitDisposition
   ): Promise<boolean> => {
     // A terminal reply is not published until its terminal event is durable.
     // If persistence fails after input was dispatched, fail closed and keep
     // the target unusable rather than claiming a recoverable success.
     try {
-      await appendJournalEvent(requestId, "request_finished", {
-        status: outcome.status,
-        ...(outcome.result !== undefined ? { result: outcome.result } : {}),
-        ...(outcome.error !== undefined ? { error: outcome.error } : {}),
+      await requests.finish(requestId, outcome, {
         ...(stateCommitDisposition !== undefined ? { stateCommitDisposition } : {})
       });
     } catch (error) {
+      // A committed transaction already durably owns the result. Failure of
+      // the compatibility journal cannot turn that commit into unknown.
+      try {
+        const committed = stateLedger.read(requestId);
+        if (committed && validateLedgerTransaction(requestId)) {
+          requests.acceptCommitted(requestId, { status: committed.status, result: committed.result });
+          return true;
+        }
+      } catch { /* Fall through to fail closed when no valid commit exists. */ }
       const message = error instanceof Error ? error.message : String(error);
       state.value = "unusable";
-      unresolvedRequests.add(requestId);
-      requestOutcomes.set(requestId, {
-        status: "unknown",
-        error: { code: "journal_error", message: `could not persist terminal request outcome: ${message}` }
+      requests.fail(requestId, {
+        code: "journal_error", message: `could not persist terminal request outcome: ${message}`
       });
       return false;
     }
-    requestOutcomes.set(requestId, outcome);
-    unresolvedRequests.delete(requestId);
     return true;
-  };
-
-  const validateRecoveredExecState = (
-    record: Awaited<ReturnType<RequestJournal["read"]>>,
-    expectedRequestId?: string
-  ): boolean => {
-    const value = record.result as {
-      status?: unknown;
-      stateCommitted?: unknown;
-      stateVersion?: unknown;
-      stateHash?: unknown;
-      error?: { code?: unknown };
-    } | undefined;
-    const intent = record.events.find((event) => event.type === "state_commit_intent");
-    if (intent === undefined) return value?.stateCommitted !== true;
-    const payload = intent.payload;
-    if (
-      typeof payload.requestId !== "string" ||
-      payload.requestId.length === 0 ||
-      (expectedRequestId !== undefined && payload.requestId !== expectedRequestId) ||
-      typeof payload.expectedVersion !== "number" ||
-      !Number.isSafeInteger(payload.expectedVersion) ||
-      typeof payload.version !== "number" ||
-      !Number.isSafeInteger(payload.version) ||
-      payload.version !== payload.expectedVersion + 1 ||
-      typeof payload.stateHash !== "string"
-    ) return false;
-    const finished = [...record.events].reverse().find((event) => event.type === "request_finished");
-    const disposition = finished?.payload.stateCommitDisposition;
-    if (
-      disposition !== undefined &&
-      disposition !== "committed" &&
-      disposition !== "abandoned" &&
-      disposition !== "uncertain"
-    ) return false;
-    const terminalProvesAbandoned =
-      finished?.payload.status === "interrupted" &&
-      value?.status === "interrupted" &&
-      value.stateCommitted === false &&
-      value.error?.code === "request_cancelled";
-    const explicitlyAbandoned =
-      terminalProvesAbandoned && (disposition === undefined || disposition === "abandoned");
-    // Only the runner's post-intent cancellation check can make a no-commit
-    // result conclusive. A failed commit, timeout, unknown delivery, or a
-    // hand-written/malformed terminal marker remains crash-uncertain.
-    if (disposition === "abandoned" && !explicitlyAbandoned) return false;
-    if (disposition === "committed" && value?.stateCommitted !== true) return false;
-    try {
-      const current = loadExecState(stateDir);
-      if (explicitlyAbandoned) {
-        // Prove that the proposed version did not land. The normal case is an
-        // unchanged head with no history file. If a later request consumed
-        // the version, its durable request id proves that this intent did not
-        // commit even when both requests produced identical JSON content.
-        if (current.version < payload.expectedVersion) return false;
-        try {
-          const snapshot = loadExecStateVersion(stateDir, payload.version);
-          // A history entry while the head is still at expectedVersion is an
-          // orphaned partial commit, not proof of this cancellation. Keep the
-          // session blocked rather than letting the next commit collide with
-          // unverifiable history.
-          if (current.version === payload.expectedVersion) return false;
-          return snapshot.requestId !== undefined && snapshot.requestId !== payload.requestId;
-        } catch (error) {
-          return current.version === payload.expectedVersion && isMissingStateHistory(error);
-        }
-      }
-      // For committed and crash-uncertain intents, only a matching historical
-      // snapshot with the same durable request owner proves that the atomic
-      // rename landed. Content hashes detect corruption; they do not establish
-      // which request performed an identical commit.
-      if (current.version < payload.version) return false;
-      const snapshot = loadExecStateVersion(stateDir, payload.version);
-      if (snapshot.requestId !== payload.requestId) return false;
-      if (snapshot.hash !== payload.stateHash) return false;
-      if (value?.stateCommitted === true) {
-        return finished !== undefined &&
-          typeof value.stateVersion === "number" &&
-          value.stateVersion === payload.version &&
-          typeof value.stateHash === "string" &&
-          value.stateHash === payload.stateHash;
-      }
-      // A crash after the atomic state rename but before request_finished is
-      // recoverable as an UNKNOWN request once its commit intent is proven.
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const validateStateBeforeAdmission = async (): Promise<void> => {
-    // Load the current head first so a corrupt state file blocks every new
-    // mutation. Then validate every historical commit intent, including an
-    // intent whose terminal event was lost in a host crash.
-    loadExecState(stateDir);
-    for (const requestId of await journal.list()) {
-      const record = await journal.read(requestId);
-      if (record.status === "running" && requestId !== activeRequestId) {
-        throw new Error(`request ${requestId} is still running; recovery ownership is not proven`);
-      }
-      if (record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record, requestId)) {
-        throw new Error(`request ${requestId} has an unverifiable state commit history`);
-      }
-    }
   };
 
   const runBusiness = async (request: SessionRequest): Promise<SessionReply> => {
@@ -950,15 +453,54 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     // request-local abort signal as batch/exec calls rather than resetting its
     // deadline at the observation seam.
     const requestDeadlineAt = requestStartedAt + requestTimeoutMs;
+    const complete = async (
+      outcome: RequestOutcome,
+      noun = "request",
+      disposition?: StateCommitDisposition,
+      unusable = outcome.status === "unknown"
+    ): Promise<SessionReply> => {
+      if (outcome.status === "unknown") await terminateBeforeUnknownReply();
+      if (!await recordOutcome(request.requestId, outcome, disposition)) {
+        state.value = "unusable";
+        afterReply = () => void shutdown("journal-failure", false);
+        return {
+          schemaVersion: 1, requestId: request.requestId, status: "unknown",
+          error: { code: "journal_error", message: `terminal ${noun} outcome could not be persisted; delivery is unknown` }
+        };
+      }
+      if (unusable) {
+        state.value = "unusable";
+        afterReply = () => void shutdown("unknown-delivery", false);
+      }
+      return { schemaVersion: 1, requestId: request.requestId, ...outcome };
+    };
     // 1. dedup FIRST (before busy): same id returns the recorded outcome.
     const hash = canonicalRequestHash({
       kind: request.operation.kind,
       target: config.target,
       operation: request.operation
     });
+    // The transaction is authoritative even when its legacy request directory
+    // is missing. Check it before claiming or consulting the live cache.
+    try {
+      const committed = stateLedger.read(request.requestId);
+      if (committed !== undefined) {
+        if (committed.requestHash !== hash) {
+          return errorReply(request, "request_conflict", `request ${request.requestId} was used with different content`);
+        }
+        if (!validateLedgerTransaction(request.requestId, hash)) throw new Error("the committed request/state record is not verifiable");
+        return { schemaVersion: 1, requestId: request.requestId, status: committed.status, result: committed.result };
+      }
+    } catch (error) {
+      state.value = "unusable";
+      return {
+        schemaVersion: 1, requestId: request.requestId, status: "unknown",
+        error: { code: "state_recovery_mismatch", message: error instanceof Error ? error.message : String(error) }
+      };
+    }
     let claim: "new" | "existing" | "conflict";
     try {
-      claim = await journal.claim(request.requestId, hash);
+      claim = await requests.claim(request.requestId, hash);
     } catch (error) {
       return errorReply(request, "journal_error", error instanceof Error ? error.message : String(error));
     }
@@ -966,13 +508,13 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       return errorReply(request, "request_conflict", `request ${request.requestId} was used with different content`);
     }
     if (claim === "existing") {
-      const prior = requestOutcomes.get(request.requestId);
+      const prior = requests.cached(request.requestId);
       if (prior) {
         return { schemaVersion: 1, requestId: request.requestId, status: prior.status, ...(prior.result !== undefined ? { result: prior.result } : {}), ...(prior.error ? { error: prior.error } : {}) };
       }
       let record;
       try {
-        record = await journal.read(request.requestId);
+        record = await requests.read(request.requestId);
       } catch {
         return errorReply(request, "journal_error", "request record is unreadable");
       }
@@ -981,28 +523,25 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         // duplicate is a status query, never a second dispatch.
         return { schemaVersion: 1, requestId: request.requestId, status: "running" };
       }
-      if (request.operation.kind === "exec" && record.events.some((event) => event.type === "state_commit_intent") && !validateRecoveredExecState(record, request.requestId)) {
+      const hasCommitIntent = record.events.some((event) => event.type === "state_commit_intent");
+      if (request.operation.kind === "exec" && (hasCommitIntent || record.result !== undefined) && !validateRecoveredExecState(record, request.requestId)) {
         state.value = "unusable";
         return {
           schemaVersion: 1,
           requestId: request.requestId,
           status: "unknown",
-          error: { code: "state_recovery_mismatch", message: "the recorded exec state commit history is not verifiable; refusing to replay" }
+          error: {
+            code: "state_recovery_mismatch",
+            message: hasCommitIntent
+              ? "the recorded exec state commit history is not verifiable; refusing to replay"
+              : "the recorded exec state commit does not match state.json; refusing to replay"
+          }
         };
       }
       if (record.result !== undefined) {
         // Durable recovery of any terminal result (F8): the events file is
         // the SSOT — a recorded outcome is returned, never rerun. A committed
         // exec state must also agree with its intent/version/hash linkage.
-        if (request.operation.kind === "exec" && !validateRecoveredExecState(record, request.requestId)) {
-          state.value = "unusable";
-          return {
-            schemaVersion: 1,
-            requestId: request.requestId,
-            status: "unknown",
-            error: { code: "state_recovery_mismatch", message: "the recorded exec state commit does not match state.json; refusing to replay" }
-          };
-        }
         return { schemaVersion: 1, requestId: request.requestId, status: record.status, result: record.result };
       }
       return { schemaVersion: 1, requestId: request.requestId, status: "unknown", error: { code: "batch_not_replayed", message: `prior run ended ${record.status}; observe instead of replaying` } };
@@ -1019,30 +558,28 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           : request.generation !== config.generation
             ? { code: "stale_generation", message: "request targets an older session generation" }
             : null;
-    if (admissionError) {
+    const rejectAdmission = async (error: { code: string; message: string }): Promise<SessionReply> => {
       try {
         // Rejected requests still get a durable terminal record, but they do
         // not reserve the active slot and never reach the driver.
         await appendJournalEvent(request.requestId, "request_started", { kind: request.operation.kind });
-        await recordOutcome(request.requestId, { status: "failed", error: admissionError });
+        await recordOutcome(request.requestId, { status: "failed", error });
       } catch (error) {
         state.value = "unusable";
-        unresolvedRequests.add(request.requestId);
-        requestOutcomes.set(request.requestId, {
-          status: "unknown",
-          error: { code: "journal_error", message: error instanceof Error ? error.message : String(error) }
+        requests.fail(request.requestId, {
+          code: "journal_error", message: error instanceof Error ? error.message : String(error)
         });
       }
-      return errorReply(request, admissionError.code, admissionError.message);
-    }
+      return errorReply(request, error.code, error.message);
+    };
+    if (admissionError) return rejectAdmission(admissionError);
     // 3. Reserve synchronously BEFORE the first post-admission await. A
     // single socket data event may contain two business frames; once this
     // slot is assigned, the second frame observes session_busy even while the
     // first request's request_started append is awaiting durability.
-    const requestAbort = new AbortController();
+    const requestAbort = createExecutionScope({ deadlineAt: requestDeadlineAt });
     activeRequestId = request.requestId;
     inFlight = { requestId: request.requestId, abort: requestAbort };
-    unresolvedRequests.add(request.requestId);
     state.value = "running";
     clearIdle();
     let stateAdmissionError: { code: string; message: string } | null = null;
@@ -1056,19 +593,11 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
       state.value = "unusable";
     }
     if (stateAdmissionError !== null) {
-      try {
-        await appendJournalEvent(request.requestId, "request_started", { kind: request.operation.kind });
-        await recordOutcome(request.requestId, { status: "failed", error: stateAdmissionError });
-      } catch (error) {
-        state.value = "unusable";
-        requestOutcomes.set(request.requestId, {
-          status: "unknown",
-          error: { code: "journal_error", message: error instanceof Error ? error.message : String(error) }
-        });
-      }
+      const reply = await rejectAdmission(stateAdmissionError);
       inFlight = null;
       activeRequestId = undefined;
-      return errorReply(request, stateAdmissionError.code, stateAdmissionError.message);
+      requestAbort.dispose();
+      return reply;
     }
     try {
       // 4. persist the start BEFORE dispatch (F8): a persistence failure
@@ -1077,19 +606,19 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.value = "unusable";
-      requestOutcomes.set(request.requestId, { status: "unknown", error: { code: "journal_error", message } });
+      requests.fail(request.requestId, { code: "journal_error", message });
       inFlight = null;
       activeRequestId = undefined;
+      requestAbort.dispose();
       return errorReply(request, "journal_error", `could not persist the request start — nothing was dispatched: ${message}`);
     }
     // 5. execute through the driver, exactly once. The request-local timer is
     // the deadline propagation path for a persistent driver: its observe
     // method receives this signal instead of silently resetting to a fresh
     // per-call budget.
-    const requestDeadlineTimer = request.operation.kind === "observe" && Number.isFinite(requestDeadlineAt)
-      ? setTimeout(() => requestAbort.abort(new Error("request deadline exceeded")), Math.max(1, requestDeadlineAt - Date.now()))
-      : undefined;
-    requestDeadlineTimer?.unref?.();
+    if (request.operation.kind === "observe") {
+      requestAbort.onDeadline(() => requestAbort.abort(new Error("request deadline exceeded")));
+    }
     let validatedBatchRequest: ReturnType<typeof validateBatch> | null = null;
     const finishedBatchActions = new Set<number>();
     try {
@@ -1103,7 +632,15 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
             "not_delivered"
           );
         }
-        const batch = await executeHostedBatch(request.requestId, validatedBatchRequest, requestAbort.signal, requestDeadlineAt, finishedBatchActions);
+        const batch = await runHostedBatch(
+          driver,
+          appendJournalEvent,
+          request.requestId,
+          validatedBatchRequest,
+          requestAbort.signal,
+          requestDeadlineAt,
+          finishedBatchActions
+        );
         const batchSteps = batch.steps as Array<{ status?: unknown }>;
         const sawUnknownStep = batchSteps.some((step) => step.status === "unknown");
         const status: SessionReply["status"] = sawUnknownStep
@@ -1116,7 +653,6 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           ...batch,
           ...(batch.observation !== undefined ? { observation: batch.observation } : {})
         };
-        if (status === "unknown") await terminateBeforeUnknownReply();
         const unknownStep = batchSteps.find((step) => step.status === "unknown") as { error?: { code?: string; message?: string } } | undefined;
         const batchError = status === "unknown"
           ? {
@@ -1124,32 +660,11 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
               message: typeof unknownStep?.error?.message === "string" ? unknownStep.error.message : "batch delivery could not be confirmed"
             }
           : undefined;
-        const durable = await recordOutcome(request.requestId, {
+        return await complete({
           status,
           result: batchResult,
           ...(batchError !== undefined ? { error: batchError } : {})
-        });
-        if (!durable) {
-          state.value = "unusable";
-          afterReply = () => void shutdown("journal-failure", false);
-          return {
-            schemaVersion: 1,
-            requestId: request.requestId,
-            status: "unknown",
-            error: { code: "journal_error", message: "terminal batch outcome could not be persisted; delivery is unknown" }
-          };
-        }
-        if (status === "unknown") {
-          state.value = "unusable";
-          afterReply = () => void shutdown("unknown-delivery", false);
-        }
-        return {
-          schemaVersion: 1,
-          requestId: request.requestId,
-          status,
-          result: batchResult,
-          ...(batchError !== undefined ? { error: batchError } : {})
-        };
+        }, "batch");
       }
       if (request.operation.kind === "exec") {
         // Exec: disposable script worker + host-generated receipts + state
@@ -1163,6 +678,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
             target: { pid: config.target.pid, windowId: BigInt(config.target.windowId) },
             stateDir,
             driverCall: (method, args, signal) => driver.call(method, args, signal ?? requestAbort.signal),
+            driverSupportsStep: driver.supportsStep,
             finalObserve: async (signal, deadlineAt) => {
               if (!driver.alive()) return null;
               // Errors propagate: the runner must be able to report
@@ -1218,6 +734,9 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
                 stateHash: intent.hash
               });
             },
+            commitState: (expectedVersion, candidate, result) => stateLedger.commitState(
+              request.requestId, hash, expectedVersion, candidate, result
+            ),
             deadlineAt: requestDeadlineAt
           },
           request.requestId,
@@ -1227,27 +746,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         deliveries += result.actions.filter((a) => a.status === "delivered" || a.status === "satisfied").length;
         const status: SessionReply["status"] =
           result.status === "completed" ? "completed" : result.status === "interrupted" ? "interrupted" : result.status === "unknown" ? "unknown" : "failed";
-        if (status === "unknown") await terminateBeforeUnknownReply();
-        const durable = await recordOutcome(
-          request.requestId,
-          { status, result },
-          classifyExecStateCommit(result)
-        );
-        if (!durable) {
-          state.value = "unusable";
-          afterReply = () => void shutdown("journal-failure", false);
-          return {
-            schemaVersion: 1,
-            requestId: request.requestId,
-            status: "unknown",
-            error: { code: "journal_error", message: "terminal exec outcome could not be persisted; delivery is unknown" }
-          };
-        }
-        if (status === "unknown") {
-          state.value = "unusable";
-          afterReply = () => void shutdown("unknown-delivery", false);
-        }
-        return { schemaVersion: 1, requestId: request.requestId, status, result };
+        return await complete({ status, result }, "exec", classifyExecStateCommit(result));
       }
       const method: DriverMethod = request.operation.kind;
       const args = { options: request.operation.options, deadlineAt: requestDeadlineAt };
@@ -1263,19 +762,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
             : "the observation deadline expired before completion was published"
         );
       }
-      const status: SessionReply["status"] = "completed";
-      const durable = await recordOutcome(request.requestId, { status, result: result ?? null });
-      if (!durable) {
-        state.value = "unusable";
-        afterReply = () => void shutdown("journal-failure", false);
-        return {
-          schemaVersion: 1,
-          requestId: request.requestId,
-          status: "unknown",
-          error: { code: "journal_error", message: "terminal request outcome could not be persisted; delivery is unknown" }
-        };
-      }
-      return { schemaVersion: 1, requestId: request.requestId, status, result: result ?? null };
+      return await complete({ status: "completed", result: result ?? null });
     } catch (error) {
       const code = error instanceof ComputerError ? error.code : "request_failed";
       const message = error instanceof Error ? error.message : String(error);
@@ -1306,28 +793,12 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
           }
         }
       }
-      if (status === "unknown") await terminateBeforeUnknownReply();
-      const durable = await recordOutcome(request.requestId, { status, error: { code, message } });
-      if (!durable) {
-        state.value = "unusable";
-        afterReply = () => void shutdown("journal-failure", false);
-        return {
-          schemaVersion: 1,
-          requestId: request.requestId,
-          status: "unknown",
-          error: { code: "journal_error", message: "terminal request outcome could not be persisted; delivery is unknown" }
-        };
-      }
-      if (!observationInterrupted && isUnknownDelivery(code)) {
-        // Unknown native delivery: the driver is no longer trusted. Teardown
-        // waits until THIS reply reaches the client (socket teardown must
-        // never eat the terminal reply).
-        state.value = "unusable";
-        afterReply = () => void shutdown("unknown-delivery", false);
-      }
-      return { schemaVersion: 1, requestId: request.requestId, status, error: { code, message } };
+      return await complete(
+        { status, error: { code, message } }, "request", undefined,
+        !observationInterrupted && isUnknownDelivery(code)
+      );
     } finally {
-      if (requestDeadlineTimer !== undefined) clearTimeout(requestDeadlineTimer);
+      requestAbort.dispose();
       inFlight = null;
       activeRequestId = undefined;
       if (state.value === "running") state.value = "idle";
@@ -1512,7 +983,7 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
         const cleanup: CleanupReport = {
           driverTerminated: final.state === "closed",
           leaseReleased,
-          unresolvedRequests: [...unresolvedRequests]
+          unresolvedRequests: requests.unresolvedIds
         };
         return { schemaVersion: 1, info: final, cleanup } as SessionControlReply & { cleanup: CleanupReport };
       }

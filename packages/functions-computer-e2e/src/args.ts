@@ -1,3 +1,4 @@
+import { tokenizeFlags } from "@ya-skills/core";
 // Strict input validation for `yk computer-e2e`. Everything is rejected
 // before any worker, SDK, or run directory exists.
 
@@ -31,48 +32,6 @@ function fail(message: string): never {
   throw new Error(`${message}\n${E2E_USAGE}`);
 }
 
-interface Tokens {
-  values: { [flag: string]: string | undefined };
-  repeatable: { [flag: string]: string[] };
-  positional: string[];
-}
-
-function tokenize(argv: string[], allowed: Set<string>): Tokens {
-  const out: Tokens = { values: {}, repeatable: {}, positional: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const raw = argv[i]!;
-    if (!raw.startsWith("--")) {
-      out.positional.push(raw);
-      continue;
-    }
-    const body = raw.slice(2);
-    const eq = body.indexOf("=");
-    const flag = eq === -1 ? body : body.slice(0, eq);
-    if (flag === "") fail(`unknown flag syntax: ${raw}`);
-    if (!allowed.has(flag)) {
-      if (ALL_FLAGS.has(flag)) fail(`--${flag} is not valid for this action`);
-      fail(`unknown flag: --${flag}`);
-    }
-    let value: string;
-    if (eq !== -1) {
-      value = body.slice(eq + 1);
-    } else {
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith("--")) fail(`--${flag} requires a value`);
-      value = next;
-      i++;
-    }
-    if (flag === "param") {
-      out.repeatable.param ??= [];
-      out.repeatable.param.push(value);
-      continue;
-    }
-    if (out.values[flag] !== undefined) fail(`--${flag} given twice`);
-    out.values[flag] = value;
-  }
-  return out;
-}
-
 function requireNonEmpty(flag: string, value: string | undefined): string {
   if (value === undefined || value.trim() === "") fail(`--${flag} requires a non-empty value`);
   return value;
@@ -92,7 +51,12 @@ export function parseE2EArgs(action: string, argv: string[]): E2ERequest;
 export function parseE2EArgs(action: string, argv: string[]): E2ERequest {
   switch (action) {
     case "run": {
-      const tokens = tokenize(argv, RUN_FLAGS);
+      const tokens = tokenizeFlags(argv, {
+        allowed: RUN_FLAGS,
+        known: ALL_FLAGS,
+        repeatable: new Set(["param"]),
+        fail
+      });
       if (tokens.positional.length === 0) fail("run needs at least one suite file");
       const params: Record<string, string> = {};
       for (const entry of tokens.repeatable.param ?? []) {
@@ -114,7 +78,7 @@ export function parseE2EArgs(action: string, argv: string[]): E2ERequest {
       };
     }
     case "history": {
-      const tokens = tokenize(argv, HISTORY_FLAGS);
+      const tokens = tokenizeFlags(argv, { allowed: HISTORY_FLAGS, known: ALL_FLAGS, fail });
       if (tokens.positional.length > 0) fail("history takes no positional arguments");
       return {
         action: "history",
@@ -123,7 +87,7 @@ export function parseE2EArgs(action: string, argv: string[]): E2ERequest {
       };
     }
     case "report": {
-      const tokens = tokenize(argv, new Set());
+      const tokens = tokenizeFlags(argv, { allowed: new Set(), known: ALL_FLAGS, fail });
       if (tokens.positional.length !== 1) fail("report takes exactly one run directory");
       return { action: "report", runDir: tokens.positional[0]! };
     }

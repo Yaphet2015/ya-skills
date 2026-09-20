@@ -1,21 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { createCodexAgentRunner, createCodexSessionSource } from "../packages/functions-pbench/src/adapters/codex.js";
 import { createClaudeAgentRunner, createClaudeSessionSource } from "../packages/functions-pbench/src/adapters/claude.js";
+import { createPbenchFixtures } from "./helpers/pbench-fixtures.js";
 
-const cleanup: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
-});
-
-async function temp(prefix: string): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), `pbench-adapter-${prefix}-`));
-  cleanup.push(path);
-  return path;
-}
+const fixtures = createPbenchFixtures();
+afterEach(fixtures.cleanup);
+const { temp } = fixtures;
 
 test("Codex and Claude sources normalize agent-specific transcripts", () => {
   const codex = createCodexSessionSource().extract(

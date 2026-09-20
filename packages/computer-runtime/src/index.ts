@@ -39,6 +39,8 @@ export type {
 export { ComputerError, CLEANUP_BUDGET_MS, OBSERVATION_TTL_MS, OP_LIMIT_MS } from "./session.js";
 export type { ComputerSession, SessionOptions, MutationLeases } from "./session.js";
 export { createComputerSession } from "./cua-backend.js";
+export { createForegroundController, runWithForeground } from "./foreground.js";
+export type { ForegroundController, ForegroundReceipt, ForegroundResult } from "./foreground.js";
 export { createSessionWithBackend, createAutoLeases } from "./session.js";
 
 export { clickUnique, waitForElements, DEFAULT_INTERVAL_MS, DEFAULT_TIMEOUT_MS } from "./actions.js";
@@ -74,6 +76,7 @@ export { evaluateCondition, isUnsupportedCondition, UnsupportedConditionError } 
 export {
   canonicalRequestHash,
   createRequestJournal,
+  createJournalWriter,
   type RequestEvent,
   type RequestEventType,
   type RequestJournal,
@@ -88,3 +91,13 @@ export {
   type LeaseHandle,
   type LeaseOwner
 } from "./target-lease.js";
+
+export { executeBatchSequence } from "./batch-sequence.js";
+export { createExecutionScope, type ExecutionScope, type ExecutionScopeOptions } from "./execution-scope.js";
+export { createRequestLedger, type RequestOutcome } from "./request-ledger.js";
+export {
+  executeRequest,
+  completeFinalObservation,
+  type RequestExecutionProfile
+} from "./request-execution.js";
+export { executeStep, type StepExecutionOptions, type StepExecutionResult } from "./step-execution.js";

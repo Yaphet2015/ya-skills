@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseRequest } from "../packages/functions-computer-use/src/args.js";
-import { parseSessionArgs, sessionCommand, SESSION_USAGE } from "../packages/functions-computer-use/src/session-command.js";
+import { parseSessionArgs, sessionCommand } from "../packages/functions-computer-use/src/session-command.js";
+import { createComputerUseCommands } from "../packages/functions-computer-use/src/commands.js";
 import { openSession, sendControl, sendRequest } from "../packages/computer-session/src/index.js";
 import { randomUUID } from "node:crypto";
 
@@ -43,9 +44,139 @@ describe("parseRequest/session parsing (B4)", () => {
   test("session ids must be UUIDs for status/cancel/close", () => {
     expect(() => parseSessionArgs(["status", "--session", "nope"])).toThrow(/UUID/);
   });
+
+  test("session act forwards key modifiers and requests a reusable observation", async () => {
+    const sessionId = randomUUID();
+    const observation = {
+      id: randomUUID(), target: { pid: 42, windowId: 7n },
+      capturedAt: Date.now(), epoch: "fixture", revision: 1, title: "Fixture",
+      ax: { status: "usable", elements: [], total: 0, returned: 0, complete: true },
+      image: { status: "unavailable" }
+    };
+    let operation: unknown;
+    const commands = createComputerUseCommands({
+      sessionTransport: {
+        findSession: async () => ({
+          socketPath: "/tmp/ya-skills-test-session.sock",
+          info: {
+            id: sessionId,
+            target: { pid: 42, windowId: "7" },
+            state: "idle",
+            hostPid: process.pid,
+            generation: randomUUID(),
+            idleTimeoutMs: 120_000
+          }
+        }),
+        sendRequest: async (_socketPath, request) => {
+          operation = request.operation;
+          return {
+            schemaVersion: 1,
+            requestId: request.requestId,
+            status: "completed",
+            result: {
+              status: "completed",
+              steps: [{ index: 0, kind: "key", status: "delivered" }],
+              observation
+            }
+          };
+        }
+      }
+    });
+    const output = await commands.find((command) => command.action === "act")!.run([
+      "--session", sessionId, "--key", "I", "--modifiers", "cmd,alt", "--format", "observation"
+    ]);
+    expect(operation).toEqual({
+      kind: "batch",
+      request: {
+        actions: [{ kind: "key", key: "I", modifiers: ["cmd", "option"] }],
+        observe: { mode: "auto" }
+      }
+    });
+    expect(JSON.parse(output as string)).toMatchObject({
+      schemaVersion: 1, target: { pid: 42, windowId: "7" },
+      observation: { id: observation.id, ax: { status: "usable" } }
+    });
+  });
+
+  test("session act preserves a failed step refusal when a valid observation is also present", async () => {
+    const sessionId = randomUUID();
+    const refusalMessage = "key was refused: target is not editable";
+    const commands = createComputerUseCommands({
+      sessionTransport: {
+        findSession: async () => ({
+          socketPath: "/tmp/ya-skills-test-session.sock",
+          info: {
+            id: sessionId,
+            target: { pid: 42, windowId: "7" },
+            state: "idle",
+            hostPid: process.pid,
+            generation: randomUUID(),
+            idleTimeoutMs: 120_000
+          }
+        }),
+        sendRequest: async (_socketPath, request) => ({
+          schemaVersion: 1,
+          requestId: request.requestId,
+          status: "completed",
+          result: {
+            status: "failed",
+            steps: [{
+              index: 0,
+              kind: "key",
+              status: "not_delivered",
+              error: { code: "action_refused", message: refusalMessage }
+            }],
+            observation: {
+              id: randomUUID(),
+              target: { pid: 42, windowId: 7n },
+              capturedAt: Date.now(),
+              epoch: "fixture-epoch",
+              revision: 1,
+              title: "Fixture",
+              ax: { status: "usable", elements: [], total: 0, returned: 0, complete: true },
+              image: { status: "unavailable" }
+            }
+          }
+        })
+      }
+    });
+    const error = await Promise.resolve(commands.find((command) => command.action === "act")!.run([
+      "--session", sessionId, "--key", "Return", "--format", "observation"
+    ])).then(() => null, (e: Error) => e);
+    const body = JSON.parse(error!.message).error;
+    expect(body.code).toBe("action_refused");
+    expect(body.message).toBe(refusalMessage);
+    expect(body.actionOutcome).toBe("not_delivered");
+    expect(body.nextStep).toMatch(/observe|correct|retry/i);
+  });
 });
 
 describe("session command orchestration (desktop-free)", () => {
+  test("session batch preserves file errors before contacting the host", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "yk-session-batch-errors-"));
+    let lookups = 0;
+    const command = createComputerUseCommands({
+      sessionTransport: {
+        findSession: async () => {
+          lookups++;
+          throw new Error("invalid files must not reach the host");
+        }
+      }
+    }).find((entry) => entry.action === "batch")!;
+    const run = (file: string) => command.run([
+      "--session", "test-session", "--request-id", "file-error", "--file", file
+    ]);
+    try {
+      const invalid = join(dir, "invalid.json");
+      await writeFile(invalid, "{");
+      await expect(run(invalid)).rejects.toBeInstanceOf(SyntaxError);
+      await expect(run(join(dir, "missing.json"))).rejects.toMatchObject({ code: "ENOENT" });
+      expect(lookups).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test("session open resolves an omitted window through a read-only selector", async () => {
     let openedTarget: { pid: number; windowId: bigint } | undefined;
     const run = sessionCommand({

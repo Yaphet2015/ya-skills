@@ -28,6 +28,9 @@ yk computer-e2e report <run-dir>
 - Runs record into `.computer-e2e/runs/<id>/` (override `--out-dir`):
   `events.jsonl` (source of truth), `run.json`, `report.md`, worker logs,
   `artifacts/`. Directories 0700, files 0600. History reads never mutate.
+- Live suite results and persisted reports share the case/step event reduction
+  rules. The supervisor owns the persisted event stream and verifies worker-group
+  cleanup before draining the remaining fd3 events and publishing the report.
 
 ## Suite contract (apiVersion 1)
 

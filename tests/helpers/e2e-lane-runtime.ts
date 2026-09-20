@@ -10,13 +10,12 @@ import {
   type Point,
   type Target
 } from "@ya-skills/computer-runtime";
+import { SYNTHETIC_PNG_BASE64 } from "./computer-fixtures.js";
 
 // This helper owns a synthetic runtime fixture for the E2E control lane. It
 // deliberately does not use the shared session-worker fixture: every test
 // receives its own directory, target identity, observation frames, and action
 // counters, while the production ComputerSession remains the code under test.
-const LANE_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 let fixtureNumber = 0;
 
 export interface E2ELaneRuntimeOptions {
@@ -80,7 +79,7 @@ export async function createE2ELaneRuntimeFixture(
         screenshotMimeType: "image/png",
         screenshotFrameValid: true,
         windowBounds: { x: 80, y: 40, width: 640, height: 400 },
-        images: options.screenshot ? [{ mimeType: "image/png", dataBase64: LANE_PNG_BASE64 }] : [],
+        images: options.screenshot ? [{ mimeType: "image/png", dataBase64: SYNTHETIC_PNG_BASE64 }] : [],
         observationId: `lane-raw-${frameNumber}`,
         capturedAt: Date.now(),
         epoch: "lane-raw-epoch",

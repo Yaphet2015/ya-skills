@@ -8,7 +8,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { ensurePrivateFile } from "./artifacts.js";
-import type { ImageGeometry, Observation, Target } from "./types.js";
+import { isSupportedPng, matchesBoundedPngEvidence } from "./image-evidence.js";
+import type { ImageGeometry, Observation, Point, Target } from "./types.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -122,11 +123,20 @@ export function pngSha256(path: string): string {
 }
 
 /** Fresh-frame comparison for cross-command visual clicks (A4): geometry must
- * match the recorded observation exactly; the original PNG is compared by
- * SHA-256 (encoding changes conservatively refuse). */
+ * match the recorded observation exactly. Identical PNG bytes take the fast
+ * path. When the bytes differ, the caller must provide the fresh PNG and the
+ * requested click point so the strict target-neighbourhood + bounded global
+ * pixel comparison can prove that the target remains stable. */
 export function frameMatchesObservation(
   observation: Observation,
-  current: { windowBounds: ImageGeometry["windowBounds"]; pngHash: string }
+  current: {
+    windowBounds: ImageGeometry["windowBounds"];
+    pngHash: string;
+    /** Persisted fresh frame. Required when the PNG hash differs. */
+    pngPath?: string;
+    /** Point in the observation's sent-image pixel coordinate space. */
+    point?: Point;
+  }
 ): boolean {
   const geometry = observation.image.geometry;
   if (!geometry) return false;
@@ -141,7 +151,41 @@ export function frameMatchesObservation(
   try {
     const stats = statSync(observation.image.originalPath);
     if (!stats.isFile()) return false;
-    return pngSha256(observation.image.originalPath) === current.pngHash;
+    const originalHash = pngSha256(observation.image.originalPath);
+    if (originalHash === current.pngHash) {
+      // A hash match is still required to decode as a supported PNG. This
+      // prevents malformed or unsupported fixtures from becoming click
+      // credentials through the exact-match fast path.
+      if (current.pngPath !== undefined) {
+        const freshStats = statSync(current.pngPath);
+        if (!freshStats.isFile() || pngSha256(current.pngPath) !== current.pngHash) return false;
+        return isSupportedPng(current.pngPath, {
+          width: geometry.sourceWidth,
+          height: geometry.sourceHeight
+        });
+      }
+      return isSupportedPng(observation.image.originalPath, {
+        width: geometry.sourceWidth,
+        height: geometry.sourceHeight
+      });
+    }
+    // Older direct callers that only provide a hash cannot safely prove which
+    // pixels changed. Keep that API fail-closed; the session path always
+    // supplies the fresh artifact and click coordinate.
+    if (current.pngPath === undefined || current.point === undefined) return false;
+    const freshStats = statSync(current.pngPath);
+    if (!freshStats.isFile() || pngSha256(current.pngPath) !== current.pngHash) return false;
+    return matchesBoundedPngEvidence(
+      observation.image.originalPath,
+      current.pngPath,
+      current.point,
+      {
+        sentWidth: geometry.sentWidth,
+        sentHeight: geometry.sentHeight,
+        sourceWidth: geometry.sourceWidth,
+        sourceHeight: geometry.sourceHeight
+      }
+    );
   } catch {
     return false;
   }

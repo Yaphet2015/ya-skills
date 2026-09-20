@@ -1,20 +1,22 @@
-// Self-spawn process management (B2/B4): chooses the command for internal
-// worker entrypoints (compiled executable vs Bun + absolute source), spawns
-// them in their own process groups with a private cwd, and reclaims them
-// with TERM→KILL. No Node-runtime fallback exists for these entrypoints —
-// Node builds refuse with unsupported_runtime before spawning anything.
+// Shared process selection, launch and group cleanup for disposable workers.
+// Keep this module dependency-free so Node can reject unsupported launches.
 
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from "node:child_process";
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  realpathSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { mkdtempSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type InternalEntrypoint =
   | "__computer-session-host"
   | "__computer-driver-worker"
-  | "__computer-exec-worker";
+  | "__computer-exec-worker"
+  | "__computer-e2e-worker";
 
 export interface SpawnCommand {
   command: string;
@@ -26,11 +28,8 @@ export function isBunRuntime(): boolean {
   return typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 }
 
-/** The spawn command for an internal entrypoint. Compiled mode: the
- * realpath'd executable IS the entry. Dev: the Bun binary plus the absolute
- * CLI source. A plain Node runtime cannot host these workers — the node
- * result is rejected HERE, before source-path resolution or spawning
- * anything (review F21). */
+/** Resolve one internal worker to the compiled executable or Bun plus the
+ * absolute CLI source. Node never gets as far as source resolution. */
 export function internalSpawnCommand(entrypoint: InternalEntrypoint, configPath: string): SpawnCommand {
   if (!isAbsolute(configPath)) {
     throw new Error(`internal entrypoint config path must be absolute (got: ${configPath})`);
@@ -38,16 +37,12 @@ export function internalSpawnCommand(entrypoint: InternalEntrypoint, configPath:
   const bun = (globalThis as { Bun?: { main?: string } }).Bun;
   const main = bun?.main;
   if (main && typeof process.execPath === "string") {
-    // Are we the compiled binary? Bun.main resolves to the real script file
-    // only in interpreted mode; compiled binaries point inside $bunfs.
     const compiled = main.includes("$bunfs") || realpathSyncSafe(main) === realpathSyncSafe(process.execPath);
     if (compiled) {
       return { command: realpathSync(process.execPath), args: [entrypoint, configPath], runtime: "compiled" };
     }
     return { command: process.execPath, args: [cliSourcePath(), entrypoint, configPath], runtime: "bun" };
   }
-  // No Bun runtime: Node cannot interpret the TS CLI source nor host the
-  // lazy-SDK Bun runtime — refuse explicitly BEFORE resolving/spawning.
   throw Object.assign(
     new Error(
       "internal workers require the compiled yk or a Bun runtime; this process runs under Node — install ya-skills or run via bun"
@@ -65,7 +60,6 @@ function realpathSyncSafe(path: string): string | null {
 }
 
 function cliSourcePath(): string {
-  // src/process.ts -> packages/computer-session/src -> packages -> repo root
   const here = dirname(fileURLToPath(import.meta.url));
   const candidate = join(here, "..", "..", "cli", "src", "cli.ts");
   if (existsSync(candidate)) return candidate;
@@ -77,35 +71,91 @@ export interface SpawnedWorker {
   cwd: string;
 }
 
-/** Spawn an internal worker: own process group, private 0700 cwd (never the
- * source checkout, so no project preload runs), pipes for the boot/upstream
- * protocol. */
+export interface WorkerSpawnOptions {
+  cwd: string;
+  stdio: SpawnOptions["stdio"];
+  env?: NodeJS.ProcessEnv;
+}
+
+function spawnResolvedWorker(command: SpawnCommand, options: WorkerSpawnOptions): ChildProcess {
+  return spawn(command.command, command.args, {
+    detached: true,
+    cwd: options.cwd,
+    stdio: options.stdio,
+    env: { ...process.env, ...options.env }
+  });
+}
+
+/** Spawn a selected internal worker without retrying. Persistent host/driver
+ * callers use this direct path because they need the child immediately. */
+export function spawnWorker(
+  entrypoint: InternalEntrypoint,
+  configPath: string,
+  options: WorkerSpawnOptions
+): ChildProcess {
+  return spawnResolvedWorker(internalSpawnCommand(entrypoint, configPath), options);
+}
+
+// Bun can transiently fail while wiring several numeric stdio descriptors.
+// Serializing these disposable launches and retrying before any child exists
+// avoids replaying a worker request.
+let spawnTail: Promise<void> = Promise.resolve();
+
+export async function spawnWorkerWithRetry(
+  entrypoint: InternalEntrypoint,
+  configPath: string,
+  options: WorkerSpawnOptions
+): Promise<ChildProcess> {
+  // Resolve the runtime once. Unsupported Node callers fail before the retry
+  // loop, source lookup or any child spawn, preserving the internal-worker
+  // boundary.
+  const command = internalSpawnCommand(entrypoint, configPath);
+  const previous = spawnTail;
+  let release!: () => void;
+  spawnTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  let lastError: unknown;
+  try {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      try {
+        return spawnResolvedWorker(command, options);
+      } catch (error) {
+        lastError = error;
+        if (attempt < 11) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  } finally {
+    release();
+  }
+}
+
+/** Spawn a worker in a private 0700 cwd. The E2E supervisor deliberately uses
+ * spawnWorkerWithRetry with the project cwd; exec uses its private boot cwd
+ * and changes to the script cwd only after worker boot. */
 export function spawnInternalWorker(
   entrypoint: InternalEntrypoint,
   configPath: string,
   options: { env?: Record<string, string>; stdio?: "pipe" | "ignore" } = {}
 ): SpawnedWorker {
-  const { command, args } = internalSpawnCommand(entrypoint, configPath);
-  if (
-    (command === process.execPath && !isBunRuntime() && !existsSync(command)) ||
-    (!isBunRuntime() && !command.includes("bun"))
-  ) {
-    throw Object.assign(new Error("internal workers require the compiled yk or a Bun runtime"), {
-      code: "unsupported_runtime"
-    });
-  }
   const cwd = mkdtempSync(join(tmpdir(), "yk-cu-worker-"));
-  const child = spawn(command, args, {
-    detached: true, // own process group — kill(-pid) reaps descendants
-    // Persistent host openers do not need parent-held pipes. Keeping those
-    // descriptors referenced would keep a normal CLI invocation attached to
-    // the long-lived host after it has returned a session id.
-    stdio: options.stdio === "ignore" ? "ignore" : ["pipe", "pipe", "pipe"],
+  const child = spawnWorker(entrypoint, configPath, {
     cwd,
-    env: { ...process.env, ...options.env }
+    stdio: options.stdio === "ignore" ? "ignore" : ["pipe", "pipe", "pipe"],
+    env: options.env
   });
   child.on("error", () => undefined);
   return { child, cwd };
+}
+
+export function closeOwnedFd(fd: number): void {
+  try {
+    closeSync(fd);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EBADF") throw error;
+  }
 }
 
 export interface StopResult {
@@ -126,11 +176,8 @@ function groupHasRunnableMember(pgid: number): boolean {
   return false;
 }
 
-/** TERM the process group, wait the grace period, then KILL. Resolution
- * requires the WHOLE GROUP to be gone, not just the leader: a descendant
- * that ignores TERM is escalated after the leader exits (F4). `exited:false`
- * means members survived both signals — the caller must treat the target as
- * un-reclaimable, never reuse it. */
+/** TERM the process group, wait the grace period, then KILL. Completion is a
+ * proof about the whole group, including descendants after the leader exits. */
 export function stopProcessGroup(child: ChildProcess, graceMs: number): Promise<StopResult> {
   return new Promise((resolve) => {
     const pgid = child.pid;
@@ -143,20 +190,20 @@ export function stopProcessGroup(child: ChildProcess, graceMs: number): Promise<
     let leaderCode: number | null = null;
     let leaderSignal: NodeJS.Signals | null = null;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
-    const clearGrace = () => {
+    const clearGrace = (): void => {
       if (graceTimer !== null) clearTimeout(graceTimer);
     };
-    const finish = (result: StopResult) => {
+    const finish = (result: StopResult): void => {
       if (settled) return;
       settled = true;
       clearGrace();
       resolve(result);
     };
-    const killGroup = (name: NodeJS.Signals) => {
+    const killGroup = (name: NodeJS.Signals): void => {
       try {
         process.kill(-pgid, name);
       } catch {
-        // ESRCH: the group is already gone
+        // ESRCH: the group is already gone.
       }
     };
     const groupAlive = (): boolean => {
@@ -168,8 +215,6 @@ export function stopProcessGroup(child: ChildProcess, graceMs: number): Promise<
         return (error as NodeJS.ErrnoException).code === "EPERM";
       }
     };
-    // Settling requires the WHOLE group to be gone (F4). Survivors are
-    // escalated with SIGKILL once; a bounded verification window follows.
     let escalated = false;
     const settle = async (): Promise<void> => {
       const deadline = Date.now() + Math.max(graceMs, 2_000);
@@ -195,7 +240,6 @@ export function stopProcessGroup(child: ChildProcess, graceMs: number): Promise<
       }
     };
     const onLeaderExit = (code: number | null, signalName: NodeJS.Signals | null): void => {
-      // Leader exit alone proves nothing about the group (F4).
       leaderExited = true;
       leaderCode = code;
       leaderSignal = signalName;
@@ -206,6 +250,9 @@ export function stopProcessGroup(child: ChildProcess, graceMs: number): Promise<
     } else {
       child.once("exit", onLeaderExit);
     }
+    // An already-exited group can settle synchronously above. Do not create
+    // a grace timer after finish() has already disposed the cleanup lifetime.
+    if (settled) return;
     killGroup("SIGTERM");
     graceTimer = setTimeout(() => {
       if (!leaderExited) killGroup("SIGKILL");

@@ -1,19 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { createPbenchReport, renderPbenchReportMarkdown } from "../packages/functions-pbench/src/reporting.js";
+import { createPbenchFixtures } from "./helpers/pbench-fixtures.js";
 
-const cleanup: string[] = [];
-afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
-});
-
-async function workspace(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "pbench-reporting-"));
-  cleanup.push(root);
-  return root;
-}
+const fixtures = createPbenchFixtures();
+afterEach(fixtures.cleanup);
+const { temp } = fixtures;
 
 async function writeRun(
   workspaceRoot: string,
@@ -56,7 +49,7 @@ async function writeRun(
 }
 
 test("reporting returns an empty stable report", async () => {
-  const workspaceRoot = await workspace();
+  const workspaceRoot = await temp("reporting");
 
   const report = await createPbenchReport({ workspaceRoot });
 
@@ -72,7 +65,7 @@ test("reporting returns an empty stable report", async () => {
 });
 
 test("reporting separates trusted cohorts and tolerates malformed artifacts", async () => {
-  const workspaceRoot = await workspace();
+  const workspaceRoot = await temp("reporting");
   await writeRun(workspaceRoot, { runId: "run_pass", status: "passed" });
   await writeRun(workspaceRoot, { runId: "run_fail", status: "validator_failed" });
   await writeRun(workspaceRoot, {
@@ -120,7 +113,7 @@ test("reporting separates trusted cohorts and tolerates malformed artifacts", as
 });
 
 test("reporting keeps legacy runs visible but unevaluated", async () => {
-  const workspaceRoot = await workspace();
+  const workspaceRoot = await temp("reporting");
   const artifactDir = join(workspaceRoot, "runs", "run_legacy");
   await mkdir(artifactDir, { recursive: true });
   await writeFile(
@@ -149,7 +142,7 @@ test("reporting keeps legacy runs visible but unevaluated", async () => {
 });
 
 test("reporting renders comparable cohorts as Markdown", async () => {
-  const workspaceRoot = await workspace();
+  const workspaceRoot = await temp("reporting");
   await writeRun(workspaceRoot, { runId: "run_markdown", status: "passed" });
 
   const markdown = renderPbenchReportMarkdown(await createPbenchReport({ workspaceRoot }));

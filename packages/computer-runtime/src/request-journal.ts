@@ -48,6 +48,26 @@ export interface RequestJournal {
   list(): Promise<string[]>;
 }
 
+/** One owner for newly claimed requests; sequence advances only after persistence. */
+export function createJournalWriter(journal: Pick<RequestJournal, "append">) {
+  const requests = new Map<string, { seq: number; pending: Promise<void> }>();
+  return (id: string, type: RequestEventType, payload: Record<string, unknown>): Promise<void> => {
+    let writer = requests.get(id);
+    if (!writer) {
+      writer = { seq: 0, pending: Promise.resolve() };
+      requests.set(id, writer);
+    }
+    const state = writer;
+    const pending = state.pending.then(async () => {
+      await journal.append(id, { seq: state.seq, time: Date.now(), type, payload });
+      state.seq++;
+    });
+    // An unsuccessful append must not consume a sequence or block failure recording.
+    state.pending = pending.catch(() => {});
+    return pending;
+  };
+}
+
 const ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
 function requestDir(root: string, id: string): string {

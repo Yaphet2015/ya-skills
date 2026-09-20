@@ -1,11 +1,22 @@
 // Desktop-free test fixtures for the observation/batch/point-click surfaces.
 // Synthetic PNGs and fake backends only — no SDK, no desktop.
 
+import { PNG } from "pngjs";
 import type { AxElement, Backend, NativeObservationLike, Target } from "../../packages/computer-runtime/src/types.js";
 
-// 8x8 valid grayscale PNG (base64), embedded so tests never need an encoder.
-export const SYNTHETIC_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAHUlEQVR4nGP8z8Dwn4GBgYGJgYGBYQoA/2IBHQATKwAAAABJRU5ErkJggg==";
+// Valid 1280x800 RGBA evidence. Keep the test artifact dimensions aligned
+// with makeNativeObservation's declared screenshot geometry so the runtime's
+// strict decoder can reject genuinely mismatched image evidence.
+export const SYNTHETIC_PNG_BASE64 = (() => {
+  const png = new PNG({ width: 1280, height: 800 });
+  for (let offset = 0; offset < png.data.length; offset += 4) {
+    png.data[offset] = 24;
+    png.data[offset + 1] = 96;
+    png.data[offset + 2] = 192;
+    png.data[offset + 3] = 255;
+  }
+  return PNG.sync.write(png).toString("base64");
+})();
 
 export function syntheticPngBuffer(): Buffer {
   return Buffer.from(SYNTHETIC_PNG_BASE64, "base64");

@@ -1,6 +1,6 @@
 {
   "name": "computer-use",
-  "description": "Drive real macOS UI. Use when the task must operate a visible desktop app.",
+  "description": "Route web pages through browser DOM/CDP first, then drive native macOS UI when a visible desktop app is required.",
   "functions": [
     { "domain": "computer-use", "action": "doctor" },
     { "domain": "computer-use", "action": "apps" },

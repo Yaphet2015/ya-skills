@@ -66,7 +66,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **eli10** | Explain a diagnosis, root cause, bug mechanism, or architecture at primitive granularity: every sentence bottoms out at facts the reader already owns. Triggers on "why does this happen" answers and 看不懂 feedback. | `yk install eli10` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
-| **computer-use** | Drive any macOS desktop app (native, Electron, Chromium) via background-first AX perception and actions — inspect app state, reproduce UI issues, operate visible windows; adds independent observe (AX/image channels), evidence-bound visual coordinate clicks, and short serial batches with per-step receipts. macOS arm64 only. | `yk install computer-use` |
+| **computer-use** | Route browser pages through DOM/CDP with an explicit target before using native macOS UI; when native UI is required, use background-first AX perception and evidence-bound actions with short batches and clear delivery receipts. macOS arm64 only. | `yk install computer-use` |
 | **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
 | **show-pr** | Manually invoke `show-pr` to turn a branch diff or code change into a self-contained offline Chinese PR report — animated architecture / data-flow diagrams, mermaid diagrams, per-case test coverage with real results, verification screenshots or video, a decision-point design doc, and suggested manual tests in one HTML page. It never triggers implicitly. | `yk install show-pr` |
 | **svg-icons** | Generate family-consistent 24-grid SVG icons from a JSON drawing language (max two inks, composed marks like folder-plus-pencil). Invoke with `/svg-icons`. | `yk install svg-icons` |
@@ -75,6 +75,8 @@ yk pbench capture --source codex --yes   # run a domain command
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 
 Browse the full catalog at any time with `yk list`.
+
+For browser pages, inspect through the browser tool or the bundled CDP helper first. Bind an explicit target id, use a bounded DOM evaluation, and use `DOM.setFileInputFiles` when the browser tool exposes it. See [computer-use](docs/computer-use.md).
 
 For computer-use coordinate actions, pass the same `--out-dir` to `observe` and
 `act`. Native failures with uncertain delivery return `unknown` and stop further
@@ -241,7 +243,7 @@ This is a Bun workspace monorepo:
 - `packages/functions-pbench` — the independent `yk pbench <action>` command package.
 - `packages/functions-computer-use` — the `yk computer-use <action>` commands (thin orchestration over the shared runtime; macOS arm64 only).
 - `packages/computer-runtime` — the shared desktop primitives both computer-use and computer-e2e run on (owns the Cua SDK dependency, budgets, cleanup, privacy, and target leases).
-- `packages/computer-session` — private persistent-session host/driver workers, request journal, cancellation, and trusted JavaScript exec lifecycle.
+- `packages/computer-session` — private persistent-session host/driver workers, shared worker lifecycle, request recovery, and trusted JavaScript exec. New hosted exec commits store the result and JSON state together; legacy state remains readable.
 - `packages/functions-computer-e2e` — the `yk computer-e2e <run|history|report>` commands: suite validation, sequential worker supervision, run records.
 - `skills/` — the local skill catalog installed by `yk install`.
 

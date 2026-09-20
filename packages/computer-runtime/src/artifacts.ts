@@ -1,10 +1,12 @@
 // Evidence artifacts: user cache by default, explicit override, unique names,
 // private permissions. Never the install dir or the project.
 
-import { chmodSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
+import type { NativeObservationLike } from "./types.js";
+import { ComputerError } from "./driver-result.js";
 
 export function defaultArtifactsDir(): string {
   return join(homedir(), "Library", "Caches", "ya-skills", "computer-use");
@@ -59,4 +61,34 @@ export function saveScreenshot(dir: string, base64: string): string {
   writeFileSync(file, data, { mode: 0o600 });
   ensurePrivateFile(file);
   return file;
+}
+
+export function persistObservationImage(raw: NativeObservationLike, artifactsDir?: string): string | undefined {
+  const base64 = raw.images?.[0]?.dataBase64;
+  try {
+    if (typeof base64 === "string" && base64.length > 0) {
+      return saveScreenshot(ensureOutDir(artifactsDir), base64);
+    }
+    const source = raw.screenshotFilePath;
+    if (typeof source === "string" && source.length > 0) {
+      const stats = statSync(source);
+      if (!stats.isFile() || stats.size <= 0) throw new Error(`screenshot file is empty or not a regular file: ${source}`);
+      const destination = artifactPath(ensureOutDir(artifactsDir), "cu.png");
+      copyFileSync(source, destination);
+      // copyFileSync does not honor a mode argument and may inherit a
+      // permissive source mode. Enforce the artifact contract on the actual
+      // destination and let chmod/stat failures escape loudly.
+      ensurePrivateFile(destination);
+      return destination;
+    }
+    return undefined;
+  } catch (error) {
+    // Fail loud: the screenshot bytes exist but the evidence artifact does
+    // not. A "usable" image channel without a persisted file would be a
+    // fabricated success (A2/A3 fail-loud contract).
+    throw new ComputerError(
+      "artifact_write_failed",
+      `the screenshot could not be persisted: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }

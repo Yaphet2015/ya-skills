@@ -1,25 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { createAuthoring, initWorkspace } from "../packages/functions-pbench/src/authoring.js";
 import type { SessionSource } from "../packages/functions-pbench/src/adapters/types.js";
+import { createPbenchFixtures } from "./helpers/pbench-fixtures.js";
 
-const cleanup: string[] = [];
-afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
-});
-
-async function temp(prefix: string): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), `pbench-authoring-${prefix}-`));
-  cleanup.push(path);
-  return path;
-}
-
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-}
+const fixtures = createPbenchFixtures();
+afterEach(fixtures.cleanup);
+const { git, temp } = fixtures;
 
 test("authoring captures through an injected registered session source", async () => {
   const repo = await temp("repo");
@@ -32,6 +20,7 @@ test("authoring captures through an injected registered session source", async (
   const workspaceRoot = join(await temp("workspace"), "workspace");
   await initWorkspace(workspaceRoot);
   const input = join(await temp("input"), "session.jsonl");
+  const home = await temp("home");
   await writeFile(input, "fake transcript\n");
 
   const source: SessionSource = {
@@ -51,7 +40,7 @@ test("authoring captures through an injected registered session source", async (
   };
   const authoring = createAuthoring({ sessionSources: new Map([[source.id, source]]) });
 
-  const result = await authoring.captureSession({ cwd: repo, workspaceRoot, input, source: "fake", yes: true });
+  const result = await authoring.captureSession({ cwd: repo, workspaceRoot, input, home, source: "fake", yes: true });
   const manifest = JSON.parse(await readFile(join(result.caseDir, "case.json"), "utf8"));
 
   expect(manifest.metadata.source).toMatchObject({ kind: "fake-session", sessionId: "fake-1" });

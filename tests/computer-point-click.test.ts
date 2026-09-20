@@ -6,9 +6,19 @@ import { createSessionWithBackend, ComputerError, OBSERVATION_TTL_MS } from "../
 import { createObservationStore } from "../packages/computer-runtime/src/observation-store.js";
 import { projectObservation } from "../packages/computer-runtime/src/observe.js";
 import type { Observation, Point, Target } from "../packages/computer-runtime/src/types.js";
-import { fakeBackendFactory, FIXTURE_TARGET, makeNativeObservation, syntheticPngBuffer } from "./helpers/computer-fixtures.js";
+import { fakeBackendFactory, FIXTURE_TARGET, makeNativeObservation, SYNTHETIC_PNG_BASE64, syntheticPngBuffer } from "./helpers/computer-fixtures.js";
 import { writeFile, mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { PNG } from "pngjs";
+
+function fixturePngBase64(
+  mutate?: (data: Buffer, width: number, height: number) => void,
+  options?: Parameters<typeof PNG.sync.write>[1]
+): string {
+  const png = PNG.sync.read(syntheticPngBuffer());
+  mutate?.(png.data, png.width, png.height);
+  return PNG.sync.write(png, options).toString("base64");
+}
 
 async function makeSession(backend: Partial<ReturnType<typeof fakeBackendFactory> extends never ? never : object> = {}, observationAge = 0) {
   const root = await mkdtemp(join(tmpdir(), "cu-click-"));
@@ -42,6 +52,118 @@ async function makeSession(backend: Partial<ReturnType<typeof fakeBackendFactory
 const target: Target = FIXTURE_TARGET;
 
 describe("Computer.clickPoint (evidence-bound delivery)", () => {
+  test("accepts a tiny unrelated pixel change through the real click path", async () => {
+    const calls: Point[] = [];
+    const fresh = fixturePngBase64((data, width) => {
+      const offset = (100 * width + 100) * 4;
+      data[offset] = 25;
+    });
+    const { session, observation, root, imageDir } = await makeSession({
+      observe: async () => makeNativeObservation({ images: [{ mimeType: "image/png", dataBase64: fresh }] }),
+      clickPoint: async (_t: Target, point: Point) => {
+        calls.push(point);
+        return { isError: false };
+      }
+    });
+    try {
+      await session.computer.clickPoint(target, { observationId: observation.id, x: 640, y: 400 });
+      expect(calls).toEqual([{ x: 640, y: 400 }]);
+    } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts equivalent PNG encoding when decoded pixels are unchanged", async () => {
+    const calls: Point[] = [];
+    const reencoded = fixturePngBase64(undefined, { filterType: 0 });
+    const { session, observation, root, imageDir } = await makeSession({
+      observe: async () => makeNativeObservation({ images: [{ mimeType: "image/png", dataBase64: reencoded }] }),
+      clickPoint: async (_t: Target, point: Point) => {
+        calls.push(point);
+        return { isError: false };
+      }
+    });
+    try {
+      await session.computer.clickPoint(target, { observationId: observation.id, x: 640, y: 400 });
+      expect(calls).toEqual([{ x: 640, y: 400 }]);
+    } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a changed click neighbourhood before native delivery", async () => {
+    let calls = 0;
+    const fresh = fixturePngBase64((data, width) => {
+      const offset = (400 * width + 640) * 4;
+      data[offset] = 25;
+    });
+    const { session, observation, root, imageDir } = await makeSession({
+      observe: async () => makeNativeObservation({ images: [{ mimeType: "image/png", dataBase64: fresh }] }),
+      clickPoint: async () => {
+        calls += 1;
+        return { isError: false };
+      }
+    });
+    try {
+      await expect(session.computer.clickPoint(target, { observationId: observation.id, x: 640, y: 400 })).rejects.toThrow(/window changed|stale/);
+      expect(calls).toBe(0);
+    } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a major global frame change before native delivery", async () => {
+    let calls = 0;
+    const fresh = fixturePngBase64((data, width, height) => {
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < 2; x += 1) {
+          const offset = (y * width + x) * 4;
+          data[offset] = 25;
+        }
+      }
+    });
+    const { session, observation, root, imageDir } = await makeSession({
+      observe: async () => makeNativeObservation({ images: [{ mimeType: "image/png", dataBase64: fresh }] }),
+      clickPoint: async () => {
+        calls += 1;
+        return { isError: false };
+      }
+    });
+    try {
+      await expect(session.computer.clickPoint(target, { observationId: observation.id, x: 640, y: 400 })).rejects.toThrow(/window changed|stale/);
+      expect(calls).toBe(0);
+    } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a title change even when the pixels are unchanged", async () => {
+    let calls = 0;
+    const { session, observation, root, imageDir } = await makeSession({
+      observe: async () => makeNativeObservation({ windowTitle: "Navigated", images: [{ mimeType: "image/png", dataBase64: SYNTHETIC_PNG_BASE64 }] }),
+      clickPoint: async () => {
+        calls += 1;
+        return { isError: false };
+      }
+    });
+    try {
+      await expect(session.computer.clickPoint(target, { observationId: observation.id, x: 640, y: 400 })).rejects.toThrow(/title|stale/);
+      expect(calls).toBe(0);
+    } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+
   test("an expired observation never reaches the driver", async () => {
     const calls: Point[] = [];
     const { session, observation, root, imageDir } = await makeSession(
@@ -59,6 +181,38 @@ describe("Computer.clickPoint (evidence-bound delivery)", () => {
       ).rejects.toThrow(/stale_observation|older than/);
       expect(calls).toEqual([]);
     } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+
+  test("an observation that expires during fresh-frame validation never dispatches", async () => {
+    let calls = 0;
+    let freshReads = 0;
+    const realNow = Date.now;
+    let clock = realNow();
+    Date.now = () => clock;
+    const { session, observation, root, imageDir } = await makeSession(
+      {
+        observe: async () => {
+          freshReads += 1;
+          clock += OBSERVATION_TTL_MS;
+          return makeNativeObservation();
+        },
+        clickPoint: async () => {
+          calls += 1;
+          return { isError: false };
+        }
+      },
+      OBSERVATION_TTL_MS - 100
+    );
+    try {
+      await expect(session.computer.clickPoint(target, { observationId: observation.id, x: 640, y: 400 })).rejects.toThrow(/expired|stale/);
+      expect(calls).toBe(0);
+      expect(freshReads).toBe(1);
+    } finally {
+      Date.now = realNow;
       await session.close();
       await rm(root, { recursive: true, force: true });
       await rm(imageDir, { recursive: true, force: true });

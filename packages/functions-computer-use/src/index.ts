@@ -6,7 +6,9 @@ export {
   type ActSpec,
   type ClickSpec,
   type ScrollSpec,
-  type ScrollDirection
+  type ScrollDirection,
+  type ActFormat,
+  type KeyModifier
 } from "./args.js";
 export { COMMAND_DEADLINE_MS, CLEANUP_DEADLINE_MS } from "./consts.js";
 export { runDoctor, type DoctorDeps, type DoctorReport, type PlatformInfo } from "./runtime.js";

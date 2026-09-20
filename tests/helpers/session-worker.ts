@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startHost, type Host, type HostConfig } from "../../packages/computer-session/src/host.js";
+import { startHost, type Host, type HostConfig, type HostDeps } from "../../packages/computer-session/src/host.js";
 import type { DriverConfig, DriverSessionLike } from "../../packages/computer-session/src/driver-worker.js";
 import type { ExecResult } from "../../packages/computer-session/src/exec-types.js";
 import { sendControl, sendRequest } from "../../packages/computer-session/src/client.js";
@@ -83,6 +83,7 @@ export interface TestHostHandle {
 }
 
 export type TestHostOptions = {
+  journal?: HostDeps["journal"];
   driver?: "fake";
   idleTimeoutMs?: number;
   target?: Target;
@@ -153,7 +154,7 @@ export async function startTestHost(options: TestHostOptions = {}): Promise<Test
     requestsDir: join(root, "requests"),
     inProcessDriver: session
   };
-  const host = await startHost(config, { driver: "in-process" });
+  const host = await startHost(config, { driver: "in-process", journal: options.journal });
   let requestCounter = 0;
   const base = {
     host,

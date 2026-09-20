@@ -5,12 +5,17 @@
 // NaN/Infinity/bigint/functions/cycles (JSON.stringify would silently mangle
 // or drop them).
 
-import { existsSync, readFileSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { existsSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { JsonValue } from "./exec-types.js";
 import { EXEC_MAX_STATE_BYTES } from "./exec-types.js";
 import { validateJsonValue } from "./json-value.js";
+import {
+  hashJsonObject,
+  loadLedgerState,
+  loadLedgerStateVersion,
+  readStateFile as readLedgerStateFile
+} from "./session-ledger.js";
 
 export { validateJsonValue } from "./json-value.js";
 
@@ -33,45 +38,18 @@ function historyPath(directory: string, version: number): string {
   return join(directory, HISTORY_DIR, `state-${version}.json`);
 }
 
-function readStateFile(file: string): ExecStateFile {
-  const parsed = JSON.parse(readFileSync(file, "utf8")) as ExecStateFile;
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !Number.isSafeInteger(parsed.version) ||
-    parsed.version < 0 ||
-    typeof parsed.value !== "object" ||
-    parsed.value === null ||
-    Array.isArray(parsed.value) ||
-    (parsed.requestId !== undefined &&
-      (typeof parsed.requestId !== "string" || parsed.requestId.length === 0))
-  ) {
-    throw new Error(`corrupt state file ${file} — refusing to guess; the session must be reset explicitly`);
-  }
-  try {
-    validateJsonValue(parsed.value, EXEC_MAX_STATE_BYTES);
-    const actualHash = execStateHash(parsed.value);
-    if (parsed.hash !== undefined && parsed.hash !== actualHash) {
-      throw new Error(`state hash mismatch (recorded ${parsed.hash}, actual ${actualHash})`);
-    }
-  } catch (error) {
-    throw new Error(`corrupt state file ${file} — ${error instanceof Error ? error.message : String(error)}`);
-  }
-  return { ...parsed, hash: execStateHash(parsed.value) };
-}
-
-export function execStateHash(value: Record<string, JsonValue>): string {
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined) throw new Error("state is not JSON-serializable");
-  return createHash("sha256").update(encoded, "utf8").digest("hex");
-}
+export const execStateHash = hashJsonObject;
 
 export function loadExecState(directory: string): { version: number; value: Record<string, JsonValue> } {
+  const ledger = loadLedgerState(directory);
+  if (ledger !== undefined) {
+    return { version: ledger.version, value: ledger.value };
+  }
   const file = statePath(directory);
   if (!existsSync(file)) {
     return { version: 0, value: {} };
   }
-  const parsed = readStateFile(file);
+  const parsed = readLedgerStateFile(file);
   return { version: parsed.version, value: parsed.value };
 }
 
@@ -86,14 +64,18 @@ export function loadExecStateVersion(
     throw new Error(`invalid state version ${version}`);
   }
   if (version === 0 && !existsSync(statePath(directory))) {
+    const ledger = loadLedgerStateVersion(directory, version);
+    if (ledger !== undefined) return ledger;
     return { version: 0, value: {}, hash: execStateHash({}) };
   }
+  const ledger = loadLedgerStateVersion(directory, version);
+  if (ledger !== undefined) return ledger;
   const current = loadExecState(directory);
   const file = version === current.version ? statePath(directory) : historyPath(directory, version);
   if (!existsSync(file)) {
     throw new Error(`missing committed state history version ${version}`);
   }
-  const parsed = readStateFile(file);
+  const parsed = readLedgerStateFile(file);
   if (parsed.version !== version) {
     throw new Error(`state history version mismatch: requested ${version}, found ${parsed.version}`);
   }
@@ -145,7 +127,7 @@ export function commitExecState(
   // dies between these renames, recovery sees an unreferenced history entry
   // and refuses new admission instead of guessing whether the commit landed.
   if (existsSync(historyFile)) {
-    const existing = readStateFile(historyFile);
+    const existing = readLedgerStateFile(historyFile);
     if (
       existing.version !== next.version ||
       execStateHash(existing.value) !== next.hash ||

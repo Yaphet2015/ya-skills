@@ -5,6 +5,7 @@
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { reduceResultEvents } from "./result-reducer.js";
 import type { CaseResult, CaseStatus, StepResult } from "./types.js";
 import type { WorkerEventType } from "./types.js";
 
@@ -56,45 +57,17 @@ const ZERO_COUNTS = (): Record<CaseStatus, number> => ({
   interrupted: 0
 });
 
-interface CollectedCase {
-  file: string;
-  id: string;
-  name: string;
-  finished?: { status: CaseStatus; reason?: string };
-  started: boolean;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function artifactWithinRun(path: string): boolean {
-  // Artifacts are recorded relative to the run dir; traversal out is refused.
-  if (path.startsWith("/")) return false;
-  const parts = path.split("/");
-  let depth = 0;
-  for (const part of parts) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") {
-      depth--;
-      if (depth < 0) return false;
-    } else depth++;
-  }
-  return true;
-}
-
 export function reduceEvents(events: readonly RunEvent[]): RunSummary {
   const runId = events[0]?.runId ?? "";
   const counts = ZERO_COUNTS();
-  const collected = new Map<string, CollectedCase>(); // `${file}::${id}`
-  const order: string[] = [];
-  const steps: StepResult[] = [];
-  const errors: string[] = [];
+  const reduction = reduceResultEvents(events, {
+    caseId: (file, id) => `${file ?? "<unknown>"}::${id}`,
+    includeInterruptedErrors: true,
+    includeOpenSteps: true
+  });
   const cleanupErrors: string[] = [];
-  const artifacts: string[] = [];
   const metadata: Record<string, unknown> = {};
   let runFinished: RunEvent | undefined;
-  const openActions = new Set<string>();
   const workerPids: number[] = [];
 
   for (const event of events) {
@@ -111,89 +84,6 @@ export function reduceEvents(events: readonly RunEvent[]): RunSummary {
       case "application":
         if (typeof p.name === "string") metadata.application = p;
         break;
-      case "suite_collected": {
-        const file = asString(p.file) ?? "<unknown>";
-        if (typeof p.loadError === "string") {
-          errors.push(`${file}: ${p.loadError}`);
-          break;
-        }
-        for (const raw of Array.isArray(p.cases) ? p.cases : []) {
-          const c = raw as { id?: unknown; name?: unknown };
-          const id = asString(c.id) ?? "<unknown>";
-          const key = `${file}::${id}`;
-          if (!collected.has(key)) {
-            collected.set(key, { file, id, name: asString(c.name) ?? id, started: false });
-            order.push(key);
-          }
-        }
-        break;
-      }
-      case "case_started": {
-        const key = `${asString(p.file) ?? "<unknown>"}::${asString(p.id) ?? "<unknown>"}`;
-        const entry = collected.get(key);
-        if (entry) entry.started = true;
-        break;
-      }
-      case "case_finished": {
-        const file = asString(p.file) ?? "<unknown>";
-        const id = asString(p.id) ?? "<unknown>";
-        const key = `${file}::${id}`;
-        const status = asString(p.status) as CaseStatus;
-        const reason = asString(p.reason);
-        const entry = collected.get(key);
-        if (entry) {
-          entry.started = true;
-          entry.finished = { status, reason };
-        }
-        if (status === "failed" || status === "interrupted") {
-          errors.push(`${file}::${id}: ${reason ?? status}`);
-        }
-        break;
-      }
-      case "step_started":
-      case "step_finished": {
-        const caseId = `${asString(p.file) ?? "<unknown>"}::${asString(p.caseId) ?? "<unknown>"}`;
-        const name = asString(p.name) ?? "<unnamed>";
-        if (event.type === "step_started") {
-          steps.push({ caseId, name, status: "passed" });
-        } else {
-          const status = asString(p.status) === "failed" ? "failed" : asString(p.status) === "interrupted" ? "interrupted" : "passed";
-          const last = [...steps].reverse().find((s) => s.caseId === caseId && s.name === name && s.status === "passed");
-          if (last) {
-            last.status = status;
-            const reason = asString(p.reason);
-            if (reason) last.reason = reason;
-          } else {
-            steps.push({ caseId, name, status, reason: asString(p.reason) });
-          }
-        }
-        break;
-      }
-      case "action_started":
-        openActions.add(asString(p.kind) ?? "unknown");
-        break;
-      case "action_finished":
-        openActions.delete(asString(p.kind) ?? "unknown");
-        break;
-      case "hook_finished": {
-        if (asString(p.status) === "failed") {
-          errors.push(`${asString(p.hook) ?? "hook"}: ${asString(p.reason) ?? "failed"}`);
-        }
-        break;
-      }
-      case "artifact": {
-        const path = asString(p.path);
-        if (path === undefined) break;
-        if (!artifactWithinRun(path)) {
-          errors.push(`artifact path escapes the run directory: ${path}`);
-        } else {
-          artifacts.push(path);
-        }
-        break;
-      }
-      case "worker_protocol_error":
-        errors.push(`worker protocol error in ${asString(p.file) ?? "<unknown file>"}: ${asString(p.reason) ?? "unknown"}`);
-        break;
       case "run_finished": {
         runFinished = event;
         if (Array.isArray(p.cleanupErrors)) {
@@ -206,24 +96,12 @@ export function reduceEvents(events: readonly RunEvent[]): RunSummary {
     }
   }
 
-  const cases: CaseResult[] = order.map((key) => {
-    const entry = collected.get(key)!;
-    let status: CaseStatus;
-    if (entry.finished) status = entry.finished.status;
-    else if (entry.started) status = "interrupted"; // started, never finished
-    else status = "not_run";
+  const { cases, steps } = reduction.suite;
+  const errors = reduction.errors;
+  const artifacts = reduction.artifacts;
+  for (const item of cases) {
+    const status = item.status;
     counts[status] += 1;
-    return {
-      id: `${entry.file}::${entry.id}`,
-      name: entry.name,
-      status,
-      ...(entry.finished?.reason !== undefined ? { reason: entry.finished.reason } : {})
-    };
-  });
-
-  // A native action without its finished event has an UNKNOWN outcome.
-  for (const kind of openActions) {
-    errors.push(`action outcome unknown: ${kind} started but never finished (no replay)`);
   }
   if (workerPids.length > 0) metadata.workerPids = workerPids;
 

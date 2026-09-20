@@ -8,25 +8,25 @@ import { sessionRoot } from "@ya-skills/computer-session";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import {
-  bigintSafeReplacer,
   canonicalRequestHash,
   ComputerError,
   DEFAULT_BATCH_TIMEOUT_MS,
-  MAX_BATCH_TIMEOUT_MS,
-  createComputerSession,
-  createRequestJournal,
+  createRequestLedger,
+  executeBatchSequence,
   createAutoLeases,
-  createObservationStore,
-  defaultArtifactsDir,
+  createRequestJournal,
+  type RequestEventType,
   selectWindow,
   validateBatch,
-  type ActionReceipt,
   type BatchRequest,
-  type ComputerSession,
+  type BatchResult,
+  type StepExecutionResult,
   type RequestJournal,
   type RequestRecord,
   type Target
 } from "@ya-skills/computer-runtime";
+import { createDefaultSessionFactory, type TimedCreateSession } from "./session-factory.js";
+import { jsonError, stringifyJson } from "./output.js";
 
 export function defaultRequestsDir(): string {
   return join(homedir(), "Library", "Caches", "ya-skills", "computer-use", "requests");
@@ -43,34 +43,55 @@ export interface BatchCommandRequest {
   maxActions?: number;
 }
 
-function jsonError(code: string, message: string, extra: Record<string, unknown> = {}): Error {
-  return new Error(JSON.stringify({ error: { code, message, ...extra } }, bigintSafeReplacer));
+export async function readBatchFile(file: string, options: { structuredErrors?: boolean } = {}): Promise<unknown> {
+  const structuredErrors = options.structuredErrors ?? true;
+  let raw: string;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch (error) {
+    if (!structuredErrors) throw error;
+    throw jsonError("batch_file_unreadable", `${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    if (!structuredErrors) throw error;
+    throw jsonError("batch_file_invalid_json", `${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export function applyBatchOverrides(
+  parsed: unknown,
+  overrides: Pick<BatchCommandRequest, "timeoutMs" | "maxActions">,
+  context = "budget overrides",
+  requireObject = false
+): unknown {
+  const hasOverrides = overrides.timeoutMs !== undefined || overrides.maxActions !== undefined;
+  if (!hasOverrides && !requireObject) return parsed;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw jsonError("batch_request_invalid", `batch file must contain a JSON object to apply ${context}`);
+  }
+  return {
+    ...(parsed as Record<string, unknown>),
+    ...(overrides.timeoutMs !== undefined ? { timeoutMs: overrides.timeoutMs } : {}),
+    ...(overrides.maxActions !== undefined ? { maxActions: overrides.maxActions } : {})
+  };
 }
 
 function encodeResult(target: Target, result: unknown): string {
-  return JSON.stringify({ schemaVersion: 1, target, result }, bigintSafeReplacer);
+  return stringifyJson({ schemaVersion: 1, target, result });
 }
 
 export function batchCommand(
   deps: {
-    createSession?: (options: { deadlineAt: number; artifactsDir?: string }) => ComputerSession;
+    createSession?: TimedCreateSession;
     requestsDir?: string;
     /** Test seam for persistence latency; production always uses requestsDir. */
     journal?: RequestJournal;
   } = {}
 ): (request: BatchCommandRequest) => Promise<string> {
-  const leaseSet = createAutoLeases(sessionRoot(), "single-step");
   const createSession =
-    deps.createSession ??
-    ((options: { deadlineAt: number; artifactsDir?: string }) => {
-      const artifactsDir = options.artifactsDir ?? defaultArtifactsDir();
-      return createComputerSession({
-        ...options,
-        artifactsDir,
-        observationStore: createObservationStore(join(artifactsDir, "observations")),
-        leases: leaseSet
-      });
-    });
+    deps.createSession ?? createDefaultSessionFactory({ leases: createAutoLeases(sessionRoot(), "single-step") });
   const requestsDir = deps.requestsDir ?? defaultRequestsDir();
   return async (request) => {
     const platform = process.platform === "darwin" && process.arch === "arm64";
@@ -82,31 +103,11 @@ export function batchCommand(
     }
     // 1. Read + validate the batch file BEFORE any driver work; the content
     //    hash fixes the request for dedup regardless of later file edits.
-    let raw: string;
-    try {
-      raw = await readFile(request.file, "utf8");
-    } catch (error) {
-      throw jsonError("batch_file_unreadable", `${request.file}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      throw jsonError("batch_file_invalid_json", `${request.file}: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    let parsed = await readBatchFile(request.file);
     // CLI budget overrides (validated in args.ts) apply ON TOP of the file
     // content; they participate in the dedup hash because they change what
     // runs.
-    if (request.timeoutMs !== undefined || request.maxActions !== undefined) {
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        throw jsonError("batch_request_invalid", "batch file must contain a JSON object to apply budget overrides");
-      }
-      parsed = {
-        ...(parsed as Record<string, unknown>),
-        ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
-        ...(request.maxActions !== undefined ? { maxActions: request.maxActions } : {})
-      };
-    }
+    parsed = applyBatchOverrides(parsed, request);
     let batchRequest: BatchRequest;
     try {
       batchRequest = validateBatch(parsed);
@@ -122,14 +123,15 @@ export function batchCommand(
     // one-action runtime batch.
     const deadlineAt = Date.now() + (batchRequest.timeoutMs ?? DEFAULT_BATCH_TIMEOUT_MS);
     const journal = deps.journal ?? createRequestJournal(requestsDir);
+    const ledger = createRequestLedger(journal);
     const hash = canonicalRequestHash({
       kind: "batch",
       target: { pid: request.pid, windowId: request.windowId ?? 0n },
       operation: parsed
     });
-    const claim = await journal.claim(request.requestId, hash);
+    const claim = await ledger.claim(request.requestId, hash);
     if (claim === "existing") {
-      const record: RequestRecord = await journal.read(request.requestId);
+      const record: RequestRecord = await ledger.read(request.requestId);
       const finished = record.events.find((e) => e.type === "request_finished");
       if (finished?.payload.status !== undefined) {
         const result = finished.payload.result ?? {
@@ -154,15 +156,8 @@ export function batchCommand(
     // 3. Execute once. Every event append is awaited; a desktop dispatch
     // cannot begin until its durable start event exists, and a terminal reply
     // is not returned while its outcome is still only in memory.
-    let nextSeq = 0;
-    const appendEvent = async (
-      type: "request_started" | "action_started" | "action_finished" | "request_finished",
-      payload: Record<string, unknown>
-    ): Promise<void> => {
-      const seq = nextSeq;
-      await journal.append(request.requestId, { seq, time: Date.now(), type, payload });
-      nextSeq++;
-    };
+    const appendEvent = (type: RequestEventType, payload: Record<string, unknown>) =>
+      ledger.append(request.requestId, type, payload);
     try {
       await appendEvent("request_started", {
         kind: "batch",
@@ -170,6 +165,10 @@ export function batchCommand(
         actions: batchRequest.actions.length
       });
     } catch (error) {
+      ledger.fail(request.requestId, {
+        code: "journal_error",
+        message: error instanceof Error ? error.message : String(error)
+      });
       throw jsonError(
         "journal_error",
         `could not persist batch start — nothing was dispatched: ${error instanceof Error ? error.message : String(error)}`
@@ -183,81 +182,51 @@ export function batchCommand(
       ...(request.outDir !== undefined ? { artifactsDir: request.outDir } : {})
     });
     let target: Target | undefined;
-    let result: import("@ya-skills/computer-runtime").BatchResult | undefined;
+    let result: BatchResult | undefined;
     const finished = new Set<number>();
     let terminalWritten = false;
     try {
       const win = selectWindow(await session.computer.windows(request.pid), request.windowId);
       target = { pid: request.pid, windowId: win.windowId };
-      const steps: import("@ya-skills/computer-runtime").ActionReceipt[] = [];
-      const fillNotRun = async (from: number, error?: { code: string; message: string }): Promise<void> => {
-        for (let index = from; index < batchRequest.actions.length; index++) {
-          const action = batchRequest.actions[index]!;
-          const receipt = { index, kind: action.kind, status: "not_run" as const, ...(error !== undefined ? { error } : {}) };
-          steps[index] = receipt;
+      const { status, steps } = await executeBatchSequence(batchRequest, {
+        mode: "standalone",
+        deadlineAt,
+        boundary: () => Date.now() >= deadlineAt
+          ? { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" }
+          : null,
+        dispatch: async (action, context) => {
+          if (session.executeStep) {
+            return session.executeStep(target!, action, {
+              deadlineAt: context.deadlineAt,
+              signal: context.signal,
+              index: context.index
+            });
+          }
+          const raw = await session.computer.batch(target!, {
+            actions: [action],
+            maxActions: 1,
+            timeoutMs: Math.max(1, context.deadlineAt - Date.now())
+          }, context.signal);
+          const receipt = raw.steps[0];
+          return {
+            status: raw.status,
+            receipt: {
+              index: context.index,
+              kind: action.kind,
+              status: receipt?.status ?? "unknown",
+              ...(receipt?.error !== undefined ? { error: receipt.error } : {})
+            }
+          } satisfies StepExecutionResult;
+        },
+        started: (index, kind) => appendEvent("action_started", { index, kind }),
+        recorded: async (receipt) => {
           await appendEvent("action_finished", {
-            index,
-            kind: action.kind,
-            outcome: receipt.status,
-            ...(error !== undefined ? { error } : {})
+            index: receipt.index, kind: receipt.kind, outcome: receipt.status,
+            ...(receipt.error !== undefined ? { error: receipt.error } : {})
           });
-          finished.add(index);
+          finished.add(receipt.index);
         }
-      };
-      let status: import("@ya-skills/computer-runtime").BatchResult["status"] = "completed";
-      for (const [index, action] of batchRequest.actions.entries()) {
-        const remaining = deadlineAt - Date.now();
-        if (remaining <= 0) {
-          const error = { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" };
-          steps[index] = { index, kind: action.kind, status: "not_run", error };
-          await appendEvent("action_finished", { index, kind: action.kind, outcome: "not_run", error });
-          finished.add(index);
-          await fillNotRun(index + 1);
-          status = "interrupted";
-          break;
-        }
-        await appendEvent("action_started", { index, kind: action.kind });
-        // Persisting action_started is part of the same absolute budget. Do
-        // not dispatch with the duration measured before that await.
-        const dispatchRemaining = deadlineAt - Date.now();
-        if (dispatchRemaining <= 0) {
-          const error = { code: "batch_deadline", message: "batch timeout budget exhausted before dispatch" };
-          steps[index] = { index, kind: action.kind, status: "not_run", error };
-          await appendEvent("action_finished", { index, kind: action.kind, outcome: "not_run", error });
-          finished.add(index);
-          await fillNotRun(index + 1);
-          status = "interrupted";
-          break;
-        }
-        const one = await session.computer.batch(target, {
-          actions: [action],
-          // Compute immediately before entering the runtime; the runtime
-          // receives the remaining budget, while the session's absolute
-          // deadline prevents setup/final evidence from extending it.
-          timeoutMs: Math.max(1, Math.min(dispatchRemaining, MAX_BATCH_TIMEOUT_MS)),
-          maxActions: 1
-        });
-        const local = one.steps[0];
-        const receipt: import("@ya-skills/computer-runtime").ActionReceipt = {
-          ...(local ?? { kind: action.kind, status: "unknown" as const }),
-          index,
-          kind: action.kind,
-          status: local?.status ?? "unknown"
-        };
-        steps[index] = receipt;
-        await appendEvent("action_finished", {
-          index,
-          kind: action.kind,
-          outcome: receipt.status,
-          ...(receipt.error !== undefined ? { error: receipt.error } : {})
-        });
-        finished.add(index);
-        if (receipt.status !== "delivered" && receipt.status !== "satisfied") {
-          await fillNotRun(index + 1);
-          status = receipt.status === "unknown" || one.status === "interrupted" ? "interrupted" : "failed";
-          break;
-        }
-      }
+      });
       if (status === "completed" && batchRequest.observe !== undefined) {
         const finalRemaining = deadlineAt - Date.now();
         if (finalRemaining <= 0) {
@@ -308,7 +277,7 @@ export function batchCommand(
       }
       await appendEvent("request_finished", {
         status: result.status,
-        result: JSON.parse(JSON.stringify(result, bigintSafeReplacer))
+        result: JSON.parse(stringifyJson(result))
       });
       terminalWritten = true;
       if (result.status === "completed") {
@@ -317,7 +286,7 @@ export function batchCommand(
       throw jsonError(
         result.status === "interrupted" ? "batch_interrupted" : "batch_failed",
         `batch ended ${result.status}: ${result.steps.map((s) => `${s.index}:${s.kind}:${s.status}`).join(", ")}`,
-        { result: JSON.parse(JSON.stringify(result, bigintSafeReplacer)) }
+        { result: JSON.parse(stringifyJson(result)) }
       );
     } catch (error) {
       // If dispatch threw before receipts came back, every planned action is
@@ -355,7 +324,7 @@ export function batchCommand(
             status: terminalStatus,
             result: {
               error: error instanceof Error ? error.message : String(error),
-              partial: JSON.parse(JSON.stringify(partial, bigintSafeReplacer))
+              partial: JSON.parse(stringifyJson(partial))
             }
           });
           terminalWritten = true;
@@ -363,14 +332,14 @@ export function batchCommand(
           throw jsonError(
             "journal_error",
             `could not persist batch failure; delivery is unknown: ${journalError instanceof Error ? journalError.message : String(journalError)}`,
-            { result: JSON.parse(JSON.stringify(partial, bigintSafeReplacer)) }
+            { result: JSON.parse(stringifyJson(partial)) }
           );
         }
         if (terminalStatus === "unknown") {
           throw jsonError(
             "batch_unknown",
             error instanceof Error ? error.message : String(error),
-            { result: JSON.parse(JSON.stringify(partial, bigintSafeReplacer)) }
+            { result: JSON.parse(stringifyJson(partial)) }
           );
         }
       }

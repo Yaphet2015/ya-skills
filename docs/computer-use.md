@@ -1,5 +1,22 @@
 # computer-use
 
+## Browser-first route
+
+For Chromium, Electron, and other web pages, inspect the page through the browser tool or CDP before taking desktop screenshots. List targets, bind the exact target id, and run a small scoped DOM evaluation. Stop when the DOM answers the question. Do not choose the first tab, switch tabs automatically, launch/restart a browser profile, or change the frontmost app.
+
+The installed fallback helper uses built-in Bun/Node `fetch` and `WebSocket`:
+
+```sh
+bun .agents/skills/computer-use/scripts/browser-cdp.mjs targets --endpoint http://127.0.0.1:9222
+bun .agents/skills/computer-use/scripts/browser-cdp.mjs eval --target-id TARGET_ID --expression '({title: document.title, url: location.href, text: document.body?.innerText?.slice(0, 4000) ?? ""})'
+```
+
+Both operations have bounded time and output. The helper returns a target list or `{target,result}` and never auto-selects a tab. Use `DOM.setFileInputFiles` through the browser/CDP tool when available; use a native chooser when its native behavior is under test or no usable file-input/CDP path exists. See [references/browser-cdp.md](../skills/computer-use/references/browser-cdp.md) and [references/native-orchestration.md](../skills/computer-use/references/native-orchestration.md).
+
+For native windows, `observe` and `act` have different response shapes: `observe` returns `{schemaVersion: 1, target, observation}` with AX data under `observation.ax.elements` and the id at `observation.id`; `act` defaults to the compatibility shape and accepts `--format observation|legacy`. Use `--key KEY --modifiers MOD[,MOD]` for shortcuts.
+
+## Runtime reference
+
 Drive any macOS desktop app (native, Electron, Chromium) from the `yk` CLI
 with background-first input delivery and AX perception. Installed with
 `yk install computer-use`; every capability is also a plain command:
@@ -11,7 +28,7 @@ yk computer-use windows --pid PID
 yk computer-use perceive --pid PID [--window ID] [--shot] [--out-dir DIR]
 yk computer-use observe --pid PID [--window ID] [--mode auto|ax|image|both] \
     [--max-dimension N] [--select-text T [--select-match exact|contains] [--select-role R]]
-yk computer-use act --pid PID [--window ID] ACTION   # --click-text/--click-contains [--click-role] | --click-x/--click-y --observation ID | --set-value VALUE --element-token TOKEN | --type | --key | --scroll
+yk computer-use act --pid PID [--window ID] [--format observation|legacy] [--modifiers MOD[,MOD]] ACTION   # --click-text/--click-contains [--click-role] | --click-x/--click-y --observation ID | --set-value VALUE --element-token TOKEN | --type | --key | --scroll
 yk computer-use batch --pid PID [--window ID] --file steps.json --request-id ID
 yk computer-use session open --pid PID [--window ID] [--idle-timeout-ms N (<=120000)]
 yk computer-use session status --session ID
@@ -19,7 +36,7 @@ yk computer-use session cancel --session ID --request-id REQUEST
 yk computer-use session close --session ID
 yk computer-use observe|batch|act --session ID ...   # reuse the session's driver
 yk computer-use exec --session ID --file flow.js --request-id ID [--timeout-ms N] [--max-actions N]
-# common flags for perceive/act: --shot, --out-dir DIR, --activate (explicit user request only)
+# common flags for perceive/act: --shot, --out-dir DIR, --activate (explicit), --audit-foreground
 ```
 
 The agent-facing usage guide lives in the skill itself
@@ -95,8 +112,16 @@ directory, the yk install prefix, or your project.
   Unknown native delivery marks the session `unusable` and KEEPS the lease —
   explicit close ends the host control plane but does not clear an unresolved
   delivery verdict or prove that the target application's callback has finished.
-- exec scripts are trusted local JavaScript; state is explicit JSON committed
-  only on clean completion. Generated script API:
+- exec scripts are trusted local JavaScript. The host commits the terminal
+  result and explicit JSON state together after worker cleanup, delivery checks,
+  and result-size validation. A failed final observation can still leave valid
+  script state committed; check `stateCommitted` separately from `status`.
+  New hosted commits use versioned immutable records in the session's
+  `state/transactions/` directory. `state.json` and historical snapshots are
+  derived from those records; legacy session state remains readable. Recovery
+  verifies the request hash and state version before returning a saved result,
+  and never repeats desktop actions. Corrupt records or snapshots are refused.
+  Generated script API:
   `skills/computer-use/references/api.d.ts`.
 
 ## Distribution layout (Homebrew)

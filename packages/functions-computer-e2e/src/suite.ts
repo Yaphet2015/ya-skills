@@ -1,6 +1,8 @@
 // Sequential fail-stop suite execution with events and truthful statuses.
 
-import type { CaseContext, CaseResult, StepResult, Suite, SuiteResult, WorkerEvent } from "./types.js";
+import { reduceResultEvents } from "./result-reducer.js";
+import { createExecutionScope, type ExecutionScope } from "@ya-skills/computer-runtime";
+import type { CaseContext, Suite, SuiteResult, WorkerEvent } from "./types.js";
 
 export type { CaseContext, CaseResult, StepResult, Suite, SuiteResult, WorkerEvent } from "./types.js";
 
@@ -80,50 +82,19 @@ export function validateSuite(value: unknown): Suite {
   return { ...(value as unknown as Suite), tests };
 }
 
-// Promise timeouts do not cancel the case body. Promise.race attaches
-// reactions to both branches, so a late rejection of the losing promise is
-// still "handled" and never surfaces as unhandled; the timer is cleared once
-// the race settles.
-function withBudget<T>(budgetMs: number, promise: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new CaseTimeoutError(budgetMs)), budgetMs);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+function withBudget<T>(scope: ExecutionScope, budgetMs: number, promise: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    scope.onDeadline(() => {
+      const error = new CaseTimeoutError(budgetMs);
+      scope.abort(error);
+      reject(error);
+    });
+    promise.then(resolve, reject);
+  }).finally(() => scope.dispose());
 }
 
-function combineAbortSignals(
-  caseSignal: AbortSignal,
-  callerSignal?: AbortSignal
-): { signal: AbortSignal; dispose: () => void } {
-  if (callerSignal === undefined || callerSignal === caseSignal) {
-    return { signal: caseSignal, dispose: () => undefined };
-  }
-  const controller = new AbortController();
-  const abort = (event: Event): void => {
-    if (!controller.signal.aborted) {
-      const source = event.target as AbortSignal | null;
-      controller.abort(source?.reason);
-    }
-  };
-  if (caseSignal.aborted) {
-    controller.abort(caseSignal.reason);
-  } else if (callerSignal.aborted) {
-    controller.abort(callerSignal.reason);
-  } else {
-    caseSignal.addEventListener("abort", abort, { once: true });
-    callerSignal.addEventListener("abort", abort, { once: true });
-  }
-  return {
-    signal: controller.signal,
-    dispose: () => {
-      caseSignal.removeEventListener("abort", abort);
-      callerSignal.removeEventListener("abort", abort);
-    }
-  };
-}
-
-function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): CaseContext["computer"] {
+function guardComputer(computer: CaseContext["computer"], scope: ExecutionScope): CaseContext["computer"] {
+  const signal = scope.signal;
   const refused = async (): Promise<never> => {
     throw new Error("the owning case was interrupted — no further desktop operations");
   };
@@ -132,21 +103,17 @@ function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): 
       signal.throwIfAborted();
       return fn(...a);
     };
-  // Batch is the one facade method whose runtime contract accepts both the
-  // owning case signal and an optional caller signal. The signals are joined
-  // for this request only; disposing both listeners when the batch settles is
-  // required so a late case/caller abort cannot affect another case.
   const batch = async (
     target: Parameters<CaseContext["computer"]["batch"]>[0],
     request: Parameters<CaseContext["computer"]["batch"]>[1],
     callerSignal?: Parameters<CaseContext["computer"]["batch"]>[2]
   ) => {
     signal.throwIfAborted();
-    const combined = combineAbortSignals(signal, callerSignal);
+    const requestScope = scope.child({ signal: callerSignal });
     try {
-      return await computer.batch(target, request, combined.signal);
+      return await computer.batch(target, request, requestScope.signal);
     } finally {
-      combined.dispose();
+      requestScope.dispose();
     }
   };
   return {
@@ -168,24 +135,21 @@ function guardComputer(computer: CaseContext["computer"], signal: AbortSignal): 
 function wrapContext(
   context: CaseContext,
   ownerId: string,
-  steps: StepResult[],
   emit: (event: WorkerEvent) => void,
-  signal?: AbortSignal
+  scope?: ExecutionScope
 ): CaseContext {
   return {
     ...context,
-    ...(signal ? { computer: guardComputer(context.computer, signal), signal } : {}),
+    ...(scope ? { computer: guardComputer(context.computer, scope), signal: scope.signal } : {}),
     step: async <T>(name: string, work: () => Promise<T>): Promise<T> => {
       emit({ type: "step_started", payload: { caseId: ownerId, name } });
       try {
         const value = await work();
-        steps.push({ caseId: ownerId, name, status: "passed" });
         emit({ type: "step_finished", payload: { caseId: ownerId, name, status: "passed" } });
         return value;
       } catch (error) {
         const status = error instanceof SkipError ? "interrupted" : "failed";
         const reason = errorMessage(error);
-        steps.push({ caseId: ownerId, name, status, reason });
         emit({ type: "step_finished", payload: { caseId: ownerId, name, status, reason } });
         throw error;
       }
@@ -199,96 +163,95 @@ function wrapContext(
   };
 }
 
+type HookName = "beforeAll" | "afterAll";
+
+type SuiteHook = NonNullable<Suite[HookName]>;
+
+async function runHook(
+  name: HookName,
+  hook: SuiteHook | undefined,
+  suite: Suite,
+  context: CaseContext,
+  emit: (event: WorkerEvent) => void,
+  parentScope: ExecutionScope,
+  budgetMs: number
+): Promise<boolean> {
+  emit({ type: "hook_started", payload: { hook: name, timeoutMs: budgetMs } });
+  try {
+    if (hook) {
+      const scope = parentScope.child({ timeoutMs: budgetMs });
+      const invocation = Promise.resolve().then(() => Reflect.apply(hook, suite, [wrapContext(context, name, emit, scope)]));
+      await withBudget(scope, budgetMs, invocation);
+    }
+    emit({ type: "hook_finished", payload: { hook: name, status: "passed" } });
+    return true;
+  } catch (error) {
+    emit({ type: "hook_finished", payload: { hook: name, status: "failed", reason: errorMessage(error) } });
+    return false;
+  }
+}
+
 export async function runSuite(
   suite: Suite,
   context: CaseContext,
   emit: (event: WorkerEvent) => void
 ): Promise<SuiteResult> {
-  const cases: CaseResult[] = [];
-  const steps: StepResult[] = [];
-  const errors: SuiteResult["errors"] = [];
+  const events: WorkerEvent[] = [];
+  const publish = (event: WorkerEvent): void => {
+    events.push(event);
+    emit(event);
+  };
   const hookBudget = suite.hookTimeoutMs ?? DEFAULT_CASE_TIMEOUT_MS;
+  const suiteScope = createExecutionScope({ signal: context.signal });
 
-  // The complete case list ships before any hook runs.
-  emit({
-    type: "suite_collected",
-    payload: {
-      cases: suite.tests.map((t) => ({
-        id: t.id,
-        name: t.name,
-        timeoutMs: t.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS,
-        ...(t.skip !== undefined ? { skip: t.skip } : {})
-      }))
-    }
-  });
-
-  let stopped = false;
-
-  emit({ type: "hook_started", payload: { hook: "beforeAll", timeoutMs: hookBudget } });
   try {
-    if (suite.beforeAll) await withBudget(hookBudget, Promise.resolve(suite.beforeAll(wrapContext(context, "beforeAll", steps, emit))));
-    emit({ type: "hook_finished", payload: { hook: "beforeAll", status: "passed" } });
-  } catch (error) {
-    errors.push({ phase: "beforeAll", message: errorMessage(error) });
-    stopped = true;
-    emit({ type: "hook_finished", payload: { hook: "beforeAll", status: "failed", reason: errorMessage(error) } });
-  }
+    // The complete case list ships before any hook runs.
+    publish({
+      type: "suite_collected",
+      payload: {
+        cases: suite.tests.map((t) => ({
+          id: t.id,
+          name: t.name,
+          timeoutMs: t.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS,
+          ...(t.skip !== undefined ? { skip: t.skip } : {})
+        }))
+      }
+    });
 
-  for (const item of suite.tests) {
-    if (stopped) {
-      cases.push({ id: item.id, name: item.name, status: "not_run" });
-      continue;
-    }
-    // Per-case abort: a timed-out case's zombie promise must not keep
-    // delivering desktop actions during afterAll.
-    const caseController = new AbortController();
-    const propagate = () => caseController.abort();
-    context.signal.addEventListener("abort", propagate, { once: true });
-    if (item.skip !== undefined) {
-      cases.push({ id: item.id, name: item.name, status: "skipped", reason: item.skip });
-      emit({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: item.skip } });
-      // A skipped case never enters its body, so remove the propagation
-      // listener here rather than retaining its case controller until the
-      // suite-level signal aborts (or the process exits).
-      context.signal.removeEventListener("abort", propagate);
-      continue;
-    }
-    const budget = item.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS;
-    emit({ type: "case_started", payload: { caseId: item.id, timeoutMs: budget } });
-    try {
-      await withBudget(budget, Promise.resolve(item.run(wrapContext(context, item.id, steps, emit, caseController.signal))));
-      cases.push({ id: item.id, name: item.name, status: "passed" });
-      emit({ type: "case_finished", payload: { caseId: item.id, status: "passed" } });
-    } catch (error) {
-      if (error instanceof SkipError) {
-        cases.push({ id: item.id, name: item.name, status: "skipped", reason: error.message });
-        emit({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: error.message } });
-      } else if (error instanceof CaseTimeoutError) {
-        caseController.abort();
-        cases.push({ id: item.id, name: item.name, status: "interrupted", reason: error.message });
-        emit({ type: "case_finished", payload: { caseId: item.id, status: "interrupted", reason: error.message } });
-        stopped = true;
-      } else {
-        const reason = errorMessage(error);
-        cases.push({ id: item.id, name: item.name, status: "failed", reason });
-        errors.push({ phase: "case", message: `${item.id}: ${reason}` });
-        emit({ type: "case_finished", payload: { caseId: item.id, status: "failed", reason } });
-        stopped = true;
+    let stopped = !(await runHook("beforeAll", suite.beforeAll, suite, context, publish, suiteScope, hookBudget));
+
+    for (const item of suite.tests) {
+      if (stopped) continue;
+      if (item.skip !== undefined) {
+        publish({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: item.skip } });
+        continue;
+      }
+      const budget = item.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS;
+      const caseScope = suiteScope.child({ timeoutMs: budget });
+      publish({ type: "case_started", payload: { caseId: item.id, timeoutMs: budget } });
+      try {
+        const invocation = Promise.resolve().then(() => item.run(wrapContext(context, item.id, publish, caseScope)));
+        await withBudget(caseScope, budget, invocation);
+        publish({ type: "case_finished", payload: { caseId: item.id, status: "passed" } });
+      } catch (error) {
+        if (error instanceof SkipError) {
+          publish({ type: "case_finished", payload: { caseId: item.id, status: "skipped", reason: error.message } });
+        } else if (error instanceof CaseTimeoutError) {
+          publish({ type: "case_finished", payload: { caseId: item.id, status: "interrupted", reason: error.message } });
+          stopped = true;
+        } else {
+          const reason = errorMessage(error);
+          publish({ type: "case_finished", payload: { caseId: item.id, status: "failed", reason } });
+          stopped = true;
+        }
       }
     }
-    context.signal.removeEventListener("abort", propagate);
-  }
 
-  emit({ type: "hook_started", payload: { hook: "afterAll", timeoutMs: hookBudget } });
-  try {
-    if (suite.afterAll) await withBudget(hookBudget, Promise.resolve(suite.afterAll(wrapContext(context, "afterAll", steps, emit))));
-    emit({ type: "hook_finished", payload: { hook: "afterAll", status: "passed" } });
-  } catch (error) {
-    errors.push({ phase: "afterAll", message: errorMessage(error) });
-    emit({ type: "hook_finished", payload: { hook: "afterAll", status: "failed", reason: errorMessage(error) } });
+    await runHook("afterAll", suite.afterAll, suite, context, publish, suiteScope, hookBudget);
+    return reduceResultEvents(events, { stepOrder: "finish" }).suite;
+  } finally {
+    suiteScope.dispose();
   }
-
-  return { cases, steps, errors };
 }
 
 export function exitCodeFor(result: SuiteResult): 0 | 1 | 2 {

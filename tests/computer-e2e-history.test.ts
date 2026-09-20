@@ -12,6 +12,7 @@ import {
   reduceEvents,
   type RunEvent
 } from "../packages/functions-computer-e2e/src/history.js";
+import { reduceResultEvents } from "../packages/functions-computer-e2e/src/result-reducer.js";
 
 function ev(seq: number, type: RunEvent["type"], payload: Record<string, unknown>, runId = "r"): RunEvent {
   return { schemaVersion: 1, runId, seq, time: "2026-09-13T00:00:00Z", type, payload };
@@ -87,6 +88,45 @@ describe("reduceEvents", () => {
     const report = reduceEvents(events);
     expect(report.errors.join(" ")).toMatch(/boot died/);
     expect(report.cleanupErrors).toEqual(["session close timed out"]);
+  });
+
+  test("history uses the shared result projection for cases, steps, errors, and artifacts", () => {
+    const events = [
+      STARTED(),
+      COLLECT("a.e2e.ts", [{ id: "a", name: "a" }]),
+      CASE_START(3, "a.e2e.ts", "a"),
+      ev(4, "step_started", { file: "a.e2e.ts", caseId: "a", name: "inner" }),
+      ev(5, "step_finished", { file: "a.e2e.ts", caseId: "a", name: "inner", status: "failed", reason: "step boom" }),
+      ev(6, "artifact", { path: "artifacts/shot.png" }),
+      CASE_DONE(7, "a.e2e.ts", "a", "failed", "case boom"),
+      FINISH(8, { exitCode: 1, status: "failed" })
+    ];
+    const projection = reduceResultEvents(events, {
+      caseId: (file, id) => `${file ?? "<unknown>"}::${id}`,
+      includeInterruptedErrors: true,
+      includeOpenSteps: true
+    });
+    const report = reduceEvents(events);
+
+    expect(report.cases).toEqual(projection.suite.cases);
+    expect(report.steps).toEqual(projection.suite.steps);
+    expect(report.errors).toEqual(projection.errors);
+    expect(report.artifacts).toEqual(projection.artifacts);
+  });
+
+  test("history keeps nested steps in start order", () => {
+    const events = [
+      STARTED(),
+      COLLECT("a.e2e.ts", [{ id: "a", name: "a" }]),
+      CASE_START(3, "a.e2e.ts", "a"),
+      ev(4, "step_started", { file: "a.e2e.ts", caseId: "a", name: "outer" }),
+      ev(5, "step_started", { file: "a.e2e.ts", caseId: "a", name: "inner" }),
+      ev(6, "step_finished", { file: "a.e2e.ts", caseId: "a", name: "inner", status: "passed" }),
+      ev(7, "step_finished", { file: "a.e2e.ts", caseId: "a", name: "outer", status: "passed" }),
+      CASE_DONE(8, "a.e2e.ts", "a", "passed"),
+      FINISH(9)
+    ];
+    expect(reduceEvents(events).steps.map((step) => step.name)).toEqual(["outer", "inner"]);
   });
 
   test("an open action without its finished event is an unknown outcome, never passed", () => {

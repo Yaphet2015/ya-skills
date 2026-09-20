@@ -4,11 +4,14 @@
 // windowId is a decimal bigint (macOS window ids exceed Number.MAX_SAFE_INTEGER);
 // pid must stay a positive safe integer.
 
+import { tokenizeFlags, type FlagTokens } from "@ya-skills/core";
 import { parseSessionArgs } from "./session-command.js";
 
 export const USAGE = "usage: yk computer-use <doctor|apps|windows|perceive|observe|act|batch|session>";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
+export type ActFormat = "legacy" | "observation";
+export type KeyModifier = "cmd" | "shift" | "option" | "ctrl" | "fn";
 
 export interface ClickSpec {
   kind: "text" | "contains";
@@ -28,7 +31,7 @@ export type ActSpec =
   | { action: "click_point"; clickPoint: { observationId: string; x: number; y: number } }
   | { action: "set_value"; elementToken: string; value: string }
   | { action: "type"; type: string }
-  | { action: "key"; key: string }
+  | { action: "key"; key: string; modifiers?: KeyModifier[] }
   | { action: "scroll"; scroll: ScrollSpec };
 
 export type ObservationMode = "auto" | "ax" | "image" | "both";
@@ -45,7 +48,7 @@ export type ParsedRequest =
   | { kind: "windows"; pid: number }
   | ({ kind: "perceive"; pid: number } & CommonOpts)
   | ({ kind: "observe"; pid: number } & CommonOpts & ObserveSpec)
-  | ({ kind: "act"; pid: number } & CommonOpts & ActSpec)
+  | ({ kind: "act"; pid: number } & CommonOpts & ActSpec & { format: ActFormat })
   | ({ kind: "batch"; pid: number } & CommonOpts & {
       file: string;
       requestId: string;
@@ -59,50 +62,18 @@ interface CommonOpts {
   windowId?: bigint;
   shot: boolean;
   activate: boolean;
+  auditForeground: boolean;
   outDir?: string;
   session?: string;
 }
 
-// Flags that take a value. Boolean flags are validated so that a value-looking
-// token after them (e.g. `--shot 5`) is an unknown flag, not a silent ignore.
-const VALUE_FLAGS = new Set([
-  "pid",
-  "window",
-  "name",
-  "out-dir",
-  "type",
-  "set-value",
-  "element-token",
-  "key",
-  "scroll",
-  "click-text",
-  "click-contains",
-  "click-role",
-  "click-x",
-  "click-y",
-  "observation",
-  "amount",
-  "x",
-  "y",
-  "mode",
-  "max-dimension",
-  "select-text",
-  "select-match",
-  "select-role",
-  "file",
-  "request-id",
-  "max-actions",
-  "timeout-ms",
-  "session",
-  "idle-timeout-ms"
-]);
-const BOOL_FLAGS = new Set(["shot", "activate"]);
+const BOOL_FLAGS = new Set(["shot", "activate", "audit-foreground"]);
 
 const ALLOWED: Record<string, Set<string>> = {
   doctor: new Set(),
   apps: new Set(["name"]),
   windows: new Set(["pid"]),
-  perceive: new Set(["pid", "window", "shot", "activate", "out-dir"]),
+  perceive: new Set(["pid", "window", "shot", "activate", "audit-foreground", "out-dir"]),
   observe: new Set([
     "pid",
     "window",
@@ -119,11 +90,14 @@ const ALLOWED: Record<string, Set<string>> = {
     "window",
     "shot",
     "activate",
+    "audit-foreground",
     "out-dir",
     "type",
     "set-value",
     "element-token",
     "key",
+    "modifiers",
+    "format",
     "scroll",
     "click-text",
     "click-contains",
@@ -141,54 +115,11 @@ const ALLOWED: Record<string, Set<string>> = {
   session: new Set(["pid", "window", "session", "request-id", "idle-timeout-ms"])
 };
 
-interface Tokens {
-  values: { [flag: string]: string | undefined };
-  positional: string[];
-}
+// Derive recognized flags from the command contracts so the two cannot drift.
+const KNOWN_FLAGS = new Set(Object.values(ALLOWED).flatMap((flags) => [...flags]));
 
 function fail(message: string): never {
   throw new Error(`${message}\n${USAGE}`);
-}
-
-function tokenize(argv: string[], allowed: Set<string>): Tokens {
-  const out: Tokens = { values: {}, positional: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const raw = argv[i]!;
-    if (!raw.startsWith("--")) {
-      out.positional.push(raw);
-      continue;
-    }
-    const body = raw.slice(2);
-    const eq = body.indexOf("=");
-    const flag = eq === -1 ? body : body.slice(0, eq);
-    if (flag === "") fail(`unknown flag syntax: ${raw}`);
-    if (!allowed.has(flag)) {
-      if (VALUE_FLAGS.has(flag) || BOOL_FLAGS.has(flag)) {
-        fail(`--${flag} is not valid for this action`);
-      }
-      fail(`unknown flag: --${flag}`);
-    }
-    if (BOOL_FLAGS.has(flag)) {
-      if (eq !== -1) fail(`--${flag} does not take a value`);
-      if (out.values[flag] !== undefined) fail(`--${flag} given twice`);
-      out.values[flag] = "true";
-      continue;
-    }
-    let value: string;
-    if (eq !== -1) {
-      value = body.slice(eq + 1);
-    } else {
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        fail(`--${flag} requires a value`);
-      }
-      value = next;
-      i++;
-    }
-    if (out.values[flag] !== undefined) fail(`--${flag} given twice`);
-    out.values[flag] = value;
-  }
-  return out;
 }
 
 function parsePid(raw: string | undefined): number {
@@ -216,11 +147,19 @@ function parseNumber(flag: string, raw: string | undefined, opts: { integer?: bo
   return n;
 }
 
-function common(tokens: Tokens): CommonOpts {
+function parseBudget(flag: string, raw: string | undefined, limit: number): number | undefined {
+  if (raw === undefined) return undefined;
+  const value = parseNumber(flag, raw, { integer: true, positive: true });
+  if (value > limit) fail(`--${flag} must be <= ${limit}`);
+  return value;
+}
+
+function common(tokens: FlagTokens): CommonOpts {
   return {
     windowId: parseWindowId(tokens.values["window"]),
     shot: tokens.values["shot"] !== undefined,
     activate: tokens.values["activate"] !== undefined,
+    auditForeground: tokens.values["audit-foreground"] !== undefined,
     outDir:
       tokens.values["out-dir"] === undefined
         ? undefined
@@ -245,12 +184,95 @@ function parseRequestId(value: string | undefined): string {
   return requestId;
 }
 
-function parseActSpec(tokens: Tokens): ActSpec {
+// These names come from the installed @trycua/cua-driver 0.27.0 native
+// contract. The driver accepts aliases for the three platform modifier names;
+// normalize them once so one-shot and session calls send the same wire values.
+const MODIFIER_ALIASES: ReadonlyMap<string, KeyModifier> = new Map([
+  ["cmd", "cmd"],
+  ["command", "cmd"],
+  ["shift", "shift"],
+  ["option", "option"],
+  ["alt", "option"],
+  ["ctrl", "ctrl"],
+  ["control", "ctrl"],
+  ["fn", "fn"]
+]);
+
+const NAMED_KEYS = new Set([
+  "return",
+  "tab",
+  "escape",
+  "up",
+  "down",
+  "left",
+  "right",
+  "space",
+  "delete",
+  "home",
+  "end",
+  "pageup",
+  "pagedown",
+  ...Array.from({ length: 12 }, (_, index) => `f${index + 1}`)
+]);
+
+const KEY_SYNTAX =
+  "return|tab|escape|up|down|left|right|space|delete|home|end|pageup|pagedown|f1-f12|one letter or digit";
+const MODIFIER_SYNTAX = "cmd|command|shift|option|alt|ctrl|control|fn";
+
+function parseKey(raw: string | undefined): string {
+  const key = requireNonEmpty("--key", raw);
+  const lower = key.toLowerCase();
+  // Preserve the CLI's historical Backspace spelling using the driver's
+  // documented macOS backward-delete key name.
+  if (lower === "backspace") return "delete";
+  if (key.includes("+") || key.includes(",")) {
+    fail(
+      `--key does not accept compound shortcuts (got: ${key}); use --key KEY --modifiers MOD[,MOD] ` +
+        `(for example: --key I --modifiers cmd,option). Supported keys: ${KEY_SYNTAX}`
+    );
+  }
+  if (!NAMED_KEYS.has(lower) && !/^[A-Za-z0-9]$/.test(key)) {
+    fail(`--key must be ${KEY_SYNTAX} (got: ${key}); use --key KEY --modifiers MOD[,MOD] for shortcuts`);
+  }
+  return key;
+}
+
+function parseModifiers(raw: string | undefined): KeyModifier[] | undefined {
+  if (raw === undefined) return undefined;
+  const value = requireNonEmpty("--modifiers", raw);
+  const modifiers = value.split(",").map((part) => part.trim());
+  if (modifiers.some((modifier) => modifier === "")) {
+    fail(`--modifiers must be comma-separated values from ${MODIFIER_SYNTAX}`);
+  }
+  const parsed: KeyModifier[] = [];
+  for (const modifier of modifiers) {
+    const canonical = MODIFIER_ALIASES.get(modifier.toLowerCase());
+    if (canonical === undefined) {
+      fail(`--modifiers contains unsupported modifier '${modifier}'; supported modifiers: ${MODIFIER_SYNTAX}`);
+    }
+    if (parsed.includes(canonical)) {
+      fail(`--modifiers contains duplicate modifier '${modifier}'`);
+    }
+    parsed.push(canonical);
+  }
+  return parsed;
+}
+
+function parseActFormat(raw: string | undefined): ActFormat {
+  const format = raw ?? "legacy";
+  if (format !== "legacy" && format !== "observation") {
+    fail(`--format must be observation|legacy (got: ${format})`);
+  }
+  return format;
+}
+
+function parseActSpec(tokens: FlagTokens): ActSpec {
   const hasType = tokens.values["type"] !== undefined;
   const setValue = tokens.values["set-value"];
   const elementToken = tokens.values["element-token"];
   const hasSetValue = setValue !== undefined || elementToken !== undefined;
   const hasKey = tokens.values["key"] !== undefined;
+  const modifiers = tokens.values["modifiers"];
   const hasScroll = tokens.values["scroll"] !== undefined;
   const clickText = tokens.values["click-text"];
   const clickContains = tokens.values["click-contains"];
@@ -266,6 +288,9 @@ function parseActSpec(tokens: Tokens): ActSpec {
   if (count > 1) {
     fail("act takes exactly one action per invocation");
   }
+  if (modifiers !== undefined && !hasKey) {
+    fail("--modifiers requires --key");
+  }
   if (hasSetValue) {
     if (setValue === undefined) fail("--set-value requires --element-token");
     if (elementToken === undefined) fail("--element-token requires --set-value");
@@ -276,7 +301,13 @@ function parseActSpec(tokens: Tokens): ActSpec {
     return { action: "type", type: requireNonEmpty("--type", tokens.values["type"]) };
   }
   if (hasKey) {
-    return { action: "key", key: requireNonEmpty("--key", tokens.values["key"]) };
+    const key = parseKey(tokens.values["key"]);
+    const parsedModifiers = parseModifiers(modifiers);
+    return {
+      action: "key",
+      key,
+      ...(parsedModifiers !== undefined ? { modifiers: parsedModifiers } : {})
+    };
   }
   if (hasScroll) {
     const direction = tokens.values["scroll"] as string;
@@ -321,7 +352,7 @@ function parseActSpec(tokens: Tokens): ActSpec {
   return { action: "click", click: { kind, text, role } };
 }
 
-function parseObserveSpec(tokens: Tokens): ObserveSpec {
+function parseObserveSpec(tokens: FlagTokens): ObserveSpec {
   const mode = tokens.values["mode"] ?? "auto";
   if (mode !== "auto" && mode !== "ax" && mode !== "image" && mode !== "both") {
     fail(`--mode must be auto|ax|image|both (got: ${mode})`);
@@ -365,7 +396,12 @@ export function parseRequest(action: string, argv: string[]): ParsedRequest {
     parseSessionArgs(argv);
     return { kind: "session", argv };
   }
-  const tokens = tokenize(argv, allowed);
+  const tokens = tokenizeFlags(argv, {
+    allowed,
+    known: KNOWN_FLAGS,
+    boolean: BOOL_FLAGS,
+    fail
+  });
   if (tokens.positional.length > 0) {
     fail(`action '${action}' takes no positional arguments (got: ${tokens.positional.join(", ")})`);
   }
@@ -375,6 +411,9 @@ export function parseRequest(action: string, argv: string[]): ParsedRequest {
     }
     if (tokens.values["out-dir"] !== undefined) {
       fail("--out-dir is only supported for one-shot commands; session artifacts use the session-owned directory");
+    }
+    if (action === "act" && (tokens.values["activate"] !== undefined || tokens.values["audit-foreground"] !== undefined)) {
+      fail("--activate and --audit-foreground are only supported for one-shot act commands");
     }
   }
   switch (action) {
@@ -398,49 +437,33 @@ export function parseRequest(action: string, argv: string[]): ParsedRequest {
         ...common(tokens),
         ...parseObserveSpec(tokens)
       };
-    case "batch": {
-      if (tokens.values["file"] === undefined) fail("missing --file (the batch JSON file)");
-      const file = requireNonEmpty("--file", tokens.values["file"]);
-      const requestId = parseRequestId(tokens.values["request-id"]);
-      let timeoutMs: number | undefined;
-      if (tokens.values["timeout-ms"] !== undefined) {
-        timeoutMs = parseNumber("timeout-ms", tokens.values["timeout-ms"], { integer: true, positive: true });
-        if (timeoutMs > 120_000) fail("--timeout-ms must be <= 120000");
-      }
-      let maxActions: number | undefined;
-      if (tokens.values["max-actions"] !== undefined) {
-        maxActions = parseNumber("max-actions", tokens.values["max-actions"], { integer: true, positive: true });
-        if (maxActions > 20) fail("--max-actions must be <= 20");
-      }
-      return {
-        kind: "batch",
-        pid: tokens.values["session"] !== undefined ? 0 : parsePid(tokens.values["pid"]),
-        ...common(tokens),
-        file,
-        requestId,
-        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-        ...(maxActions !== undefined ? { maxActions } : {})
-      };
-    }
+    case "batch":
     case "exec": {
-      if (tokens.values["session"] === undefined) {
+      if (action === "exec" && tokens.values["session"] === undefined) {
         fail("exec runs inside a persistent session — open one first (session open) and pass --session");
       }
-      if (tokens.values["file"] === undefined) fail("missing --file (the script file)");
+      if (tokens.values["file"] === undefined) {
+        fail(`missing --file (the ${action === "batch" ? "batch JSON" : "script"} file)`);
+      }
       const file = requireNonEmpty("--file", tokens.values["file"]);
       const requestId = parseRequestId(tokens.values["request-id"]);
-      const timeoutMs = tokens.values["timeout-ms"] === undefined ? undefined : parseNumber("timeout-ms", tokens.values["timeout-ms"], { integer: true, positive: true });
-      if (timeoutMs !== undefined && timeoutMs > 120_000) fail("--timeout-ms must be <= 120000");
-      const maxActions = tokens.values["max-actions"] === undefined ? undefined : parseNumber("max-actions", tokens.values["max-actions"], { integer: true, positive: true });
-      if (maxActions !== undefined && maxActions > 500) fail("--max-actions must be <= 500");
-      return {
-        kind: "exec",
-        sessionId: requireNonEmpty("--session", tokens.values["session"]),
+      const timeoutMs = parseBudget("timeout-ms", tokens.values["timeout-ms"], 120_000);
+      const maxActions = parseBudget("max-actions", tokens.values["max-actions"], action === "batch" ? 20 : 500);
+      const budget = {
         file,
         requestId,
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
         ...(maxActions !== undefined ? { maxActions } : {})
       };
+      if (action === "batch") {
+        return {
+          kind: "batch",
+          pid: tokens.values["session"] !== undefined ? 0 : parsePid(tokens.values["pid"]),
+          ...common(tokens),
+          ...budget
+        };
+      }
+      return { kind: "exec", sessionId: requireNonEmpty("--session", tokens.values["session"]), ...budget };
     }
     case "act": {
       const options = common(tokens);
@@ -452,7 +475,8 @@ export function parseRequest(action: string, argv: string[]): ParsedRequest {
         kind: "act",
         pid: tokens.values["session"] !== undefined ? 0 : parsePid(tokens.values["pid"]),
         ...options,
-        ...spec
+        ...spec,
+        format: parseActFormat(tokens.values["format"])
       };
     }
     default:

@@ -77,15 +77,13 @@ describe("resizeScreenshot (real sips, macOS only)", () => {
   maybe("derives a genuinely smaller same-format PNG", async () => {
     const dir = await mkdtemp(join(tmpdir(), "cu-sips-"));
     const original = join(dir, "cu.png");
-    // 64x64 real PNG via sips itself is overkill; use the embedded one (8x8)
-    // so this checks the real binary path with a no-op upscale guard.
+    // The shared fixture matches the runtime's declared 1280x800 geometry.
+    // A smaller max dimension exercises the real derivation path.
     await writeFile(original, syntheticPngBuffer());
     const out = await resizeScreenshot(original, 64);
-    expect(out.path).toBe(original); // 8x8 <= 64: original kept
-    const forced = await resizeScreenshot(original, 4);
-    expect(forced.width).toBeLessThanOrEqual(4);
-    expect(forced.height).toBeLessThanOrEqual(4);
-    expect(forced.path).not.toBe(original);
+    expect(out.width).toBeLessThanOrEqual(64);
+    expect(out.height).toBeLessThanOrEqual(64);
+    expect(out.path).not.toBe(original);
     await rm(dir, { recursive: true, force: true });
   });
 });

@@ -180,12 +180,61 @@ describe("parseRequest rejects before any driver exists", () => {
     expect(() => parseRequest("act", ["--pid", "1", "--key", ""])).toThrow(/--key/);
   });
 
+  test("key modifiers use the installed SDK vocabulary and reach the parsed request", () => {
+    const req = parseRequest("act", [
+      "--pid", "1", "--key", "I", "--modifiers", "cmd, option,control,fn"
+    ]);
+    expect(req).toMatchObject({
+      kind: "act",
+      action: "key",
+      key: "I",
+      modifiers: ["cmd", "option", "ctrl", "fn"]
+    });
+  });
+
+  test("compound key strings are rejected with the supported syntax", () => {
+    expect(() => parseRequest("act", ["--pid", "1", "--key", "Cmd+Alt+I"])).toThrow(
+      /--key I --modifiers cmd,option|--modifiers/
+    );
+    expect(() => parseRequest("act", ["--pid", "1", "--key", "I", "--modifiers", "cmd,wat"])).toThrow(
+      /supported|modifier|cmd/
+    );
+    expect(() => parseRequest("act", ["--pid", "1", "--type", "x", "--modifiers", "cmd"])).toThrow(
+      /requires --key/
+    );
+  });
+
+  test("Backspace remains accepted as the driver's backward-delete key", () => {
+    expect(parseRequest("act", ["--pid", "1", "--key", "Backspace"])).toMatchObject({ key: "delete" });
+  });
+
+  test("act format defaults to legacy and accepts the observation envelope", () => {
+    expect(parseRequest("act", ["--pid", "1", "--key", "Return"])).toMatchObject({ format: "legacy" });
+    expect(parseRequest("act", ["--pid", "1", "--key", "Return", "--format", "observation"])).toMatchObject({
+      format: "observation"
+    });
+    expect(() => parseRequest("act", ["--pid", "1", "--key", "Return", "--format", "compact"])).toThrow(
+      /--format/
+    );
+  });
+
   test("boolean flags: shot and activate", () => {
     const req = parseRequest("perceive", ["--pid", "1", "--shot"]);
     expect((req as { shot: boolean }).shot).toBe(true);
     expect((req as { activate: boolean }).activate).toBe(false);
     const act = parseRequest("perceive", ["--pid", "1", "--shot", "--activate"]);
     expect((act as { activate: boolean }).activate).toBe(true);
+  });
+
+  test("audit foreground is a one-shot-only boolean control", () => {
+    expect(parseRequest("perceive", ["--pid", "1"])).toMatchObject({ auditForeground: false });
+    expect(parseRequest("perceive", ["--pid", "1", "--audit-foreground"])).toMatchObject({ auditForeground: true });
+    expect(() => parseRequest("act", ["--session", "s", "--key", "Return", "--audit-foreground"])).toThrow(
+      /one-shot|session|audit-foreground/
+    );
+    expect(() => parseRequest("act", ["--session", "s", "--key", "Return", "--activate"])).toThrow(
+      /one-shot|session|activate/
+    );
   });
 
   test("apps accepts only --name filter", () => {
@@ -301,6 +350,8 @@ describe("command orchestration via injected session", () => {
         (e: Error) => e
       );
       expect(JSON.parse(error!.message).error.code).toBe("action_refused");
+      expect(JSON.parse(error!.message).error.actionOutcome).toBe("not_delivered");
+      expect(JSON.parse(error!.message).error.nextStep).toMatch(/observe|correct|retry/i);
       expect(attempts).toBe(1);
     }
   });
@@ -384,5 +435,67 @@ describe("command orchestration via injected session", () => {
       "--pid", "7", "--set-value", "Ada", "--element-token", "field-token"
     ]);
     expect(calls).toEqual([{ pid: 7, windowId: 9n, token: "field-token", value: "Ada" }]);
+  });
+
+  test("act key forwards explicit modifiers through the one-shot computer seam", async () => {
+    const calls: Array<{ key: string; modifiers?: string[] }> = [];
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 7, windowId: 9n, title: "Editor" }],
+      key: async (_target, key, modifiers) => {
+        calls.push({ key, ...(modifiers !== undefined ? { modifiers } : {}) });
+      },
+      snapshot: async () => ({ elements: [], title: "Editor" })
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    await commands.find((c) => c.action === "act")!.run([
+      "--pid", "7", "--key", "I", "--modifiers", "cmd,alt"
+    ]);
+    expect(calls).toEqual([{ key: "I", modifiers: ["cmd", "option"] }]);
+  });
+
+  test("act --format observation returns the observe envelope", async () => {
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 7, windowId: 9n, title: "Editor" }],
+      key: async () => {},
+      observe: async (target) => ({
+        id: "01234567-89ab-cdef-0123-456789abcdef",
+        target,
+        capturedAt: 1,
+        epoch: "epoch",
+        revision: 1,
+        title: "Editor",
+        ax: { status: "usable", elements: [], total: 0, returned: 0, complete: true },
+        image: { status: "unavailable" }
+      }),
+      snapshot: async () => ({ elements: [], title: "Editor" })
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    const output = await commands.find((c) => c.action === "act")!.run([
+      "--pid", "7", "--key", "I", "--format", "observation"
+    ]);
+    expect(JSON.parse(output as string)).toEqual({
+      schemaVersion: 1,
+      target: { pid: 7, windowId: "9" },
+      observation: expect.objectContaining({ id: "01234567-89ab-cdef-0123-456789abcdef" })
+    });
+  });
+
+  test("act observation failure retains delivered action outcome", async () => {
+    const computer = makeFakeComputer({
+      windows: async () => [{ pid: 7, windowId: 9n, title: "Editor" }],
+      key: async () => {},
+      observe: async () => {
+        throw new ComputerError("degraded_snapshot", "the observation degraded");
+      }
+    });
+    const commands = createComputerUseCommands({ createSession: () => makeSession(computer) });
+    const error = await Promise.resolve(commands.find((c) => c.action === "act")!.run([
+      "--pid", "7", "--key", "I", "--format", "observation"
+    ])).then(() => null, (e: Error) => e);
+    const body = JSON.parse(error!.message).error;
+    expect(body.code).toBe("post_action_observe_failed");
+    expect(body.actionDelivered).toBe(true);
+    expect(body.actionOutcome).toBe("delivered");
+    expect(body.nextStep).toMatch(/do NOT repeat/);
   });
 });

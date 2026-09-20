@@ -43,11 +43,8 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       run: async (args) => {
         const parsed = parseArgs(args);
         const source = getString(parsed, "source") ?? "codex";
-        const workspace = getString(parsed, "workspace");
         const yes = getBoolean(parsed, "yes");
-        const workspaceRoot = workspace
-          ? await dependencies.resolveWorkspaceRoot({ workspace, cwd: process.cwd(), home: options.home, createDefault: yes })
-          : await dependencies.resolveWorkspaceRoot({ cwd: process.cwd(), home: options.home, createDefault: yes });
+        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options, yes);
         const result = await dependencies.captureSession({
           cwd: process.cwd(),
           workspaceRoot,
@@ -139,17 +136,8 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
         if (manual && requestedAgent) {
           throw new Error("yk pbench run --manual and --agent cannot be used together.");
         }
-        const workspaceRoot = await dependencies.resolveWorkspaceRoot({
-          workspace: getString(parsed, "workspace"),
-          cwd: process.cwd(),
-          home: options.home
-        });
-        const caseDir = await dependencies.resolveCaseDirInput({
-          caseInput,
-          cwd: process.cwd(),
-          home: options.home,
-          workspace: workspaceRoot
-        });
+        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
+        const caseDir = await resolveCommandCase(dependencies, options, caseInput, workspaceRoot);
         const profile = normalizeRunProfile(getString(parsed, "profile"));
         if (manual) {
           return printJson(
@@ -181,17 +169,8 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       run: async (args) => {
         const parsed = parseArgs(args);
         const caseInput = requireString(parsed, "case", "yk pbench start requires --case <case-dir-or-case-id>");
-        const workspaceRoot = await dependencies.resolveWorkspaceRoot({
-          workspace: getString(parsed, "workspace"),
-          cwd: process.cwd(),
-          home: options.home
-        });
-        const caseDir = await dependencies.resolveCaseDirInput({
-          caseInput,
-          cwd: process.cwd(),
-          home: options.home,
-          workspace: workspaceRoot
-        });
+        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
+        const caseDir = await resolveCommandCase(dependencies, options, caseInput, workspaceRoot);
         return printJson(
           await dependencies.replay.startManualRun({
             caseDir,
@@ -234,11 +213,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
       ],
       run: async (args) => {
         const parsed = parseArgs(args);
-        const workspaceRoot = await dependencies.resolveWorkspaceRoot({
-          workspace: getString(parsed, "workspace"),
-          cwd: process.cwd(),
-          home: options.home
-        });
+        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
         const report = await dependencies.createPbenchReport({
           workspaceRoot,
           caseFilter: await dependencies.resolveReportCaseFilter({
@@ -276,11 +251,7 @@ export function createCommands(dependencies: PbenchCommandDependencies, options:
           });
           return printJson(await dependencies.auditPbenchCase(caseDir));
         }
-        const workspaceRoot = await dependencies.resolveWorkspaceRoot({
-          workspace: getString(parsed, "workspace"),
-          cwd: process.cwd(),
-          home: options.home
-        });
+        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
         return printJson(await dependencies.auditPbenchWorkspace(workspaceRoot));
       }
     },
@@ -348,6 +319,34 @@ function requireString(parsed: ParsedArgs, key: string, message: string): string
 
 function getBoolean(parsed: ParsedArgs, key: string): boolean {
   return parsed.options[key] === true;
+}
+
+async function resolveCommandWorkspace(
+  dependencies: PbenchCommandDependencies,
+  parsed: ParsedArgs,
+  options: PbenchCommandOptions,
+  createDefault?: boolean
+): Promise<string> {
+  return dependencies.resolveWorkspaceRoot({
+    workspace: getString(parsed, "workspace"),
+    cwd: process.cwd(),
+    home: options.home,
+    ...(createDefault === undefined ? {} : { createDefault })
+  });
+}
+
+async function resolveCommandCase(
+  dependencies: PbenchCommandDependencies,
+  options: PbenchCommandOptions,
+  caseInput: string,
+  workspaceRoot: string
+): Promise<string> {
+  return dependencies.resolveCaseDirInput({
+    caseInput,
+    cwd: process.cwd(),
+    home: options.home,
+    workspace: workspaceRoot
+  });
 }
 
 function printJson(value: unknown): string {

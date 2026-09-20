@@ -2,12 +2,13 @@
 // load/create/work, signal + poison guards, idempotent ordered close. The
 // session facade turns backend ToolResults and timeouts into ComputerError.
 
+import { randomUUID } from "node:crypto";
 import type {
-  AppRef,
   AxElement,
   AxValueResult,
   Backend,
   BackendFactory,
+  BatchAction,
   BatchRequest,
   BatchResult,
   Computer,
@@ -18,15 +19,12 @@ import type {
   PointClick,
   Predicate,
   ScrollSpec,
-  Snapshot,
   Target,
-  ToolResultLike,
-  WindowRef
+  ToolResultLike
 } from "./types.js";
 import { clickUnique, waitForElements } from "./actions.js";
 import { normalizeElements, projectObservation } from "./observe.js";
-import { artifactPath, ensureOutDir, ensurePrivateFile, saveScreenshot } from "./artifacts.js";
-import { copyFileSync, statSync } from "node:fs";
+import { persistObservationImage } from "./artifacts.js";
 import { mapImagePointToDriverPixels } from "./coordinates.js";
 import {
   frameMatchesObservation,
@@ -37,8 +35,21 @@ import {
   type ResizeResult
 } from "./observation-store.js";
 import { validateBatch, runBatch, DEFAULT_BATCH_TIMEOUT_MS } from "./batch.js";
-import { acquireTargetLease, LeaseError, type LeaseHandle, type LeaseOwner } from "./target-lease.js";
-import { randomUUID } from "node:crypto";
+import { executeStep as executeSingleStep, type StepExecutionResult } from "./step-execution.js";
+import { LeaseError, type LeaseHandle } from "./target-lease.js";
+import {
+  ComputerError,
+  driverErrorDiagnostic,
+  isAbortError,
+  isKnownDriverRefusal,
+  isTimeoutError,
+  parseAxValueResult
+} from "./driver-result.js";
+import { combineAbortSignals, normalizeObserveCallOptions, withDeadline } from "./operation-control.js";
+import type { MutationLeases } from "./mutation-leases.js";
+
+export { ComputerError } from "./driver-result.js";
+export { createAutoLeases, type MutationLeases } from "./mutation-leases.js";
 
 export type { AxElement, AxValueResult, Backend, BackendFactory, ToolResultLike } from "./types.js";
 
@@ -46,80 +57,6 @@ export const OP_LIMIT_MS = 30_000;
 export const CLEANUP_BUDGET_MS = 5_000;
 const MAX_AX_ELEMENT_TOKEN_BYTES = 256;
 const MAX_AX_VALUE_BYTES = 256 * 1024;
-
-export class ComputerError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-    public actionOutcome?: "delivered" | "not_delivered" | "unknown"
-  ) {
-    super(message);
-  }
-}
-
-/** Mutation leases (B3): every mutation entry path (single-step CLI, batch
- * CLI, E2E) acquires the shared app-level target lease at the FIRST mutation
- * and releases it when the enclosing computer session closes. Session hosts
- * instead hold one lease for their configured target from open to close and
- * pass external ownership — the hosted driver session sets NO leases so it
- * never double-acquires its own host's lease. */
-export interface MutationLeases {
-  acquire(target: Target): Promise<LeaseHandle>;
-}
-
-/** Default auto-leases for non-session entry paths: one generation per
- * computer session, leases keyed by app pid, released together on close. */
-export function createAutoLeases(
-  root: string,
-  kind: LeaseOwner["kind"]
-): MutationLeases & { releaseAll(): Promise<void> } {
-  const generation = randomUUID();
-  const handles = new Map<number, LeaseHandle>();
-  return {
-    async acquire(target) {
-      const existing = handles.get(target.pid);
-      if (existing) return existing;
-      const acquired = await acquireTargetLease(root, target, {
-        generation,
-        pid: process.pid,
-        // The process-start probe is synchronous and can delay a desktop
-        // worker cold start under Bun 1.3. PID reuse remains conservative
-        // (a live PID blocks reclamation); persistent hosts include the
-        // stronger start identity because they already have boot time.
-        kind
-      });
-      // SessionImpl releases its handle during close. Remove the cached
-      // handle then, otherwise a later one-shot session in this same process
-      // would reuse a lease file that has already been deleted.
-      const handle: LeaseHandle = {
-        owner: acquired.owner,
-        refreshOwner: acquired.refreshOwner,
-        async release() {
-          try {
-            await acquired.release();
-          } finally {
-            if (handles.get(target.pid) === handle) handles.delete(target.pid);
-          }
-        }
-      };
-      handles.set(target.pid, handle);
-      return handle;
-    },
-    async releaseAll() {
-      const pending = [...handles.values()];
-      handles.clear();
-      const errors: unknown[] = [];
-      for (const handle of pending) {
-        try {
-          await handle.release();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      if (errors.length > 0) throw errors[0];
-    }
-  };
-}
 
 export interface SessionOptions {
   onRuntime?: (info: { driverVersion: string; pid: number }) => void;
@@ -147,6 +84,13 @@ export const OBSERVATION_TTL_MS = 60_000;
 
 export interface ComputerSession {
   computer: Computer;
+  /** Internal transport seam for one action. Public callers should use
+   * computer.batch; persistent hosts use this to avoid batch-of-one layers. */
+  executeStep?(
+    target: Target,
+    action: BatchAction,
+    options?: { deadlineAt?: number; signal?: AbortSignal; index?: number }
+  ): Promise<StepExecutionResult>;
   metadata(): Promise<{ driverVersion: string; pid: number }>;
   permissions(): Promise<{ accessibility: boolean; screenRecording: boolean }>;
   close(): Promise<void>;
@@ -154,215 +98,6 @@ export interface ComputerSession {
 
 interface InternalOptions extends SessionOptions {
   cleanupDeadlineMs?: number;
-}
-
-const PREDISPATCH_TOOL_ERROR_CODES = new Set([
-  "stale_element_token",
-  "window_target_not_found",
-  "px_capture_unavailable"
-]);
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null ? value as Record<string, unknown> : undefined;
-}
-
-function driverErrorTag(error: unknown): string | undefined {
-  const root = asRecord(error);
-  if (root === undefined) return undefined;
-  if (typeof root.tag === "string") return root.tag;
-  const nested = asRecord(root.tag);
-  return typeof nested?.tag === "string" ? nested.tag : undefined;
-}
-
-function driverErrorCode(error: unknown): string | undefined {
-  const root = asRecord(error);
-  if (root === undefined) return undefined;
-  const inner = asRecord(root.inner);
-  if (typeof inner?.errorCode === "string") return inner.errorCode;
-  return typeof root.errorCode === "string" ? root.errorCode : undefined;
-}
-
-function isKnownDriverRefusal(error: unknown): boolean {
-  const root = asRecord(error);
-  if (root === undefined) return false;
-  const name = typeof root.name === "string" ? root.name : "";
-  const tag = driverErrorTag(error);
-  // InvalidArguments is rejected while constructing the request, before the
-  // native input boundary. A Tool class name alone is not enough: the SDK can
-  // use DriverError.Tool after an action has already entered the app.
-  if (tag === "InvalidArguments" || name === "DriverError.InvalidArguments") return true;
-  return PREDISPATCH_TOOL_ERROR_CODES.has(driverErrorCode(error) ?? "");
-}
-
-function isAbortError(error: unknown): boolean {
-  return asRecord(error)?.name === "AbortError";
-}
-
-function isTimeoutError(error: unknown): boolean {
-  return error instanceof Error && /timed out/.test(error.message);
-}
-
-function driverErrorDiagnostic(error: unknown): string {
-  const base = error instanceof Error ? error.message : String(error);
-  const root = asRecord(error);
-  const tag = driverErrorTag(error);
-  const name = typeof root?.name === "string" ? root.name : "";
-  if (tag !== "Tool" && name !== "DriverError.Tool") return base;
-  const code = driverErrorCode(error);
-  // SDK messages can contain application content. The code is enough to
-  // diagnose delivery classification without copying the whole inner error.
-  return code !== undefined && /^[a-z0-9_]+$/i.test(code)
-    ? `${base} (errorCode=${code})`
-    : base;
-}
-
-function parseStructuredObject(text: string | undefined): Record<string, unknown> | undefined {
-  if (text === undefined) return undefined;
-  try {
-    const value = JSON.parse(text) as unknown;
-    return asRecord(value);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * `set_value` is the strict AX-only seam. The generic SDK keeps its
- * structured action result in `structuredJson`; accepting a result without a
- * confirmed Accessibility route would turn this method into an unsafe
- * fallback. A result that crossed the native seam but cannot prove the route
- * is therefore an unknown delivery and poisons the session in `action()`.
- */
-function parseAxValueResult(result: void | ToolResultLike): AxValueResult {
-  const tool = asRecord(result);
-  const structured = parseStructuredObject(tool?.structuredJson as string | undefined);
-  // Generic set_value is accepted only from its structured JSON envelope.
-  // Typed `action` metadata or raw JSON is not a substitute: accepting either
-  // would make an unrelated result look like proof that this call stayed on
-  // the AX route.
-  const candidate = structured;
-  const route = candidate?.route;
-  const effect = candidate?.effect;
-  if (route !== "accessibility" || effect !== "confirmed") {
-    throw new ComputerError(
-      "ax_only_unverified",
-      "set_value did not return a confirmed Accessibility route; delivery is unknown and the session is now unusable",
-      "unknown"
-    );
-  }
-  const deliveryValue = candidate?.delivery;
-  if (deliveryValue !== undefined && deliveryValue !== null && asRecord(deliveryValue) === undefined) {
-    throw new ComputerError(
-      "ax_only_unverified",
-      "set_value returned malformed delivery metadata; delivery is unknown and the session is now unusable",
-      "unknown"
-    );
-  }
-  const delivery = asRecord(deliveryValue);
-  const mode = delivery?.mode;
-  if (mode !== undefined && mode !== "not_applicable" && mode !== "background" && mode !== "foreground" && mode !== "unknown") {
-    throw new ComputerError(
-      "ax_only_unverified",
-      "set_value returned an unknown delivery mode; delivery is unknown and the session is now unusable",
-      "unknown"
-    );
-  }
-  const deliveryMode = mode as "not_applicable" | "background" | "foreground" | "unknown" | undefined;
-  // The SDK envelope uses snake_case JSON; the public TypeScript result keeps
-  // camelCase. Validate the optional count before converting its spelling.
-  const rawDeliveredCount = delivery?.delivered_count ?? delivery?.deliveredCount;
-  if (rawDeliveredCount !== undefined && rawDeliveredCount !== null &&
-      (typeof rawDeliveredCount !== "number" || !Number.isSafeInteger(rawDeliveredCount) || rawDeliveredCount < 0)) {
-    throw new ComputerError(
-      "ax_only_unverified",
-      "set_value returned malformed delivery count; delivery is unknown and the session is now unusable",
-      "unknown"
-    );
-  }
-  const deliveredCount = rawDeliveredCount;
-  return {
-    route: "accessibility",
-    effect: "confirmed",
-    ...(deliveryMode !== undefined || deliveredCount !== undefined
-      ? {
-          delivery: {
-            ...(deliveryMode !== undefined ? { mode: deliveryMode } : {}),
-            ...(typeof deliveredCount === "number" || deliveredCount === null ? { deliveredCount } : {})
-          }
-        }
-      : {})
-  };
-}
-
-function normalizeObserveCallOptions(callOptions?: ObserveCallOptions | AbortSignal): ObserveCallOptions {
-  if (callOptions !== undefined && typeof callOptions === "object" && callOptions !== null &&
-    "aborted" in callOptions && typeof (callOptions as AbortSignal).addEventListener === "function") {
-    return { signal: callOptions as AbortSignal };
-  }
-  return (callOptions ?? {}) as ObserveCallOptions;
-}
-
-interface CombinedAbortSignal {
-  signal?: AbortSignal;
-  dispose(): void;
-}
-
-/** Combine session, batch, and per-call cancellation without mutating any
- * caller-owned signal. A direct observe signal must not mask a later session
- * shutdown, because post-read work can still publish an observation. */
-function combineAbortSignals(signals: Array<AbortSignal | undefined>): CombinedAbortSignal {
-  const unique = [...new Set(signals.filter((signal): signal is AbortSignal => signal !== undefined))];
-  if (unique.length === 0) return { dispose() {} };
-  if (unique.length === 1) return { signal: unique[0], dispose() {} };
-
-  const controller = new AbortController();
-  const listeners = unique.map((signal) => {
-    const onAbort = () => controller.abort();
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
-    return { signal, onAbort };
-  });
-  return {
-    signal: controller.signal,
-    dispose() {
-      for (const { signal, onAbort } of listeners) signal.removeEventListener("abort", onAbort);
-    }
-  };
-}
-
-function withDeadline<T>(label: string, promise: Promise<T>, deadlineMs: number, signal?: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const cleanup = () => {
-      if (timer !== undefined) clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-    };
-    const onAbort = () => {
-      cleanup();
-      reject(new ComputerError("aborted", `${label} was aborted`));
-    };
-    if (signal?.aborted) {
-      onAbort();
-      return;
-    }
-    if (Number.isFinite(deadlineMs)) {
-      timer = setTimeout(() => {
-        cleanup();
-        reject(new Error(`${label} timed out after ${deadlineMs}ms`));
-      }, Math.max(1, deadlineMs));
-    }
-    signal?.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error) => {
-        cleanup();
-        reject(error);
-      }
-    );
-  });
 }
 
 class SessionImpl implements ComputerSession {
@@ -566,7 +301,7 @@ class SessionImpl implements ComputerSession {
             if (late) void this.cleanupBackend(late);
           })
           .catch(() => undefined);
-        throw new ComputerError("command_timeout", String((error as Error).message), "unknown");
+        throw new ComputerError("command_timeout", String(error.message), "unknown");
       }
       throw this.wrapAborted(error);
     }
@@ -604,38 +339,26 @@ class SessionImpl implements ComputerSession {
       if (operationSignal?.aborted) {
         throw new ComputerError("aborted", "the operation was aborted");
       }
-      let backend: Backend;
-      try {
-        backend = await withDeadline(
-          "driver setup",
-          this.trackNative(this.ensureReady(deadlineAt)),
-          // ensureReady owns the absolute setup deadline so its late-create
-          // cleanup path can observe the real factory promise. This wrapper
-          // adds only request-local cancellation; racing a second timeout
-          // here could win before ensureReady records the late backend.
-          Number.POSITIVE_INFINITY,
-          operationSignal
-        );
-      } catch (error) {
-        if (isTimeoutError(error)) {
-          throw new ComputerError("command_timeout", (error as Error).message);
-        }
-        throw this.wrapAborted(error);
-      }
+      // ensureReady owns the setup deadline and late-backend cleanup. This
+      // wrapper adds cancellation only, so a second timer cannot win first.
+      const backend = await withDeadline(
+        "driver setup",
+        this.trackNative(this.ensureReady(deadlineAt)),
+        Number.POSITIVE_INFINITY,
+        operationSignal
+      );
       this.assertDispatchAllowed(deadlineAt, undefined, operationSignal);
-      try {
-        return await withDeadline(
-          label,
-          this.trackNative(fn(backend, { signal: operationSignal, deadlineAt })),
-          Math.max(deadlineAt - Date.now(), 1),
-          operationSignal
-        );
-      } catch (error) {
-        if (isTimeoutError(error)) {
-          throw new ComputerError("command_timeout", (error as Error).message);
-        }
-        throw this.wrapAborted(error);
+      return await withDeadline(
+        label,
+        this.trackNative(fn(backend, { signal: operationSignal, deadlineAt })),
+        Math.max(deadlineAt - Date.now(), 1),
+        operationSignal
+      );
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        throw new ComputerError("command_timeout", error.message);
       }
+      throw this.wrapAborted(error);
     } finally {
       this.endOp();
     }
@@ -683,36 +406,6 @@ class SessionImpl implements ComputerSession {
       epoch: this.epoch,
       revision: this.revision
     } as NativeObservationLike;
-  }
-
-  private persistImage(raw: NativeObservationLike): string | undefined {
-    const base64 = raw.images?.[0]?.dataBase64;
-    try {
-      if (typeof base64 === "string" && base64.length > 0) {
-        return saveScreenshot(ensureOutDir(this.options.artifactsDir), base64);
-      }
-      const source = raw.screenshotFilePath;
-      if (typeof source === "string" && source.length > 0) {
-        const stats = statSync(source);
-        if (!stats.isFile() || stats.size <= 0) throw new Error(`screenshot file is empty or not a regular file: ${source}`);
-        const destination = artifactPath(ensureOutDir(this.options.artifactsDir), "cu.png");
-        copyFileSync(source, destination);
-        // copyFileSync does not honor a mode argument and may inherit a
-        // permissive source mode. Enforce the artifact contract on the actual
-        // destination and let chmod/stat failures escape loudly.
-        ensurePrivateFile(destination);
-        return destination;
-      }
-      return undefined;
-    } catch (error) {
-      // Fail loud: the screenshot bytes exist but the evidence artifact does
-      // not. A "usable" image channel without a persisted file would be a
-      // fabricated success (A2/A3 fail-loud contract).
-      throw new ComputerError(
-        "artifact_write_failed",
-        `the screenshot could not be persisted: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
   }
 
   private async readObservation(
@@ -802,7 +495,7 @@ class SessionImpl implements ComputerSession {
       if (view.image.status === "usable" || view.image.status === "degraded") {
         let path: string | undefined;
         try {
-          path = this.persistImage(stamped);
+          path = persistObservationImage(stamped, this.options.artifactsDir);
         } catch (error) {
           const controlError = this.observationControlError(deadlineAt, operationSignal, "while saving the image");
           if (controlError) throw controlError;
@@ -887,7 +580,7 @@ class SessionImpl implements ComputerSession {
           const controlError = this.observationControlError(deadlineAt, operationSignal, "while saving the observation");
           if (controlError) throw controlError;
           if (isTimeoutError(error)) {
-            throw new ComputerError("command_timeout", String((error as Error).message));
+            throw new ComputerError("command_timeout", String(error.message));
           }
           throw new ComputerError(
             "observation_store_failed",
@@ -947,13 +640,21 @@ class SessionImpl implements ComputerSession {
         "the current frame's validity is unconfirmed (screenshotFrameValid not true) — observe again"
       );
     }
-    const freshPath = this.persistImage(fresh);
+    if ((fresh.windowTitle ?? "") !== observation.title) {
+      throw new ComputerError(
+        "stale_observation",
+        "the current frame title differs from the observation — observe again"
+      );
+    }
+    const freshPath = persistObservationImage(fresh, this.options.artifactsDir);
     if (
       freshPath === undefined ||
       fresh.windowBounds === undefined ||
       !frameMatchesObservation(observation, {
         windowBounds: fresh.windowBounds,
-        pngHash: pngSha256(freshPath)
+        pngHash: pngSha256(freshPath),
+        pngPath: freshPath,
+        point: { x: point.x, y: point.y }
       })
     ) {
       throw new ComputerError(
@@ -972,7 +673,30 @@ class SessionImpl implements ComputerSession {
         `point (${point.x}, ${point.y}) is outside the observation image (${geometry.sentWidth}x${geometry.sentHeight})`
       );
     }
-    await this.action("click_point", target, async (b) => b.clickPoint(target, driverPoint));
+    const expectedRevisionAtDispatch = observation.revision + 1;
+    await this.action(
+      "click_point",
+      target,
+      async (b) => b.clickPoint(target, driverPoint),
+      {
+        beforeDispatch: () => {
+          if (this.revision !== expectedRevisionAtDispatch) {
+            throw new ComputerError(
+              "stale_observation",
+              "a mutation started while the frame was being validated — observe again",
+              "not_delivered"
+            );
+          }
+          if (Date.now() - observation.capturedAt > OBSERVATION_TTL_MS) {
+            throw new ComputerError(
+              "stale_observation",
+              "observation expired while the frame was being validated — observe again",
+              "not_delivered"
+            );
+          }
+        }
+      }
+    );
   }
 
   // ---- click: fresh lookup on the READ path, then dispatch (A4/F12) ------
@@ -1020,24 +744,55 @@ class SessionImpl implements ComputerSession {
     }
   }
 
+  async executeStep(
+    target: Target,
+    action: BatchAction,
+    options: { deadlineAt?: number; signal?: AbortSignal; index?: number } = {}
+  ): Promise<StepExecutionResult> {
+    const previousDeadline = this.batchDeadlineAt;
+    const previousSignal = this.batchSignal;
+    const requestedDeadline = options.deadlineAt ?? Date.now() + DEFAULT_BATCH_TIMEOUT_MS;
+    const deadline = Math.min(this.options.deadlineAt ?? Infinity, requestedDeadline);
+    const signal = options.signal ?? this.options.signal;
+    this.batchDeadlineAt = previousDeadline === null ? deadline : Math.min(previousDeadline, deadline);
+    this.batchSignal = signal ?? null;
+    try {
+      return await executeSingleStep(this.computer, target, action, {
+        deadlineAt: deadline,
+        signal,
+        ...(options.index !== undefined ? { index: options.index } : {})
+      });
+    } finally {
+      this.batchDeadlineAt = previousDeadline;
+      this.batchSignal = previousSignal;
+    }
+  }
+
   // ---- actions: unknown delivery poisons; refusals are not_delivered ------
 
   private action(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
-    fn: (backend: Backend) => Promise<void | ToolResultLike>
+    fn: (backend: Backend) => Promise<void | ToolResultLike>,
+    options?: { beforeDispatch?: () => void }
   ): Promise<void>;
   private action<T>(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
     fn: (backend: Backend) => Promise<void | ToolResultLike>,
-    validate: (result: void | ToolResultLike) => T
+    options: {
+      validate: (result: void | ToolResultLike) => T;
+      beforeDispatch?: () => void;
+    }
   ): Promise<T>;
   private async action<T>(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
     fn: (backend: Backend) => Promise<void | ToolResultLike>,
-    validate?: (result: void | ToolResultLike) => T
+    options: {
+      validate?: (result: void | ToolResultLike) => T;
+      beforeDispatch?: () => void;
+    } = {}
   ): Promise<void | T> {
     const deadlineAt = this.beginOp();
     try {
@@ -1060,10 +815,8 @@ class SessionImpl implements ComputerSession {
           );
         }
       }
-      let actionStarted = false;
       try {
         await this.options.onAction?.({ phase: "started", kind });
-        actionStarted = true;
       } catch (error) {
         throw new ComputerError(
           "event_persist_failed",
@@ -1096,23 +849,18 @@ class SessionImpl implements ComputerSession {
         this.assertDispatchAllowed(deadlineAt, "not_delivered");
       } catch (error) {
         const mapped = this.wrapAborted(error);
-        if (actionStarted) {
-          // Setup failures occur before the action input crosses the native
-          // seam. A timed-out driver setup remains unknown conservatively;
-          // lifecycle/refusal failures are not_delivered, but every durable
-          // action_started event receives a matching finished event.
-          const outcome =
-            mapped instanceof ComputerError && mapped.code === "command_timeout"
-              ? "unknown"
-              : mapped instanceof ComputerError && mapped.actionOutcome !== undefined
-                ? mapped.actionOutcome
-                : "not_delivered";
-          await finish(outcome);
+        // Setup failed before native input. Every persisted start still needs
+        // a finish; a setup timeout retains its conservative unknown outcome.
+        let outcome: "delivered" | "not_delivered" | "unknown" = "not_delivered";
+        if (mapped instanceof ComputerError) {
+          outcome = mapped.code === "command_timeout" ? "unknown" : mapped.actionOutcome ?? "not_delivered";
         }
+        await finish(outcome);
         throw mapped;
       }
       try {
         this.assertDispatchAllowed(deadlineAt, "not_delivered");
+        options.beforeDispatch?.();
         const result = await withDeadline(kind, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
         if (result && typeof result === "object" && result.isError) {
           throw new ComputerError(
@@ -1121,14 +869,14 @@ class SessionImpl implements ComputerSession {
             "not_delivered"
           );
         }
-        const projected = validate?.(result);
+        const projected = options.validate?.(result);
         await finish("delivered");
         return projected;
       } catch (error) {
         if (isTimeoutError(error)) {
           this.poisoned = true;
           await finish("unknown");
-          throw new ComputerError("command_timeout", String((error as Error).message), "unknown");
+          throw new ComputerError("command_timeout", String(error.message), "unknown");
         }
         if (error instanceof ComputerError && error.actionOutcome !== undefined) {
           if (error.actionOutcome === "unknown") this.poisoned = true;
@@ -1180,7 +928,7 @@ class SessionImpl implements ComputerSession {
     if (Buffer.byteLength(value, "utf8") > MAX_AX_VALUE_BYTES) {
       throw new ComputerError("invalid_request", `setValue value exceeds ${MAX_AX_VALUE_BYTES} UTF-8 bytes`, "not_delivered");
     }
-    return this.action("set_value", target, async (backend) => {
+    return this.action<AxValueResult>("set_value", target, async (backend) => {
       if (typeof backend.setValue !== "function") {
         throw new ComputerError(
           "ax_only_unsupported",
@@ -1189,7 +937,7 @@ class SessionImpl implements ComputerSession {
         );
       }
       return backend.setValue(target, elementToken, value);
-    }, parseAxValueResult);
+    }, { validate: parseAxValueResult });
   }
 
   private async ensureLease(target: Target): Promise<void> {
@@ -1249,7 +997,7 @@ class SessionImpl implements ComputerSession {
               return snap.elements;
             } catch (error) {
               if (isTimeoutError(error)) {
-                throw new ComputerError("command_timeout", (error as Error).message);
+                throw new ComputerError("command_timeout", error.message);
               }
               throw this.wrapAborted(error);
             }

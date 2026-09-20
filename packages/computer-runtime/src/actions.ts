@@ -2,7 +2,7 @@
 // polling. Every replay re-observes; element tokens are never persisted.
 
 import type { AxElement, Predicate } from "./types.js";
-import { ComputerError } from "./session.js";
+import { ComputerError } from "./driver-result.js";
 
 // One bounded retry for stale-token refusals only (official contract: the
 // action was never delivered — retry is recovery, NOT replay); any other

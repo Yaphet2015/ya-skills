@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRequestJournal, canonicalRequestHash } from "../packages/computer-runtime/src/request-journal.js";
+import { createRequestJournal, createJournalWriter, canonicalRequestHash } from "../packages/computer-runtime/src/request-journal.js";
 
 async function makeJournal() {
   const root = await mkdtemp(join(tmpdir(), "cu-journal-"));
@@ -119,4 +119,28 @@ describe("canonicalRequestHash", () => {
     const b = canonicalRequestHash({ kind: "exec", target: { pid: 1, windowId: "123" }, operation: { code: "1" } });
     expect(a).toBe(b);
   });
+});
+
+
+test("journal writer serializes a request and retries failed persistence without a sequence gap", async () => {
+  const events: Array<{ id: string; seq: number }> = [];
+  let rejectFirst = true;
+  const write = createJournalWriter({
+    async append(id, event) {
+      await Promise.resolve();
+      if (rejectFirst) { rejectFirst = false; throw new Error("disk full"); }
+      events.push({ id, seq: event.seq });
+    }
+  });
+  const first = write("a", "request_started", {});
+  const second = write("a", "request_started", {});
+  await expect(first).rejects.toThrow("disk full");
+  await second;
+  await Promise.all([
+    write("a", "action_started", {}),
+    write("a", "action_finished", {}),
+    write("b", "request_started", {})
+  ]);
+  expect(events.filter((e) => e.id === "a").map((e) => e.seq)).toEqual([0, 1, 2]);
+  expect(events.filter((e) => e.id === "b").map((e) => e.seq)).toEqual([0]);
 });

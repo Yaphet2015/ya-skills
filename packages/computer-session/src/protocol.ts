@@ -48,12 +48,34 @@ import {
 } from "./exec-types.js";
 import { JsonValueValidationError, validateJsonValue } from "./json-value.js";
 
+import {
+  ProtocolError,
+  MAX_FIELD_BYTES,
+  fail,
+  isRecord,
+  hasOwn,
+  requireRecord,
+  assertKnownKeys,
+  copyUnknownFields,
+  stringValue,
+  requiredString,
+  optionalString,
+  finiteNumber,
+  enumValue,
+  optionalBoolean,
+  requiredBoolean,
+  nonNegativeInteger,
+  positiveInteger,
+  type ValidationContext
+} from "./protocol-validation.js";
+
+export { ProtocolError } from "./protocol-validation.js";
+
 export const MAX_MESSAGE_BYTES = 1024 * 1024;
 export const PROTOCOL_VERSION = 1;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ID_BYTES = 256;
-const MAX_FIELD_BYTES = 256 * 1024;
 const MAX_ERROR_BYTES = 64 * 1024;
 const MAX_AX_ELEMENTS = 10_000;
 const MAX_RECEIPTS = EXEC_MAX_ACTIONS_LIMIT;
@@ -68,19 +90,6 @@ const EXEC_STATUSES = ["completed", "failed", "interrupted", "unknown"] as const
 const SESSION_STATES = ["starting", "idle", "running", "stopping", "closed", "unusable"] as const;
 const SCROLL_DIRECTIONS = ["up", "down", "left", "right"] as const;
 const CONDITION_KINDS = ["element_exists", "element_value", "window_exists", "focused_element"] as const;
-export class ProtocolError extends Error {
-  constructor(
-    public code: string,
-    message: string
-  ) {
-    // Put the stable code first so callers can classify protocol failures
-    // without depending on a particular nested-field wording.
-    super(`${code}: ${message}`);
-    this.name = "ProtocolError";
-  }
-}
-
-type ValidationContext = "protocol_request" | "protocol_operation" | "protocol_result" | "protocol_control" | "protocol_rpc";
 type WindowIdEncoding = "wire" | "native";
 
 type KnownReply = {
@@ -92,149 +101,6 @@ type KnownReply = {
   result?: unknown;
   [key: string]: unknown;
 };
-
-function fail(context: ValidationContext, where: string, message: string): never {
-  throw new ProtocolError(context, `${where}: ${message}`);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasOwn(value: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-function requireRecord(value: unknown, context: ValidationContext, where: string): Record<string, unknown> {
-  if (!isRecord(value)) fail(context, where, "must be an object");
-  return value;
-}
-
-function assertKnownKeys(
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-  context: ValidationContext,
-  where: string
-): void {
-  const allowedSet = new Set(allowed);
-  for (const key of Object.keys(value)) {
-    if (!allowedSet.has(key)) fail(context, `${where}.${key}`, "is not part of this wire schema");
-  }
-}
-
-/** Preserve optional metadata without allowing a source key such as
- * `__proto__` to mutate the receiver's prototype. Declared fields are written
- * by each parser after validation; this helper copies only non-schema keys. */
-function copyUnknownFields<T extends object>(
-  source: Record<string, unknown>,
-  target: T,
-  declared: readonly string[]
-): T {
-  const declaredSet = new Set(declared);
-  for (const [key, value] of Object.entries(source)) {
-    if (declaredSet.has(key)) continue;
-    Object.defineProperty(target, key, {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value
-    });
-  }
-  return target;
-}
-
-function stringValue(
-  value: unknown,
-  context: ValidationContext,
-  where: string,
-  options: { nonEmpty?: boolean; maxBytes?: number } = {}
-): string {
-  if (typeof value !== "string") fail(context, where, "must be a string");
-  const maxBytes = options.maxBytes ?? MAX_FIELD_BYTES;
-  const bytes = Buffer.byteLength(value, "utf8");
-  if (bytes > maxBytes) fail(context, where, `exceeds ${maxBytes} UTF-8 bytes`);
-  if (options.nonEmpty && value.length === 0) fail(context, where, "must not be empty");
-  return value;
-}
-
-function requiredString(
-  value: Record<string, unknown>,
-  key: string,
-  context: ValidationContext,
-  where: string,
-  options: { nonEmpty?: boolean; maxBytes?: number } = {}
-): string {
-  if (!hasOwn(value, key) || value[key] === undefined) fail(context, `${where}.${key}`, "is required");
-  return stringValue(value[key], context, `${where}.${key}`, options);
-}
-
-function optionalString(
-  value: Record<string, unknown>,
-  key: string,
-  context: ValidationContext,
-  where: string,
-  options: { nonEmpty?: boolean; maxBytes?: number } = {}
-): string | undefined {
-  if (!hasOwn(value, key) || value[key] === undefined) return undefined;
-  return stringValue(value[key], context, `${where}.${key}`, options);
-}
-
-function finiteNumber(
-  value: unknown,
-  context: ValidationContext,
-  where: string,
-  options: { integer?: boolean; min?: number; max?: number } = {}
-): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    fail(context, where, "must be a finite number");
-  }
-  if (options.integer && !Number.isSafeInteger(value)) {
-    fail(context, where, "must be a safe integer");
-  }
-  if (options.min !== undefined && value < options.min) {
-    fail(context, where, `must be >= ${options.min}`);
-  }
-  if (options.max !== undefined && value > options.max) {
-    fail(context, where, `must be <= ${options.max}`);
-  }
-  return value;
-}
-
-function enumValue<T extends string>(
-  value: unknown,
-  choices: readonly T[],
-  context: ValidationContext,
-  where: string
-): T {
-  if (typeof value !== "string" || !choices.includes(value as T)) {
-    fail(context, where, `must be one of ${choices.join("|")}`);
-  }
-  return value as T;
-}
-
-function optionalBoolean(
-  value: Record<string, unknown>,
-  key: string,
-  context: ValidationContext,
-  where: string
-): boolean | undefined {
-  if (!hasOwn(value, key) || value[key] === undefined) return undefined;
-  if (typeof value[key] !== "boolean") fail(context, `${where}.${key}`, "must be a boolean");
-  return value[key] as boolean;
-}
-
-function requiredBoolean(value: Record<string, unknown>, key: string, context: ValidationContext, where: string): boolean {
-  if (!hasOwn(value, key) || typeof value[key] !== "boolean") fail(context, `${where}.${key}`, "must be a boolean");
-  return value[key] as boolean;
-}
-
-function nonNegativeInteger(value: unknown, context: ValidationContext, where: string, max?: number): number {
-  return finiteNumber(value, context, where, { integer: true, min: 0, ...(max !== undefined ? { max } : {}) });
-}
-
-function positiveInteger(value: unknown, context: ValidationContext, where: string, max?: number): number {
-  return finiteNumber(value, context, where, { integer: true, min: 1, ...(max !== undefined ? { max } : {}) });
-}
 
 function parseJsonLine(line: string, context: ValidationContext, noun: string): unknown {
   if (typeof line !== "string") fail(context, noun, "must be a string");
@@ -252,23 +118,12 @@ function parseJsonLine(line: string, context: ValidationContext, noun: string): 
 function parseWireWindowId(value: unknown, context: ValidationContext, where: string): string {
   const id = stringValue(value, context, where, { nonEmpty: true, maxBytes: 128 });
   if (!/^\d+$/.test(id)) fail(context, where, "must contain decimal digits only");
-  // BigInt conversion is checked here without returning the bigint so the
-  // control-plane SessionInfo contract can retain its string representation.
-  try {
-    BigInt(id);
-  } catch {
-    fail(context, where, "is not a valid decimal window id");
-  }
   return id;
 }
 
 function parseNativeWindowId(value: unknown, context: ValidationContext, where: string): bigint {
   if (typeof value !== "bigint" || value < 0n) fail(context, where, "must be a non-negative bigint");
   return value;
-}
-
-function parsePid(value: unknown, context: ValidationContext, where: string): number {
-  return positiveInteger(value, context, where);
 }
 
 function parseTarget(
@@ -278,7 +133,7 @@ function parseTarget(
   encoding: WindowIdEncoding
 ): Target {
   const raw = requireRecord(value, context, where);
-  const pid = parsePid(raw.pid, context, `${where}.pid`);
+  const pid = positiveInteger(raw.pid, context, `${where}.pid`);
   const windowId = encoding === "wire"
     ? BigInt(parseWireWindowId(raw.windowId, context, `${where}.windowId`))
     : parseNativeWindowId(raw.windowId, context, `${where}.windowId`);
@@ -289,7 +144,7 @@ function parseTarget(
 
 function parseSessionTarget(value: unknown, context: ValidationContext, where: string): { pid: number; windowId: string } {
   const raw = requireRecord(value, context, where);
-  const pid = parsePid(raw.pid, context, `${where}.pid`);
+  const pid = positiveInteger(raw.pid, context, `${where}.pid`);
   const windowId = parseWireWindowId(raw.windowId, context, `${where}.windowId`);
   return copyUnknownFields(raw, { pid, windowId }, ["pid", "windowId"]);
 }
@@ -338,6 +193,7 @@ function parseCondition(value: unknown, context: ValidationContext, where: strin
   const kind = enumValue(raw.kind, CONDITION_KINDS, context, `${where}.kind`);
   switch (kind) {
     case "element_exists":
+    case "focused_element":
       assertKnownKeys(raw, ["kind", "selector"], context, where);
       return { kind, selector: parseSelector(raw.selector, context, `${where}.selector`) };
     case "element_value": {
@@ -348,9 +204,6 @@ function parseCondition(value: unknown, context: ValidationContext, where: strin
     case "window_exists":
       assertKnownKeys(raw, ["kind"], context, where);
       return { kind };
-    case "focused_element":
-      assertKnownKeys(raw, ["kind", "selector"], context, where);
-      return { kind, selector: parseSelector(raw.selector, context, `${where}.selector`) };
   }
 }
 
@@ -548,13 +401,8 @@ export class FrameReader {
       throw new ProtocolError("protocol_utf8", "frame data is not valid UTF-8");
     }
     this.buffer += text;
-    const frames: string[] = [];
-    for (;;) {
-      const newline = this.buffer.indexOf("\n");
-      if (newline === -1) break;
-      frames.push(this.buffer.slice(0, newline));
-      this.buffer = this.buffer.slice(newline + 1);
-    }
+    const frames = this.buffer.split("\n");
+    this.buffer = frames.pop()!;
     return frames;
   }
 }
@@ -672,17 +520,13 @@ function parseRect(value: unknown, context: ValidationContext, where: string): R
   return copyUnknownFields(raw, rect, ["x", "y", "width", "height"]);
 }
 
-function parseDimension(value: unknown, context: ValidationContext, where: string): number {
-  return positiveInteger(value, context, where);
-}
-
 function parseImageGeometry(value: unknown, context: ValidationContext, where: string): ImageGeometry {
   const raw = requireRecord(value, context, where);
   const geometry: ImageGeometry = {
-    sourceWidth: parseDimension(raw.sourceWidth, context, `${where}.sourceWidth`),
-    sourceHeight: parseDimension(raw.sourceHeight, context, `${where}.sourceHeight`),
-    sentWidth: parseDimension(raw.sentWidth, context, `${where}.sentWidth`),
-    sentHeight: parseDimension(raw.sentHeight, context, `${where}.sentHeight`),
+    sourceWidth: positiveInteger(raw.sourceWidth, context, `${where}.sourceWidth`),
+    sourceHeight: positiveInteger(raw.sourceHeight, context, `${where}.sourceHeight`),
+    sentWidth: positiveInteger(raw.sentWidth, context, `${where}.sentWidth`),
+    sentHeight: positiveInteger(raw.sentHeight, context, `${where}.sentHeight`),
     inputBounds: parseRect(raw.inputBounds, context, `${where}.inputBounds`),
     windowBounds: parseRect(raw.windowBounds, context, `${where}.windowBounds`)
   };
@@ -813,10 +657,6 @@ function parseExecResult(value: unknown, context: ValidationContext, where: stri
   let validatedValue: JsonValue | undefined;
   if (hasOwn(raw, "value")) {
     validatedValue = parseJsonValue(raw.value, context, `${where}.value`);
-    const encodedValue = JSON.stringify(validatedValue);
-    if (encodedValue === undefined || Buffer.byteLength(encodedValue, "utf8") > EXEC_MAX_STATE_BYTES) {
-      fail(context, `${where}.value`, `exceeds ${EXEC_MAX_STATE_BYTES} UTF-8 bytes`);
-    }
   }
   const parsed: ExecResult = {
     status,
@@ -851,7 +691,7 @@ function parseControlInfo(value: unknown): SessionInfo {
   const target = parseSessionTarget(raw.target, context, "reply.info.target");
   const state = enumValue(raw.state, SESSION_STATES, context, "reply.info.state");
   const activeRequestId = optionalString(raw, "activeRequestId", context, "reply.info", { nonEmpty: true, maxBytes: MAX_ID_BYTES });
-  const hostPid = parsePid(raw.hostPid, context, "reply.info.hostPid");
+  const hostPid = positiveInteger(raw.hostPid, context, "reply.info.hostPid");
   const generation = requiredString(raw, "generation", context, "reply.info", { nonEmpty: true, maxBytes: MAX_ID_BYTES });
   const idleTimeoutMs = positiveInteger(raw.idleTimeoutMs, context, "reply.info.idleTimeoutMs", 120_000);
   const parsed: SessionInfo = {
@@ -888,37 +728,31 @@ export function decodeSessionReply(line: string, operation: SessionOperation): S
   const raw = decodeReply(line);
   const requestId = requiredString(raw, "requestId", "protocol_result", "business reply", { nonEmpty: true, maxBytes: MAX_ID_BYTES });
   const status = enumValue(raw.status, REPLY_STATUSES, "protocol_result", "business reply.status");
+  let result: unknown;
   if (raw.result === undefined) {
     if (status === "completed") {
       throw new ProtocolError("protocol_result", `completed ${operation.kind} reply is missing result`);
     }
-    const reply: SessionReply = {
-      schemaVersion: PROTOCOL_VERSION,
-      requestId,
-      status,
-      ...(raw.error !== undefined ? { error: raw.error } : {})
-    };
-    return copyUnknownFields(raw, reply, ["schemaVersion", "requestId", "status", "error", "result"]);
-  }
-  let result: unknown;
-  switch (operation.kind) {
-    case "observe":
-      result = parseObservation(raw.result, "protocol_result", "reply.result", "wire");
-      break;
-    case "batch":
-      result = parseBatchResult(raw.result, "protocol_result", "reply.result", "wire");
-      break;
-    case "exec":
-      result = parseExecResult(raw.result, "protocol_result", "reply.result", "wire");
-      break;
-    default:
-      throw new ProtocolError("protocol_operation", `unsupported operation kind: ${String((operation as { kind?: unknown }).kind)}`);
+  } else {
+    switch (operation.kind) {
+      case "observe":
+        result = parseObservation(raw.result, "protocol_result", "reply.result", "wire");
+        break;
+      case "batch":
+        result = parseBatchResult(raw.result, "protocol_result", "reply.result", "wire");
+        break;
+      case "exec":
+        result = parseExecResult(raw.result, "protocol_result", "reply.result", "wire");
+        break;
+      default:
+        throw new ProtocolError("protocol_operation", `unsupported operation kind: ${String((operation as { kind?: unknown }).kind)}`);
+    }
   }
   const reply: SessionReply = {
     schemaVersion: PROTOCOL_VERSION,
     requestId,
     status,
-    result,
+    ...(result !== undefined ? { result } : {}),
     ...(raw.error !== undefined ? { error: raw.error } : {})
   };
   return copyUnknownFields(raw, reply, ["schemaVersion", "requestId", "status", "error", "result"]);

@@ -2,9 +2,6 @@
 // --session routing for observe/batch/act. All desktop work happens in the
 // dedicated host process; this module only parses, connects, and prints.
 
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import {
   findSession,
@@ -17,6 +14,7 @@ import {
   type SessionOperation
 } from "@ya-skills/computer-session";
 import { createComputerSession, selectWindow, type ComputerSession, type Target } from "@ya-skills/computer-runtime";
+import { jsonError, stringifyJson } from "./output.js";
 
 export const SESSION_USAGE_LINES = [
   "yk computer-use session <open|status|cancel|close>",
@@ -27,11 +25,6 @@ export const SESSION_USAGE_LINES = [
 ];
 export const SESSION_USAGE = `usage: ${SESSION_USAGE_LINES[0]}\n${SESSION_USAGE_LINES.slice(1).join("\n")}`;
 
-function jsonError(code: string, message: string, extra: Record<string, unknown> = {}): Error {
-  return new Error(JSON.stringify({ error: { code, message, ...extra } }));
-}
-
-const replacer = (_key: string, value: unknown) => (typeof value === "bigint" ? value.toString() : value);
 const SESSION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type SessionLookup = (sessionId: string) => Promise<{ socketPath: string; info: SessionInfo } | null>;
@@ -104,7 +97,7 @@ function deadListenerFallback(
   // dead recorded host proves that a missing listener is not a transient boot
   // race. No CLI-side state recovery or lease release is attempted.
   if (info.state !== "unusable" && isHostAlive(info.hostPid)) return undefined;
-  return JSON.stringify(
+  return stringifyJson(
     {
       schemaVersion: 1,
       session: info,
@@ -112,8 +105,7 @@ function deadListenerFallback(
         info.state === "closed"
           ? { alreadyClosed: true, hostUnavailable: true }
           : { leaseRetained: true, hostUnavailable: true }
-    },
-    replacer
+    }
   );
 }
 
@@ -192,10 +184,7 @@ export function sessionCommand(
   const lookup = deps.findSession ?? findSession;
   const control = deps.sendControl ?? sendControl;
   const alive = deps.isHostAlive ?? defaultHostAlive;
-  const doOpen =
-    deps.open ??
-    (async (options: { target: { pid: number; windowId: bigint }; idleTimeoutMs: number }) =>
-      openSession(options));
+  const doOpen = deps.open ?? openSession;
   const resolveWindow = deps.resolveWindow ?? (async (pid: number): Promise<Target> => {
     const session: ComputerSession = createComputerSession();
     try {
@@ -206,84 +195,62 @@ export function sessionCommand(
     }
   });
   return async (sub) => {
-    switch (sub.sub) {
-      case "open": {
-        const target =
-          sub.windowId === undefined
-            ? await resolveWindow(sub.pid!)
-            : { pid: sub.pid!, windowId: sub.windowId };
-        const opened = await doOpen({
-          target,
-          idleTimeoutMs: sub.idleTimeoutMs ?? 120_000
-        });
-        return JSON.stringify({ schemaVersion: 1, session: opened.info }, replacer);
-      }
-      case "status": {
-        const found = await lookup(sub.sessionId!);
-        if (!found) throw jsonError("unknown_session", `no session ${sub.sessionId} — open one first`);
-        const metadata = validateSessionMetadata(sub.sessionId!, found);
-        // A confirmed closed session removes its socket but retains metadata;
-        // status remains useful and does not turn idempotent cleanup into an
-        // ENOENT error.
-        if (metadata.state === "closed") {
-          return JSON.stringify({ schemaVersion: 1, session: metadata }, replacer);
-        }
-        try {
-          const reply = await control(found.socketPath, { kind: "status", schemaVersion: 1, sessionId: sub.sessionId! }, 5_000);
-          if (reply.error) throw jsonError(reply.error.code, reply.error.message);
-          return JSON.stringify({ schemaVersion: 1, session: reply.info }, replacer);
-        } catch (error) {
-          const fallback = isDeadListenerError(error)
-            ? deadListenerFallback(sub.sessionId!, { ...found, info: metadata }, alive)
-            : undefined;
-          if (fallback !== undefined) return fallback;
-          throw jsonError(
-            "session_connection_failed",
-            `could not reach session ${sub.sessionId}: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
-      }
-      case "cancel": {
-        const found = await lookup(sub.sessionId!);
-        if (!found) throw jsonError("unknown_session", `no session ${sub.sessionId}`);
-        validateSessionMetadata(sub.sessionId!, found);
-        const reply = await control(
-          found.socketPath,
-          { kind: "cancel", schemaVersion: 1, sessionId: sub.sessionId!, requestId: sub.requestId! },
-          5_000
-        );
-        if (reply.error) throw jsonError(reply.error.code, reply.error.message);
-        return JSON.stringify(
-          {
-            schemaVersion: 1,
-            session: reply.info,
-            next: "the cancelled request's delivery state is recorded; observe instead of replaying"
-          },
-          replacer
-        );
-      }
-      case "close": {
-        const found = await lookup(sub.sessionId!);
-        if (!found) throw jsonError("unknown_session", `no session ${sub.sessionId}`);
-        const metadata = validateSessionMetadata(sub.sessionId!, found);
-        if (metadata.state === "closed") {
-          return JSON.stringify({ schemaVersion: 1, session: metadata, cleanup: { alreadyClosed: true } }, replacer);
-        }
-        try {
-          const reply = await control(found.socketPath, { kind: "close", schemaVersion: 1, sessionId: sub.sessionId! }, 15_000);
-          if (reply.error) throw jsonError(reply.error.code, reply.error.message);
-          return JSON.stringify({ schemaVersion: 1, session: reply.info, ...("cleanup" in reply ? { cleanup: (reply as unknown as { cleanup: unknown }).cleanup } : {}) }, replacer);
-        } catch (error) {
-          const fallback = isDeadListenerError(error)
-            ? deadListenerFallback(sub.sessionId!, { ...found, info: metadata }, alive)
-            : undefined;
-          if (fallback !== undefined) return fallback;
-          throw jsonError(
-            "session_connection_failed",
-            `could not reach session ${sub.sessionId}: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
-      }
+    if (sub.sub === "open") {
+      const target = sub.windowId === undefined
+        ? await resolveWindow(sub.pid!)
+        : { pid: sub.pid!, windowId: sub.windowId };
+      const opened = await doOpen({ target, idleTimeoutMs: sub.idleTimeoutMs ?? 120_000 });
+      return stringifyJson({ schemaVersion: 1, session: opened.info });
+    }
+    const sessionId = sub.sessionId!;
+    const found = await lookup(sessionId);
+    if (!found) {
+      throw jsonError("unknown_session", `no session ${sessionId}${sub.sub === "status" ? " — open one first" : ""}`);
+    }
+    const metadata = validateSessionMetadata(sessionId, found);
+    if (sub.sub === "cancel") {
+      const reply = await control(
+        found.socketPath,
+        { kind: "cancel", schemaVersion: 1, sessionId, requestId: sub.requestId! },
+        5_000
+      );
+      if (reply.error) throw jsonError(reply.error.code, reply.error.message);
+      return stringifyJson({
+        schemaVersion: 1,
+        session: reply.info,
+        next: "the cancelled request's delivery state is recorded; observe instead of replaying"
+      });
+    }
+    // Closed sessions retain metadata but remove the socket. Both reads and
+    // repeated closes can use that final record without contacting the host.
+    if (metadata.state === "closed") {
+      return stringifyJson({
+        schemaVersion: 1,
+        session: metadata,
+        ...(sub.sub === "close" ? { cleanup: { alreadyClosed: true } } : {})
+      });
+    }
+    try {
+      const reply = await control(
+        found.socketPath,
+        { kind: sub.sub, schemaVersion: 1, sessionId },
+        sub.sub === "close" ? 15_000 : 5_000
+      );
+      if (reply.error) throw jsonError(reply.error.code, reply.error.message);
+      return stringifyJson({
+        schemaVersion: 1,
+        session: reply.info,
+        ...(sub.sub === "close" && "cleanup" in reply ? { cleanup: reply.cleanup } : {})
+      });
+    } catch (error) {
+      const fallback = isDeadListenerError(error)
+        ? deadListenerFallback(sessionId, { ...found, info: metadata }, alive)
+        : undefined;
+      if (fallback !== undefined) return fallback;
+      throw jsonError(
+        "session_connection_failed",
+        `could not reach session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   };
 }
@@ -342,7 +309,7 @@ export async function runOnSession(
     timeoutMs
   );
   if (reply.status === "completed") {
-    return JSON.stringify({ schemaVersion: 1, session: sessionId, result: reply.result ?? null }, replacer);
+    return stringifyJson({ schemaVersion: 1, session: sessionId, result: reply.result ?? null });
   }
   throw jsonError(
     reply.status === "unknown" ? "unknown_delivery" : reply.error?.code ?? "session_failed",

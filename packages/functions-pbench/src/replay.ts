@@ -1,5 +1,6 @@
 import { detectSkillTargets } from "@ya-skills/core";
 import type { AgentRunner, JsonObject } from "./adapters/types.js";
+import { execGit, execGitDir, execGitRaw } from "./git.js";
 import {
   cleanupReplayWorktree,
   createReplayWorktree,
@@ -31,10 +32,10 @@ import {
 import type { PbenchIntegrity, PbenchRunStatus, ValidatorOutcome } from "./run-types.js";
 import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { arch, homedir, platform, release } from "node:os";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 
 const MAX_PUBLIC_TEXT_FILE_BYTES = 64 * 1024;
 const PUBLIC_REPLAY_MANIFEST_PATH = "public/replay.manifest.json";
@@ -60,21 +61,6 @@ export type ReplayDependencies = {
   agentRunners: ReadonlyMap<string, AgentRunner>;
   runnerSkillMarkdown: string;
 };
-
-function execGit(cwd: string, args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-}
-
-function execGitRaw(cwd: string, args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-}
-
-function execGitDir(gitDir: string, args: string[]): string {
-  return execFileSync("git", ["--git-dir", gitDir, ...args], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  }).trim();
-}
 
 function repoCacheForSubject(workspaceRoot: string, subject: JsonObject): string {
   return join(workspaceRoot, "repos", `${String(subject.repoId)}.git`);
@@ -260,7 +246,21 @@ function runnerPathAliases(worktree: string): Array<{ actual: string; replacemen
   }
 }
 
-async function saveRunState(state: RunState, home?: string): Promise<void> {
+async function saveRunState(
+  state: RunState,
+  home?: string,
+  completion?: { details: string[]; events?: RunEvent[]; validatorOutcomes?: ValidatorOutcome[] }
+): Promise<void> {
+  // All terminal projections are published here from the same run record.
+  // Keep their established write order; the home record owns manual-run recovery.
+  if (completion) {
+    await writeRunSummary(state, completion.details);
+    if (completion.events) {
+      state.events = completion.events;
+      await writeRunMetrics(state, completion.validatorOutcomes);
+      await writeRunEvents(state);
+    }
+  }
   state.updatedAt = nowIso();
   const statePath = state.status === "finishing" && !state.terminal
     ? finishingStatePath(home, state.runId)
@@ -434,7 +434,7 @@ function tokenUsageFromState(state: RunState): JsonObject {
   return asObject(state.tokenUsage) ?? {};
 }
 
-async function writeRunMetrics(state: RunState, options: { validatorOutcomes?: ValidatorOutcome[] } = {}): Promise<void> {
+async function writeRunMetrics(state: RunState, validatorOutcomes?: ValidatorOutcome[]): Promise<void> {
   await writeJson(join(state.artifactDir, "metrics.json"), {
     schemaVersion: 1,
     runId: state.runId,
@@ -454,30 +454,21 @@ async function writeRunMetrics(state: RunState, options: { validatorOutcomes?: V
     accessAuditSuspicious: state.accessAuditSuspicious === true,
     durationMs: typeof state.durationMs === "number" ? state.durationMs : null,
     tokenUsage: tokenUsageFromState(state),
-    validator: validatorCounts(options.validatorOutcomes),
+    validator: validatorCounts(validatorOutcomes),
     createdAt: state.createdAt,
     updatedAt: state.updatedAt,
     finishedAt: typeof state.finishedAt === "string" ? state.finishedAt : null
   });
 }
 
-async function writeRunEvents(state: RunState, events: RunEvent[]): Promise<void> {
+async function writeRunEvents(state: RunState): Promise<void> {
   await writeJson(join(state.artifactDir, "events.json"), {
     schemaVersion: 1,
     runId: state.runId,
     caseId: state.caseId,
     profile: state.profile ?? "default",
-    events
+    events: state.events
   });
-}
-
-async function writeTerminalRunArtifacts(
-  state: RunState,
-  options: { events: RunEvent[]; validatorOutcomes?: ValidatorOutcome[] }
-): Promise<void> {
-  state.events = options.events;
-  await writeRunMetrics(state, { validatorOutcomes: options.validatorOutcomes });
-  await writeRunEvents(state, options.events);
 }
 
 async function preparePublicCapsule(caseDir: string, manifest: JsonObject, worktree: string, runId: string): Promise<void> {
@@ -698,11 +689,10 @@ async function createStartedRun(options: {
         state.terminal = true;
         state.finishedAt = nowIso();
         await writeAgentDiff(worktree, artifactDir, redactor);
-        await writeRunSummary(state, setupFailureSummary(failed));
-        await writeTerminalRunArtifacts(state, {
+        await saveRunState(state, options.home, {
+          details: setupFailureSummary(failed),
           events: [...(state.events ?? []), runEvent("finish", "setup_failed", { message: "Setup failed before agent execution." })]
         });
-        await saveRunState(state, options.home);
         await cleanupReplayWorktree(repoCache, worktree);
         return { state, manifest, redactor };
       }
@@ -759,8 +749,8 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
   } else {
     summaryDetails = validatorFailureSummary(outcomes);
   }
-  await writeRunSummary(state, summaryDetails);
-  await writeTerminalRunArtifacts(state, {
+  await saveRunState(state, home, {
+    details: summaryDetails,
     events: [
       ...(state.events ?? []),
       validatorRunEvent(outcomes),
@@ -768,7 +758,6 @@ async function completeRunWithValidators(state: RunState, manifest: JsonObject, 
     ],
     validatorOutcomes: outcomes
   });
-  await saveRunState(state, home);
   await cleanupReplayWorktree(state.repoCache, state.worktree);
   return state;
 }
@@ -817,11 +806,10 @@ async function runCase(options: RunCaseRequest, dependencies: ReplayDependencies
     state.terminal = true;
     state.finishedAt = nowIso();
     await writeAgentDiff(state.worktree, state.artifactDir, redactor);
-    await writeRunSummary(state, agentFailureSummary(agentResult.exitCode));
-    await writeTerminalRunArtifacts(state, {
+    await saveRunState(state, options.home, {
+      details: agentFailureSummary(agentResult.exitCode),
       events: [...(state.events ?? []), runEvent("finish", "agent_failed", { message: "Agent failed before private validation." })]
     });
-    await saveRunState(state, options.home);
     await cleanupReplayWorktree(state.repoCache, state.worktree);
   } else {
     await completeRunWithValidators(state, manifest, options.home);
@@ -921,8 +909,7 @@ async function finishRun(options: { runId: string; home?: string }): Promise<Jso
     state.status = "blocked";
     state.terminal = true;
     state.finishedAt = nowIso();
-    await writeRunSummary(state, ["Run blocked by validation infrastructure."]);
-    await saveRunState(state, options.home);
+    await saveRunState(state, options.home, { details: ["Run blocked by validation infrastructure."] });
     await cleanupReplayWorktree(state.repoCache, state.worktree);
     return { runId: state.runId, status: state.status };
   }

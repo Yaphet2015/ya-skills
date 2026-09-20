@@ -9,6 +9,7 @@ import {
   ComputerError,
   createComputerSession,
   createObservationStore,
+  type BatchAction,
   type BatchRequest,
   type ComputerSession,
   type ObserveOptions,
@@ -25,7 +26,7 @@ export interface DriverConfig {
   onAction?: (event: { phase: "started" | "finished"; kind: string; outcome?: string }) => void;
 }
 
-export type DriverMethod = "observe" | "batch" | "close";
+export type DriverMethod = "observe" | "step" | "batch" | "close";
 
 export interface DriverRequest {
   id: string;
@@ -48,13 +49,47 @@ export interface DriverNotification {
 /** Fixed-method session facade. Tests inject fakes with this shape;
  * production always builds the real Cua session exactly once. */
 export interface DriverSessionLike {
-  /** Optional signal aborts a batch between actions; native work already in
+  /** True means this session has the internal one-action method. Omitted
+   * keeps older injected fixtures on the legacy batch adapter. */
+  supportsStep?: true;
+  /** Optional signal aborts a request between actions; native work already in
    * flight remains classified by the runtime rather than being replayed. */
   call(method: DriverMethod, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   close(): Promise<void>;
   /** Test drivers may report the number of native initializations they
    * actually performed; production workers default to one. */
   initCount?: number;
+}
+
+export interface DriverDispatcher {
+  supportsStep?: boolean;
+  call(method: DriverMethod, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
+}
+
+/** Select the internal step transport before invoking an injected driver.
+ * Legacy fixtures are adapted explicitly by capability, so a mutation error
+ * can never trigger a second native call. */
+export function dispatchDriverRequest(
+  driver: DriverDispatcher,
+  method: DriverMethod,
+  args: Record<string, unknown>,
+  signal?: AbortSignal
+): Promise<unknown> {
+  if (method !== "step" || driver.supportsStep === true) {
+    return driver.call(method, args, signal);
+  }
+  const action = args.action as BatchAction;
+  const rawDeadline = args.deadlineAt;
+  const timeoutMs = typeof rawDeadline === "number" && Number.isFinite(rawDeadline)
+    ? Math.max(1, rawDeadline - Date.now())
+    : undefined;
+  return driver.call("batch", {
+    request: {
+      actions: [action],
+      maxActions: 1,
+      ...(timeoutMs !== undefined ? { timeoutMs } : {})
+    }
+  }, signal);
 }
 
 export function createRealDriverSession(config: DriverConfig): DriverSessionLike {
@@ -73,6 +108,7 @@ export function createRealDriverSession(config: DriverConfig): DriverSessionLike
     return session;
   };
   return {
+    supportsStep: true,
     async call(method, args, signal) {
       const computer = ensure().computer;
       switch (method) {
@@ -93,6 +129,23 @@ export function createRealDriverSession(config: DriverConfig): DriverSessionLike
         }
         case "batch":
           return computer.batch(target, args.request as BatchRequest, signal);
+        case "step": {
+          const action = args.action as BatchAction;
+          const rawDeadline = args.deadlineAt;
+          const deadlineAt = typeof rawDeadline === "number" && Number.isFinite(rawDeadline)
+            ? rawDeadline
+            : undefined;
+          const index = typeof args.index === "number" ? args.index : undefined;
+          const executeStep = ensure().executeStep;
+          if (executeStep === undefined) {
+            throw new ComputerError("invalid_request", "the driver does not support step dispatch");
+          }
+          return executeStep(target, action, {
+            signal,
+            ...(deadlineAt !== undefined ? { deadlineAt } : {}),
+            ...(index !== undefined ? { index } : {})
+          });
+        }
         case "close":
           await ensure().close();
           return null;
@@ -168,7 +221,12 @@ async function runDriverWorker(configPath: string): Promise<number> {
       activeRequests.set(request.id, controller);
       const run = async (): Promise<void> => {
         try {
-          const result = await session.call(request.method, request.args ?? {}, controller.signal);
+          const result = await dispatchDriverRequest(
+            session,
+            request.method,
+            request.args ?? {},
+            controller.signal
+          );
           send({ id: request.id, ok: true, result: result ?? null });
         } catch (error) {
           send({

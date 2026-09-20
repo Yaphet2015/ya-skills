@@ -4,26 +4,30 @@
 // whole process group on overrun. Reports come from the same reduction as
 // history — never from optimistic in-memory counters.
 
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
   mkdirSync,
-  closeSync,
   openSync,
   readFileSync,
-  readSync,
   realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync
 } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
-import { isCompiledRuntime } from "@ya-skills/computer-runtime";
-import { FrameReader } from "@ya-skills/computer-session";
+import {
+  closeOwnedFd,
+  createWorkerWatchdog,
+  FileSpoolReader,
+  spawnWorkerWithRetry,
+  stopProcessGroup,
+  type SpoolPoll,
+  type SpoolTail
+} from "@ya-skills/computer-session";
 import {
   ARTIFACTS_DIR,
   EVENTS_FILE,
@@ -45,19 +49,10 @@ export const DEFAULT_SUPERVISOR_LOCK_TIMEOUT_MS = 30_000;
 export const LOAD_BUDGET_MS = 30_000;
 const WATCHDOG_GRACE_MS = 5_000;
 const MAX_EVENT_LINE = 1024 * 1024;
-const SPOOL_READ_CHUNK_BYTES = 64 * 1024;
-
-/** Bun may close a parent-owned numeric fd while setting up child stdio. The
- * parent no longer owns those descriptors after spawn, so cleanup treats an
- * already-closed fd as complete rather than turning a valid worker result into
- * a supervisor failure. Other close errors remain fatal. */
-function closeOwnedFd(fd: number): void {
-  try {
-    closeSync(fd);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EBADF") throw error;
-  }
-}
+// Preserve the supervisor's historical testing export while sharing the
+// implementation with exec's regular-file control spool.
+export { FileSpoolReader as IncrementalE2ESpoolReader };
+export type { SpoolPoll, SpoolTail };
 
 const WORKER_EVENT_TYPES = new Set<string>([
   "runtime",
@@ -84,116 +79,6 @@ export class SupervisorLockError extends Error {
   }
 }
 
-export interface SpoolPoll {
-  lines: string[];
-  /** Bytes read from the spool during this poll, never more than the reader chunk cap. */
-  bytesRead: number;
-}
-
-export interface SpoolTail {
-  complete: boolean;
-  pendingBytes: number;
-}
-
-/**
- * Read the worker's fd3 regular-file spool incrementally. The parent must not
- * reread a growing spool from byte zero on every watchdog tick: that both
- * makes work proportional to the complete history and obscures a partial
- * frame at a truncation/rotation boundary. FrameReader remains the byte/UTF-8
- * authority; this reader only supplies bounded chunks and tracks the tail so
- * the supervisor can fail closed when a worker exits mid-frame.
- */
-export class IncrementalE2ESpoolReader {
-  private fd: number | null = null;
-  private offset = 0;
-  private identity: string | null = null;
-  private frameReader = new FrameReader();
-  private pendingFrameBytes = 0;
-
-  constructor(
-    private readonly path: string,
-    private readonly chunkBytes = SPOOL_READ_CHUNK_BYTES
-  ) {
-    if (!Number.isSafeInteger(chunkBytes) || chunkBytes <= 0) {
-      throw new Error("spool chunk size must be a positive safe integer");
-    }
-  }
-
-  poll(): SpoolPoll {
-    const stats = statSync(this.path);
-    const identity = `${String(stats.dev)}:${String(stats.ino)}`;
-    if (this.identity === null) {
-      this.identity = identity;
-    } else if (identity !== this.identity) {
-      this.resetAfterDiscontinuity();
-      this.identity = identity;
-      throw new Error("event spool was rotated before the current frame completed");
-    }
-    if (stats.size < this.offset) {
-      this.resetAfterDiscontinuity();
-      throw new Error("event spool was truncated before the current frame completed");
-    }
-    this.fd ??= openSync(this.path, "r");
-
-    const lines: string[] = [];
-    const remaining = stats.size - this.offset;
-    if (remaining <= 0) return { lines, bytesRead: 0 };
-    // One bounded read per watchdog tick. A large frame therefore makes
-    // progress over successive polls instead of turning one 20ms callback
-    // into an unbounded read proportional to the complete spool.
-    const requested = Math.min(this.chunkBytes, remaining);
-    const buffer = Buffer.allocUnsafe(requested);
-    const count = readSync(this.fd, buffer, 0, requested, this.offset);
-    if (count <= 0) return { lines: [], bytesRead: 0 }; // writer may append later
-    const chunk = buffer.subarray(0, count);
-    this.offset += count;
-    for (const byte of chunk) {
-      if (byte === 0x0a) this.pendingFrameBytes = 0;
-      else this.pendingFrameBytes += 1;
-    }
-    lines.push(...this.frameReader.push(chunk));
-    return { lines, bytesRead: count };
-  }
-
-  /**
-   * Drain all bytes that were written before the worker group reached EOF.
-   * Each poll remains capped at the live 64KiB chunk size; two consecutive
-   * empty polls after group cleanup verify that the regular-file tail is
-   * stable before the caller finalizes the frame and removes the spool.
-   */
-  async drainToEof(onLines: (lines: string[]) => void): Promise<void> {
-    let emptyPolls = 0;
-    for (;;) {
-      const poll = this.poll();
-      onLines(poll.lines);
-      if (poll.bytesRead === 0) {
-        emptyPolls += 1;
-        if (emptyPolls >= 2) return;
-      } else {
-        emptyPolls = 0;
-      }
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    }
-  }
-
-  finalize(): SpoolTail {
-    return { complete: this.pendingFrameBytes === 0, pendingBytes: this.pendingFrameBytes };
-  }
-
-  close(): void {
-    if (this.fd === null) return;
-    closeSync(this.fd);
-    this.fd = null;
-  }
-
-  private resetAfterDiscontinuity(): void {
-    this.offset = 0;
-    this.pendingFrameBytes = 0;
-    this.frameReader = new FrameReader();
-    this.close();
-  }
-}
-
 export interface RunOptions {
   files: string[];
   params: Record<string, string>;
@@ -217,72 +102,6 @@ function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
-function processGroupHasRunnableMember(pid: number): boolean {
-  const ps = spawnSync("ps", ["-axo", "pgid=,stat="], { encoding: "utf8" });
-  if (ps.status !== 0) return true; // conservative when process inventory is unavailable
-  for (const line of (ps.stdout ?? "").split("\n")) {
-    const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line);
-    if (!match || Number(match[1]) !== pid) continue;
-    if (!match[2]!.startsWith("Z")) return true;
-  }
-  // A group made only of zombies has no runnable/native work left. The OS
-  // reaper may keep its pid visible briefly, so do not hold the next run on
-  // kill(-pgid, 0) alone.
-  return false;
-}
-
-async function waitForProcessGroupGone(pid: number | undefined, timeoutMs: number): Promise<boolean> {
-  if (!pid) return true;
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    try {
-      process.kill(-pid, 0);
-      if (!processGroupHasRunnableMember(pid)) return true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ESRCH") return true;
-    }
-    if (Date.now() >= deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-}
-
-async function reapWorkerGroup(pid: number | undefined, graceMs: number): Promise<boolean> {
-  const waitMs = Math.max(graceMs, 2_000);
-  if (!pid || await waitForProcessGroupGone(pid, 0)) return true;
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-  }
-  if (await waitForProcessGroupGone(pid, waitMs)) return true;
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-  }
-  return waitForProcessGroupGone(pid, waitMs);
-}
-
-async function spawnWorkerWithRetry(
-  executable: string,
-  args: string[],
-  options: Parameters<typeof spawn>[2]
-): Promise<ChildProcess> {
-  let lastError: unknown;
-  // Bun 1.3.14 can transiently report ENOENT while wiring several pipe
-  // descriptors under concurrent test workers. The spawn has not created a
-  // child in that case, so a bounded retry is safe and does not replay work.
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return spawn(executable, args, options);
-    } catch (error) {
-      lastError = error;
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
-}
-
 function gitRepoInfo(): { revision: string | null; dirty: boolean | null } {
   const rev = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
   if (rev.status !== 0 || !rev.stdout.trim()) return { revision: null, dirty: null };
@@ -296,11 +115,6 @@ function gitRepoInfo(): { revision: string | null; dirty: boolean | null } {
 function toDisplayFile(absolute: string): string {
   const rel = relative(process.cwd(), absolute);
   return rel.startsWith("..") ? absolute : rel;
-}
-
-function cliEntryPath(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, "..", "..", "..", "packages", "cli", "src", "cli.ts");
 }
 
 interface WorkerOutcome {
@@ -551,10 +365,6 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       { mode: 0o600 }
     );
 
-    const invocation = isCompiledRuntime()
-      ? { executable: realpathSync(process.execPath), args: [WORKER_COMMAND, configPath] }
-      : { executable: process.execPath, args: [cliEntryPath(), WORKER_COMMAND, configPath] };
-
     const stdoutPath = join(runDir, `worker-${index}.stdout.log`);
     const stderrPath = join(runDir, `worker-${index}.stderr.log`);
     const eventSpoolPath = join(runDir, `.worker-${index}.events`);
@@ -566,9 +376,8 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
     const eventFd = openSync(eventSpoolPath, "a+", 0o600);
     let child: ChildProcess;
     try {
-      child = await spawnWorkerWithRetry(invocation.executable, invocation.args, {
+      child = await spawnWorkerWithRetry(WORKER_COMMAND, configPath, {
         cwd: process.cwd(),
-        detached: true,
         stdio: ["ignore", stdoutFd, stderrFd, eventFd],
         env: { ...process.env, BUN_CONFIG_NO_CLEAR_TERMINAL: "1" }
       });
@@ -590,40 +399,26 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
 
     append("runtime", { workerPid: child.pid });
 
+    let stopRequested = false;
+    let stopPromise: ReturnType<typeof stopProcessGroup> | null = null;
+    const requestStop = (): void => {
+      if (stopRequested) return;
+      stopRequested = true;
+      stopPromise = stopProcessGroup(child, cleanupGraceMs);
+    };
     // Watchdog: overall cap + per-load/hook/case budgets from the events.
-    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const watchdog = createWorkerWatchdog(() => {
+      stopped = true;
+      requestStop();
+    });
     const arm = (ms: number): void => {
-      if (watchdog) clearTimeout(watchdog);
-      watchdog = setTimeout(() => {
-        stopped = true;
-        requestStop();
-      }, Math.max(ms, 1));
+      watchdog.arm(Math.max(ms, 1));
     };
     const remainingOverall = () => overallDeadline - Date.now();
     arm(Math.min(LOAD_BUDGET_MS + WATCHDOG_GRACE_MS, Math.max(remainingOverall(), 1)));
 
-    let killTimer: ReturnType<typeof setTimeout> | undefined;
-    let stopRequested = false;
-    const requestStop = (): void => {
-      if (stopRequested || !child.pid) return;
-      stopRequested = true;
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-      }
-      killTimer = setTimeout(() => {
-        if (!child.pid) return;
-        try {
-          process.kill(-child.pid, "SIGKILL");
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-        }
-      }, cleanupGraceMs);
-    };
     const clearTimers = (): void => {
-      if (watchdog) clearTimeout(watchdog);
-      if (killTimer) clearTimeout(killTimer);
+      watchdog.clear();
       if (activeStop === requestStop) activeStop = null;
     };
     activeStop = requestStop;
@@ -658,7 +453,7 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
       if (parsed.type === "case_finished") sawCaseFinished = true;
       append(parsed.type as WorkerEventType, { ...payload, file: displayFile });
     };
-    const spoolReader = new IncrementalE2ESpoolReader(eventSpoolPath);
+    const spoolReader = new FileSpoolReader(eventSpoolPath);
     let spoolFailed = false;
     const pollSpool = (): void => {
       if (spoolFailed) return;
@@ -686,8 +481,9 @@ async function superviseOnce(options: SuperviseOptions): Promise<RunSummary> {
     // detached worker group before declaring the regular-file spool at EOF;
     // otherwise an inherited fd3 could append after the final poll and its
     // terminal/cleanup events would be deleted with the spool.
-    const groupReaped = await reapWorkerGroup(child.pid, cleanupGraceMs);
-    if (!groupReaped) {
+    const groupStop = stopPromise ?? stopProcessGroup(child, cleanupGraceMs);
+    const groupReaped = await groupStop;
+    if (!groupReaped.exited) {
       append("worker_protocol_error", { file: displayFile, reason: `worker process group ${child.pid ?? "?"} could not be fully reaped` });
     }
     if (!spoolFailed) {

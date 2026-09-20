@@ -130,7 +130,7 @@ describe("frameMatchesObservation (cross-command freshness)", () => {
     ).toBe(false);
   });
 
-  test("identical geometry but re-encoded pixels conservatively refuses", async () => {
+  test("hash-only callers refuse re-encoded pixels without a fresh artifact", async () => {
     const observation = await makeObservation();
     // A different valid PNG (different bytes) with the same geometry: the
     // hash check refuses even though the pixels could be visually identical —
@@ -145,5 +145,18 @@ describe("frameMatchesObservation (cross-command freshness)", () => {
       })
     ).toBe(false);
     await rm(otherFile, { force: true });
+  });
+
+  test("malformed PNG bytes never satisfy the exact-hash path", async () => {
+    const observation = await makeObservation();
+    await writeFile(observation.image.originalPath!, Buffer.from("not a PNG"));
+    const malformedHash = pngSha256(observation.image.originalPath!);
+    expect(
+      frameMatchesObservation(observation, {
+        windowBounds: observation.image.geometry!.windowBounds,
+        pngHash: malformedHash,
+        pngPath: observation.image.originalPath!
+      })
+    ).toBe(false);
   });
 });

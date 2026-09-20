@@ -11,6 +11,7 @@ import {
   type Suite,
   type WorkerEvent
 } from "../packages/functions-computer-e2e/src/suite.js";
+import { reduceResultEvents } from "../packages/functions-computer-e2e/src/result-reducer.js";
 import type { Computer } from "@ya-skills/computer-runtime";
 
 const directories: string[] = [];
@@ -229,6 +230,28 @@ describe("runSuite (sequential, fail-stop)", () => {
     ]);
   });
 
+  test("nested steps are reported in finish order", async () => {
+    const result = await runSuite(
+      {
+        apiVersion: 1,
+        id: "s",
+        name: "s",
+        tests: [{
+          id: "a",
+          name: "nested steps",
+          async run(ctx) {
+            await ctx.step("outer", async () => {
+              await ctx.step("inner", async () => undefined);
+            });
+          }
+        }]
+      },
+      makeContext(),
+      () => {}
+    );
+    expect(result.steps.map((step) => step.name)).toEqual(["inner", "outer"]);
+  });
+
   test("a failing step marks the step failed and the case failed", async () => {
     const result = await runSuite(
       {
@@ -253,6 +276,36 @@ describe("runSuite (sequential, fail-stop)", () => {
     expect(result.steps[0]!.status).toBe("failed");
     expect(result.steps[0]!.reason).toMatch(/step boom/);
     expect(result.cases[0]!.status).toBe("failed");
+  });
+
+  test("suite results are the projection of the events it emits", async () => {
+    const events: WorkerEvent[] = [];
+    const result = await runSuite(
+      {
+        apiVersion: 1,
+        id: "s",
+        name: "s",
+        afterAll() {
+          throw new Error("cleanup boom");
+        },
+        tests: [
+          {
+            id: "pass",
+            name: "passes",
+            async run(ctx) {
+              await ctx.step("work", async () => undefined);
+            }
+          },
+          { id: "skip", name: "declared skip", skip: "known gap", run() {} },
+          { id: "fail", name: "fails", run() { throw new Error("case boom"); } },
+          { id: "later", name: "not run", run() {} }
+        ]
+      },
+      makeContext(),
+      (event) => events.push(event)
+    );
+
+    expect(result).toEqual(reduceResultEvents(events).suite);
   });
 
   test("suite_collected is emitted before any hook event, with the full case list", async () => {
