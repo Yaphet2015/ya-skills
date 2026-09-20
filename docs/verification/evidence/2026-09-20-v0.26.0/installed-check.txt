@@ -1,0 +1,43 @@
+formula_prefix=/opt/homebrew/opt/ya-skills
+==== layout ====
+/opt/homebrew/opt/ya-skills/bin:
+total 8
+drwxr-xr-x@ 3 phaethon  admin   96 Sep 20 22:40 .
+drwxr-xr-x@ 8 phaethon  admin  256 Sep 20 22:40 ..
+-r-xr-xr-x@ 1 phaethon  admin  159 Sep 20 22:40 yk
+
+/opt/homebrew/opt/ya-skills/libexec:
+total 125352
+drwxr-xr-x@ 4 phaethon  admin       128 Sep 20 22:40 .
+drwxr-xr-x@ 8 phaethon  admin       256 Sep 20 22:40 ..
+drwxr-xr-x@ 3 phaethon  admin        96 Sep 20 22:38 runtime
+-rwxr-xr-x@ 1 phaethon  admin  64179312 Sep 20 22:38 yk
+==== codesign libexec/yk ====
+codesign_exit=0
+==== help ====
+help_exit=0
+yk
+
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
+Commands:
+  yk list
+  yk install [options] [skill...]
+  yk uninstall [options] <skill...>
+  yk <domain> <action> [...args]
+
+Function domains: demo, pbench, computer-use, computer-e2e
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
+==== version ====
+version=[0.26.0]
+==== brew test ====
+==> Testing yaphet2015/tap/ya-skills
+[34m==>[0m [1m/opt/homebrew/Cellar/ya-skills/0.26.0/bin/yk --version[0m
+[34m==>[0m [1m/opt/homebrew/Cellar/ya-skills/0.26.0/bin/yk list[0m
+[34m==>[0m [1m/opt/homebrew/Cellar/ya-skills/0.26.0/bin/yk list[0m

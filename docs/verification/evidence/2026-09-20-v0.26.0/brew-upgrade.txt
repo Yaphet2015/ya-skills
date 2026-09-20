@@ -1,0 +1,45 @@
+==== brew info before ====
+==> yaphet2015/tap/ya-skills: stable 0.25.3
+Personal skill repository and yk CLI
+https://github.com/Yaphet2015/ya-skills
+Installed (on request)
+From: https://github.com/Yaphet2015/homebrew-tap/blob/HEAD/Formula/ya-skills.rb
+Tap: yaphet2015/tap
+License: LicenseRef-Homebrew-cannot-represent
+==> Installed Versions
+yaphet2015/tap/ya-skills 0.25.3 (450 files, 121.4MB) [Linked]
+==> Requirements
+Required: arm64 architecture, macOS
+==== upgrade ====
+HOMEBREW_BREW_GIT_REMOTE set: using https://mirrors.ustc.edu.cn/brew.git as the Homebrew/brew Git remote.
+From https://mirrors.ustc.edu.cn/brew
+   14c54f7c76..f00137e62e  main       -> origin/main
+==> Updating Homebrew...
+==> Updated Homebrew from 14c54f7c76 to f00137e62e.
+Updated 3 taps (yaphet2015/tap, homebrew/core and homebrew/cask).
+==> New Formulae
+ratex: Fast TeX engine written in Rust
+xgrammar: Structured generation and reasoning engine for LLMs
+==> New Casks
+jlcone: Desktop client for JLCPCB quoting, ordering and order tracking
+reolink: Client for viewing and managing security cameras and NVRs
+ruswitcher: Keyboard layout switcher
+==> Outdated Formulae
+mole
+pnpm
+ya-skills
+==> Outdated Casks
+otty
+
+You have 3 outdated formulae and 1 outdated cask installed.
+You can upgrade them with brew upgrade
+or list them with brew outdated.
+==> Fetching downloads for: yaphet2015/tap/ya-skills
+==> Would upgrade 1 requested outdated package
+yaphet2015/tap/ya-skills 0.25.3 -> 0.26.0
+✔︎ Formula ya-skills (0.26.0)
+==> Upgrading yaphet2015/tap/ya-skills
+  0.25.3 -> 0.26.0 
+🍺  /opt/homebrew/Cellar/ya-skills/0.26.0: 455 files, 121.5MB, built in 2 seconds
+==> Upgraded 1 requested outdated package
+yaphet2015/tap/ya-skills 0.25.3 -> 0.26.0

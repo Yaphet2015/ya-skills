@@ -1,0 +1,12 @@
+First default `bun run test` after removing stale dist/release failed once:
+
+  tests/computer-exec-terminal.test.ts
+  (fail) exec terminal reduction > terminal receipt closes admission for every queued independent RPC
+  expect(batchCalls).toBeLessThanOrEqual(1)
+  Expected: <= 1
+  Received: 2
+
+The original full log was overwritten when the passing rerun was copied to tests.txt.
+Isolated reruns of this test passed 8/8.
+The next full default suite passed: 744 pass, 17 skip, 0 fail (tests.txt / tests-rerun.txt).
+This is recorded as a flake, not as a passing first run.

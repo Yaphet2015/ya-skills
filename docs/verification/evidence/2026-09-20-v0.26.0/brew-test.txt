@@ -1,0 +1,4 @@
+==> Testing yaphet2015/tap/ya-skills
+[34m==>[0m [1m/opt/homebrew/Cellar/ya-skills/0.26.0/bin/yk --version[0m
+[34m==>[0m [1m/opt/homebrew/Cellar/ya-skills/0.26.0/bin/yk list[0m
+[34m==>[0m [1m/opt/homebrew/Cellar/ya-skills/0.26.0/bin/yk list[0m

@@ -1,0 +1,8 @@
+download_dir=/tmp/ya-skills-v0.26.0-download-3Lk9
+total 87928
+drwx------@  3 phaethon  wheel        96 Sep 20 22:39 .
+drwxrwxrwt  49 root      wheel      1568 Sep 20 22:39 ..
+-rw-r--r--@  1 phaethon  wheel  44577956 Sep 20 22:39 ya-skills-v0.26.0-macos-arm64.tar.gz
+local=a5214808b87acba63da05b2a7f3069e688e9435afd2eb83e879a23129ccf7cba  ya-skills-v0.26.0-macos-arm64.tar.gz
+downloaded=a5214808b87acba63da05b2a7f3069e688e9435afd2eb83e879a23129ccf7cba  /tmp/ya-skills-v0.26.0-download-3Lk9/ya-skills-v0.26.0-macos-arm64.tar.gz
+cmp=OK

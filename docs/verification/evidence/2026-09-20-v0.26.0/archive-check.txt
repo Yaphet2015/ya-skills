@@ -1,0 +1,61 @@
+EXTRACT=/tmp/ya-skills-v0.26.0-extract-rqLi
+yk
+skills/
+skills/video-transcript/
+skills/svg-icons/
+skills/validator/
+skills/a-share-data/
+skills/pbench/
+skills/computer-e2e/
+skills/plan-jury/
+skills/eli5/
+skills/ultra-simplify/
+skills/design-grill/
+skills/coding-recon/
+skills/show-pr/
+skills/computer-use/
+skills/eli10/
+skills/eli10/SKILL.md
+skills/eli10/skill.json
+skills/computer-use/references/
+skills/computer-use/examples/
+archive_root=/tmp/ya-skills-v0.26.0-extract-rqLi
+total 125352
+drwx------@  5 phaethon  wheel       160 Sep 20 22:38 .
+drwxrwxrwt  48 root      wheel      1536 Sep 20 22:38 ..
+drwxr-xr-x@  3 phaethon  wheel        96 Sep 20 22:38 runtime
+drwxr-xr-x@ 16 phaethon  wheel       512 Sep 20 22:38 skills
+-rwxr-xr-x@  1 phaethon  wheel  64179312 Sep 20 22:38 yk
+---- exists ----
+OK yk
+OK skills
+OK runtime
+---- codesign ----
+codesign_exit=0
+---- help ----
+help_exit=0
+yk
+
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
+Commands:
+  yk list
+  yk install [options] [skill...]
+  yk uninstall [options] <skill...>
+  yk <domain> <action> [...args]
+
+Function domains: demo, pbench, computer-use, computer-e2e
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
+---- version ----
+version=[0.26.0]
+---- sha256 ----
+recomputed=a5214808b87acba63da05b2a7f3069e688e9435afd2eb83e879a23129ccf7cba  ya-skills-v0.26.0-macos-arm64.tar.gz
+file=a5214808b87acba63da05b2a7f3069e688e9435afd2eb83e879a23129ccf7cba  ya-skills-v0.26.0-macos-arm64.tar.gz
+---- compare ----
+ya-skills-v0.26.0-macos-arm64.tar.gz: OK

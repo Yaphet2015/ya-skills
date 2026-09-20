@@ -1,0 +1,71 @@
+$ bun packages/cli/src/cli.ts -h && bun packages/cli/src/cli.ts -v && bun packages/cli/src/cli.ts list && bun packages/cli/src/cli.ts demo echo hello && node packages/cli/dist/cli.js -h && node packages/cli/dist/cli.js -v && node packages/cli/dist/cli.js list && node packages/cli/dist/cli.js demo echo hello
+yk
+
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
+Commands:
+  yk list
+  yk install [options] [skill...]
+  yk uninstall [options] <skill...>
+  yk <domain> <action> [...args]
+
+Function domains: demo, pbench, computer-use, computer-e2e
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
+
+0.26.0
+a-share-data      Fetch A-share quotes, K-lines, and filings. Use when the user asks for A-share market data.
+coding-recon      Use when ownership, contracts, callers, or root cause are unclear before a non-local code change.
+computer-e2e      Deterministic macOS desktop E2E via yk. Use only when the user asks for computer-e2e. · computer-use
+computer-use      Route web pages through browser DOM/CDP first, then drive native macOS UI when a visible desktop app is required.
+design-grill      Stress-test a design or plan. Use when the user wants to grill an idea, PRD, or architecture.
+eli10             Finer-grained explanation of a diagnosis or mechanism. Use after 看不懂 / 太费劲 / 再详细解释.
+eli5              Picture-heavy HTML explainer. Use only when the user asks for eli5.
+pbench            PBench capture/replay. Use when a coding-agent outcome is wrong, or the user asks to capture, run, or compare runs.
+plan-jury         Sol/Grok/GLM plan review. Use only when the user invokes plan-jury.
+show-pr           Use only when the user explicitly invokes show-pr to build an offline Chinese PR HTML report; never triggers implicitly.
+svg-icons         Unified SVG icon/glyph. Use when the user invokes /svg-icons or asks for an icon.
+ultra-simplify    Use when the user asks for a massive simplification pass
+validator         Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete.
+video-transcript  Video transcript (captions first, Whisper fallback). Use when the user wants text from a video.
+hello
+yk
+
+Usage:
+  yk [options]
+  yk <command> [args]
+
+Options:
+  -h, --help       Show help.
+  -v, --version    Show version.
+
+Commands:
+  yk list
+  yk install [options] [skill...]
+  yk uninstall [options] <skill...>
+  yk <domain> <action> [...args]
+
+Function domains: demo, pbench, computer-use, computer-e2e
+Run 'yk <domain> -h' to list actions, 'yk <domain> <action> -h' for usage.
+
+0.26.0
+a-share-data      Fetch A-share quotes, K-lines, and filings. Use when the user asks for A-share market data.
+coding-recon      Use when ownership, contracts, callers, or root cause are unclear before a non-local code change.
+computer-e2e      Deterministic macOS desktop E2E via yk. Use only when the user asks for computer-e2e. · computer-use
+computer-use      Route web pages through browser DOM/CDP first, then drive native macOS UI when a visible desktop app is required.
+design-grill      Stress-test a design or plan. Use when the user wants to grill an idea, PRD, or architecture.
+eli10             Finer-grained explanation of a diagnosis or mechanism. Use after 看不懂 / 太费劲 / 再详细解释.
+eli5              Picture-heavy HTML explainer. Use only when the user asks for eli5.
+pbench            PBench capture/replay. Use when a coding-agent outcome is wrong, or the user asks to capture, run, or compare runs.
+plan-jury         Sol/Grok/GLM plan review. Use only when the user invokes plan-jury.
+show-pr           Use only when the user explicitly invokes show-pr to build an offline Chinese PR HTML report; never triggers implicitly.
+svg-icons         Unified SVG icon/glyph. Use when the user invokes /svg-icons or asks for an icon.
+ultra-simplify    Use when the user asks for a massive simplification pass
+validator         Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete.
+video-transcript  Video transcript (captions first, Whisper fallback). Use when the user wants text from a video.
+hello
