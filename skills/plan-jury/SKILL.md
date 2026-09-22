@@ -16,7 +16,7 @@ disable-model-invocation: true
 | key | --model | --thinking | 写入 |
 |---|---|---|---|
 | sol | openai-codex/gpt-6-astra | xhigh | `sol.md` |
-| grok | xai/grok-4.6 | xhigh | `grok.md` |
+| grok | xai/grok-4.7 | xhigh | `grok.md` |
 | glm | zai-coding-cn/glm-5.3 | max | `glm.md` |
 
 ## brief.md
@@ -74,7 +74,7 @@ prompt=(@"$ws/brief.md" "$review")
 
 cd "$ws"
 bangboo --model openai-codex/gpt-6-astra --thinking xhigh --tools read,bash,edit,write,grep,find,ls --no-skills -a -p "${prompt[@]}" "Output file: sol.md" > sol.log 2>&1 &
-bangboo --model xai/grok-4.6 --thinking xhigh --tools read,bash,edit,write,grep,find,ls --no-skills -a -p "${prompt[@]}" "Output file: grok.md" > grok.log 2>&1 &
+bangboo --model xai/grok-4.7 --thinking xhigh --tools read,bash,edit,write,grep,find,ls --no-skills -a -p "${prompt[@]}" "Output file: grok.md" > grok.log 2>&1 &
 bangboo --model zai-coding-cn/glm-5.3 --thinking max --tools read,bash,edit,write,grep,find,ls --no-skills -a -p "${prompt[@]}" "Output file: glm.md" > glm.log 2>&1 &
 wait
 ```
