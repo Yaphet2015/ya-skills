@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **skills:** eli10 adds internal-noun appendix rule ([c36b320](https://github.com/Yaphet2015/ya-skills/commit/c36b3203bec3a63c111d71f5ea9234fc42796b3d))
+* **skills:** eli10 assumes CS basics, drops everyday-life analogies ([36b5be8](https://github.com/Yaphet2015/ya-skills/commit/36b5be8e52afc71a85ca608d97e2be4bf3d210e8))
+* **skills:** eli10 forbids internal nouns as subjects, not just undefined terms ([d1f528f](https://github.com/Yaphet2015/ya-skills/commit/d1f528f1bf0462fd2e7ffef063aad7b2fe80705c))
+
 ## [0.23.0](https://github.com/Yaphet2015/ya-skills/compare/v0.22.0...v0.23.0) (2026-09-17)
 
 
