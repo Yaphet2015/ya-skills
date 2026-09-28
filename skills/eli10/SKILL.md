@@ -18,6 +18,10 @@ step B", request/response. Assume junior-high/high-school CS basics
 NOT project-internal knowledge. A sentence that references a
 project-internal concept they haven't been shown (function name, module,
 mechanism) is a defect in the explanation, not a reading failure.
+Defining an internal term first does NOT license it as a load-bearing
+subject: the reader should not have to carry new nouns at all. Refer to
+actors by generic class — a background process, a child process, a
+library, a JSON record file.
 
 No everyday-life analogies (couriers, buildings, restaurants). Plain
 technical statements only — the mechanism itself, stated step by step.
