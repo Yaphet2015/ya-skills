@@ -58,6 +58,13 @@ For simpler questions, apply only the Granularity Rules below.
 
 ## Granularity Rules
 
+- **Internal-noun appendix.** The body refers to actors by generic class
+  only (background process, child process, library, JSON record file).
+  End with an appendix that maps each generic actor to the internal
+  name (and file) it corresponds to, with one plain sentence each. The
+  reader understands the mechanism without the map; the map connects it
+  to the codebase afterwards.
+
 - **Expand every term inline.** no-op → "什么都不改，也不报错". Composite
   key → "数据库按 role+id 一起找行". If it can't be expanded in one clause,
   it doesn't belong in the explanation.
