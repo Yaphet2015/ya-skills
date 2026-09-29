@@ -1,0 +1,27 @@
+[
+  {
+    "name": "release",
+    "databaseId": 36544538199,
+    "event": "push",
+    "headSha": "0a1a3aa3310aa70b2f47af05618d2c409990fb5c",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/Yaphet2015/ya-skills/actions/runs/36544538199",
+    "job": {
+      "name": "macos-arm64",
+      "status": "completed",
+      "conclusion": "success",
+      "localAssetGuard": "success",
+      "checkoutTypecheckTestPackageReleaseTestsBuildSmokePublish": "skipped"
+    }
+  },
+  {
+    "name": "release-please",
+    "databaseId": 36543676837,
+    "event": "push",
+    "headSha": "0a1a3aa3310aa70b2f47af05618d2c409990fb5c",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/Yaphet2015/ya-skills/actions/runs/36543676837"
+  }
+]
