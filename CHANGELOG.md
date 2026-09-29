@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/Yaphet2015/ya-skills/compare/v0.26.2...v0.27.0) (2026-09-29)
+
+
+### Features
+
+* **computer-use:** complete background driver actions ([76db887](https://github.com/Yaphet2015/ya-skills/commit/76db8870a5fbc084f8e5ea1dfaf627a300b59559))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
