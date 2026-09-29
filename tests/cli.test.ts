@@ -2,13 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import {
-  applySelectionEvent,
-  confirmSkillsFor,
-  createKeyParser,
-  initialSelectionState
-} from "../packages/cli/src/interactive.js";
-import { formatSelectionRow, formatSkillLine, skillNameWidth } from "../packages/cli/src/skill-list.js";
+import { confirmSkillsFor, pickerOptions } from "../packages/cli/src/interactive.js";
 import type { CatalogSkill, SkillCatalog } from "../packages/core/src/types.js";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -266,72 +260,18 @@ test("commands without declared usage keep the generic [...args] fallback", asyn
   expect(result.stdout).toContain("yk demo echo [...args]");
 });
 
-test("interactive selection rows reuse the yk list line body exactly", () => {
-  const { skills } = checkboxCatalog();
-  const width = skillNameWidth(skills);
+test("picker options expose catalog names with deps visible in hints", () => {
+  const { catalog } = checkboxCatalog();
+  const options = pickerOptions(catalog);
 
-  expect(formatSkillLine(skills[0]!, width, false)).toBe("alpha  Base skill");
-  expect(formatSelectionRow(skills[0]!, width, { checked: false, cursor: false }, false)).toBe(
-    "  [ ] alpha  Base skill"
-  );
-  expect(formatSelectionRow(skills[1]!, width, { checked: true, cursor: true }, false)).toBe(
-    "❯ [x] beta   Dependent skill · alpha"
-  );
-});
-
-test("selection state machine toggles, moves, submits, and cancels", () => {
-  const { skills } = checkboxCatalog();
-
-  const space = applySelectionEvent(skills, initialSelectionState(skills), { kind: "space" });
-  if (space.kind !== "continue") throw new Error("expected continue");
-  expect([...space.state.checked]).toEqual(["alpha"]);
-
-  const afterDown = applySelectionEvent(skills, space.state, { kind: "down" });
-  if (afterDown.kind !== "continue") throw new Error("expected continue");
-  expect(afterDown.state.cursor).toBe(1);
-
-  const afterSecondSpace = applySelectionEvent(skills, afterDown.state, { kind: "space" });
-  if (afterSecondSpace.kind !== "continue") throw new Error("expected continue");
-  expect([...afterSecondSpace.state.checked]).toEqual(["alpha", "beta"]);
-
-  const submit = applySelectionEvent(skills, afterSecondSpace.state, { kind: "enter" });
-  if (submit.kind !== "submit") throw new Error("expected submit");
-  expect(submit.selected).toEqual(["alpha", "beta"]);
-
-  const emptyEnter = applySelectionEvent(skills, initialSelectionState(skills), { kind: "enter" });
-  if (emptyEnter.kind !== "continue") throw new Error("expected continue");
-  expect(emptyEnter.hint).toContain("space");
-
-  const escape = applySelectionEvent(skills, initialSelectionState(skills), { kind: "escape" });
-  expect(escape.kind).toBe("cancel");
-});
-
-test("key parser turns raw stdin chunks into selection events", () => {
-  const parser = createKeyParser();
-
-  expect(parser.push(" ")).toEqual([{ kind: "space" }]);
-  expect(parser.push("j")).toEqual([{ kind: "down" }]);
-  expect(parser.push("k")).toEqual([{ kind: "up" }]);
-  expect(parser.push("\r\r")).toEqual([{ kind: "enter" }, { kind: "enter" }]);
-  expect(parser.push("\n")).toEqual([{ kind: "enter" }]);
-  expect(parser.push("\x1b")).toEqual([{ kind: "escape" }]);
-  expect(parser.push("\x1b[A")).toEqual([{ kind: "up" }]);
-  expect(parser.push("\x1b[B")).toEqual([{ kind: "down" }]);
-  expect(parser.push("x")).toEqual([]);
-});
-
-test("key parser keeps keys that share a chunk with ctrl+c", () => {
-  // Bun's readline keypress parser drops a key that shares a chunk with
-  // \x03; our own parser must not.
-  expect(createKeyParser().push(" \x03")).toEqual([{ kind: "space" }, { kind: "interrupt" }]);
-
-  // A lone trailing ESC is the Esc key (terminals send Esc presses this way);
-  // arrow sequences arrive complete in one chunk.
-  expect(createKeyParser().push("\x1b\x1b[B")).toEqual([{ kind: "escape" }, { kind: "down" }]);
-  expect(createKeyParser().push("\x1b[")).toEqual([]); // partial arrow held
-  const held = createKeyParser();
-  held.push("\x1b[");
-  expect(held.push("B")).toEqual([{ kind: "down" }]);
+  // Values are the names install consumes, so selection maps straight to installs.
+  expect(options.map((option) => option.value)).toEqual(["alpha", "beta"]);
+  // Labels stay width-aligned like `yk list`.
+  expect(options[0]!.label).toBe("alpha");
+  expect(options[1]!.label).toBe("beta ");
+  // Dependencies must be visible before install because they install implicitly.
+  expect(options[1]!.hint).toBe("Dependent skill · alpha");
+  expect(options[0]!.hint).toBe("Base skill");
 });
 
 test("confirm list expands selected skills with their dependencies in install order", () => {

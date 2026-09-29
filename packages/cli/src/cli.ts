@@ -153,7 +153,7 @@ async function promptForSkills(catalog: SkillCatalog): Promise<string[]> {
   const result = await selectSkillsInteractively(catalog);
   if (result.canceled) {
     console.log("yk install canceled.");
-    process.exit(result.reason === "interrupt" ? 130 : 1);
+    process.exit(1);
   }
   return result.selected;
 }
@@ -224,7 +224,7 @@ Usage:
 Options:
   -g, --global    Install into user-level skill targets.
 
-Install selected skills into this repository by default. Without skill names on an interactive terminal, yk shows a checkbox picker over the catalog (same view as yk list): arrows move, space toggles, Enter confirms, a second Enter installs; Esc or Ctrl+C cancels.
+Install selected skills into this repository by default. Without skill names on an interactive terminal, yk shows a checkbox picker over the catalog: arrows move, space toggles, Enter confirms, a second Enter (Install) installs; Esc or Ctrl+C cancels.
 `);
 }
 

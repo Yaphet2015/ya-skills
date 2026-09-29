@@ -31,15 +31,3 @@ export function formatSkillLine(skill: CatalogSkill, nameWidth: number, color: b
   }
   return `${boldCyan(name)}  ${dim(body)}`;
 }
-
-// Interactive row = cursor marker + checkbox + the exact `yk list` line body.
-export function formatSelectionRow(
-  skill: CatalogSkill,
-  nameWidth: number,
-  options: { checked: boolean; cursor: boolean },
-  color: boolean
-): string {
-  const marker = options.cursor ? "❯ " : "  ";
-  const checkbox = options.checked ? "[x] " : "[ ] ";
-  return `${marker}${checkbox}${formatSkillLine(skill, nameWidth, color)}`;
-}
