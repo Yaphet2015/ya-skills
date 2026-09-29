@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/Yaphet2015/ya-skills/compare/v0.27.0...v0.27.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **install:** replace hand-rolled TUI with @clack/prompts ([b0ab7bc](https://github.com/Yaphet2015/ya-skills/commit/b0ab7bc3f7b31de7f023daf2d53f9b44dc560a2e))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
