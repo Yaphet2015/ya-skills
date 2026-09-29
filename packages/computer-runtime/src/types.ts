@@ -53,19 +53,19 @@ export interface Computer {
    * signal. The signal is also passed to the backend so persistent session
    * callers do not lose their absolute deadline at the observation seam. */
   observe(target: Target, options?: ObserveOptions, callOptions?: ObserveCallOptions | AbortSignal): Promise<Observation>;
-  clickPoint(target: Target, point: PointClick): Promise<void>;
+  clickPoint(target: Target, point: PointClick): Promise<ActionResult | void>;
   /** Execute one serial batch; an optional signal closes admission between
    * actions without pretending an in-flight native input was undone. */
   batch(target: Target, request: BatchRequest, signal?: AbortSignal): Promise<BatchResult>;
-  click(target: Target, predicate: Predicate, description: string): Promise<void>;
+  click(target: Target, predicate: Predicate, description: string): Promise<ActionResult | void>;
   /**
    * Set a snapshot-scoped accessibility value without a keyboard fallback.
    * The token comes from a fresh AX observation of this exact target.
    */
   setValue(target: Target, elementToken: string, value: string): Promise<AxValueResult>;
-  type(target: Target, text: string): Promise<void>;
-  key(target: Target, key: string, modifiers?: string[]): Promise<void>;
-  scroll(target: Target, options: ScrollSpec): Promise<void>;
+  type(target: Target, text: string, input?: InputAddress): Promise<ActionResult | void>;
+  key(target: Target, key: string, modifiers?: string[], input?: InputAddress): Promise<ActionResult | void>;
+  scroll(target: Target, options: ScrollSpec): Promise<ActionResult | void>;
   waitFor(
     target: Target,
     predicate: (elements: AxElement[]) => boolean,
@@ -74,18 +74,40 @@ export interface Computer {
   ): Promise<AxElement[]>;
 }
 
-// Cua ToolResult shape (isError/text) as returned by the driver.
+/** Portable driver metadata. Delivery and application effect are independent. */
+export interface ActionResult {
+  route: "accessibility" | "synthetic_events" | "global_input" | "system_api" | "dom" | "trusted_input";
+  effect: "confirmed" | "partial" | "unverifiable" | "suspected_noop" | "refused";
+  delivery?: {
+    mode: "background" | "foreground" | "not_applicable" | "unknown";
+    deliveredCount?: number | null;
+  };
+  escalation?: {
+    target: "pixel" | "foreground" | "page" | "session";
+    reason: "route_unavailable" | "delivery_failed" | "effect_unconfirmed" | "suspected_noop" | "permission_required";
+  };
+  error?: { code: string };
+}
+
+/** Input can address a fresh AX token or a point on an observed image. */
+export type InputAddress = { elementToken: string; point?: never } | { point: PointClick; elementToken?: never };
+
+/** Coordinates have already passed observation validation and scaling. */
+export type NativeInputAddress = { elementToken: string; point?: never } | { point: Point; elementToken?: never };
+
+// Generic ToolResult and typed ActionResult share this lazy, structural seam.
 export interface ToolResultLike {
   isError?: boolean;
+  errorCode?: string;
   text?: string;
-  /** Generic SDK results keep the structured route/effect envelope here. */
   structuredJson?: string;
   rawJson?: string;
-  action?: {
-    route?: string | number;
-    effect?: string | number;
-    delivery?: { mode?: string | number; deliveredCount?: number | null };
-  };
+  action?: unknown;
+  route?: string | number;
+  effect?: string | number;
+  delivery?: unknown;
+  escalation?: unknown;
+  error?: unknown;
 }
 
 /** A successful value write that crossed only the Accessibility route. */
@@ -196,8 +218,8 @@ export type BatchAction =
   | { kind: "click"; selector: Selector }
   | { kind: "click_point"; point: PointClick }
   | { kind: "set_value"; elementToken: string; value: string }
-  | { kind: "type"; text: string; before?: Condition }
-  | { kind: "key"; key: string; modifiers?: string[]; before?: Condition }
+  | { kind: "type"; text: string; before?: Condition; input?: InputAddress }
+  | { kind: "key"; key: string; modifiers?: string[]; before?: Condition; input?: InputAddress }
   | { kind: "scroll"; spec: ScrollSpec }
   | { kind: "wait"; condition: Condition; timeoutMs: number };
 
@@ -213,6 +235,7 @@ export interface ActionReceipt {
   kind: BatchAction["kind"];
   status: "delivered" | "not_delivered" | "unknown" | "satisfied" | "not_run";
   error?: { code: string; message: string };
+  result?: ActionResult;
 }
 
 export interface BatchResult {
@@ -241,8 +264,8 @@ export interface Backend {
   clickPoint(target: Target, point: Point): Promise<ToolResultLike>;
   /** Optional so test or older backends fail closed before native dispatch. */
   setValue?(target: Target, elementToken: string, value: string): Promise<ToolResultLike>;
-  type(target: Target, text: string): Promise<ToolResultLike>;
-  key(target: Target, key: string, modifiers?: string[]): Promise<ToolResultLike>;
+  type(target: Target, text: string, input?: NativeInputAddress): Promise<ToolResultLike>;
+  key(target: Target, key: string, modifiers?: string[], input?: NativeInputAddress): Promise<ToolResultLike>;
   scroll(target: Target, options: ScrollSpec): Promise<ToolResultLike>;
   metadata(): Promise<{ driverVersion?: string; pid?: number }>;
   permissions(): Promise<{ accessibility: boolean; screenRecording: boolean }>;

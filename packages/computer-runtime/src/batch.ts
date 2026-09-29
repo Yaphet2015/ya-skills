@@ -11,6 +11,7 @@ import type {
   BatchResult,
   Computer,
   Condition,
+  InputAddress,
   Selector,
   Target
 } from "./types.js";
@@ -109,6 +110,18 @@ function validatePointClick(value: unknown, where: string): { observationId: str
   return { observationId, x, y };
 }
 
+export function validateInputAddress(value: unknown): InputAddress {
+  if (!isObject(value) || Array.isArray(value)) fail("input must be an object");
+  if (Object.keys(value).some((key) => key !== "elementToken" && key !== "point")) fail("unknown input field");
+  if ((value.elementToken !== undefined) === (value.point !== undefined)) fail("input needs exactly one elementToken or point");
+  if (value.point !== undefined) return { point: validatePointClick(value.point, "input.point") };
+  const token = value.elementToken;
+  if (typeof token !== "string" || !token.trim() || Buffer.byteLength(token, "utf8") > MAX_ELEMENT_TOKEN_LENGTH) {
+    fail("input.elementToken must be a non-empty string <= 256 UTF-8 bytes");
+  }
+  return { elementToken: token };
+}
+
 function validateAction(value: unknown, index: number): BatchAction {
   const where = `actions[${index}]`;
   if (!isObject(value)) fail(`${where} must be an object`);
@@ -136,7 +149,11 @@ function validateAction(value: unknown, index: number): BatchAction {
         fail(`${where}.text must be a non-empty string`);
       }
       const before = v.before === undefined ? undefined : validateCondition(v.before, `${where}.before`);
-      return before ? { kind, text, before } : { kind, text };
+      return {
+        kind, text,
+        ...(before ? { before } : {}),
+        ...(v.input !== undefined ? { input: validateInputAddress(v.input) } : {})
+      };
     }
     case "key": {
       const key = v.key;
@@ -154,7 +171,8 @@ function validateAction(value: unknown, index: number): BatchAction {
         kind,
         key,
         ...(modifiers !== undefined ? { modifiers: modifiers as string[] } : {}),
-        ...(before !== undefined ? { before } : {})
+        ...(before !== undefined ? { before } : {}),
+        ...(v.input !== undefined ? { input: validateInputAddress(v.input) } : {})
       };
     }
     case "scroll":

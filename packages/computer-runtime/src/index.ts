@@ -4,6 +4,9 @@
 
 export type {
   AppRef,
+  ActionResult,
+  InputAddress,
+  NativeInputAddress,
   AxValueResult,
   AxChannel,
   AxElement,
@@ -70,7 +73,8 @@ export {
   DEFAULT_BATCH_TIMEOUT_MS,
   MAX_BATCH_TIMEOUT_MS,
   runBatch,
-  validateBatch
+  validateBatch,
+  validateInputAddress
 } from "./batch.js";
 export { evaluateCondition, isUnsupportedCondition, UnsupportedConditionError } from "./conditions.js";
 export {
@@ -101,3 +105,5 @@ export {
   type RequestExecutionProfile
 } from "./request-execution.js";
 export { executeStep, type StepExecutionOptions, type StepExecutionResult } from "./step-execution.js";
+
+export { parseActionResult } from "./driver-result.js";

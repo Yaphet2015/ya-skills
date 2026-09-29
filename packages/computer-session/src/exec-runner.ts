@@ -64,6 +64,7 @@ function boundedResult(result: ExecResult, requestId: string): ExecResult {
     index: receipt.index,
     kind: receipt.kind,
     status: receipt.status,
+    ...(receipt.result !== undefined ? { result: receipt.result } : {}),
     ...(receipt.error !== undefined
       ? {
           error: {

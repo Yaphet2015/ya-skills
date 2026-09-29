@@ -8,11 +8,11 @@ import { ComputerError } from "./driver-result.js";
 // action was never delivered — retry is recovery, NOT replay); any other
 // error fails immediately. The refusal code lives in the typed errorCode
 // field, never in the error message string.
-export async function clickUnique(
-  deps: { snapshot(): Promise<AxElement[]>; click(token: string): Promise<void> },
+export async function clickUnique<T>(
+  deps: { snapshot(): Promise<AxElement[]>; click(token: string): Promise<T> },
   predicate: Predicate,
   description: string
-): Promise<void> {
+): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const matches = (await deps.snapshot()).filter(predicate);
     if (matches.length !== 1) {
@@ -33,8 +33,7 @@ export async function clickUnique(
       );
     }
     try {
-      await deps.click(token);
-      return;
+      return await deps.click(token);
     } catch (error) {
       const e = (typeof error === "object" && error !== null ? error : {}) as {
         errorCode?: string;

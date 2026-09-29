@@ -93,14 +93,28 @@ export interface AxValueResult {
     deliveredCount?: number | null;
   };
 }
+export interface ActionResult {
+  route: "accessibility" | "synthetic_events" | "global_input" | "system_api" | "dom" | "trusted_input";
+  effect: "confirmed" | "partial" | "unverifiable" | "suspected_noop" | "refused";
+  delivery?: {
+    mode: "background" | "foreground" | "not_applicable" | "unknown";
+    deliveredCount?: number | null;
+  };
+  escalation?: {
+    target: "pixel" | "foreground" | "page" | "session";
+    reason: "route_unavailable" | "delivery_failed" | "effect_unconfirmed" | "suspected_noop" | "permission_required";
+  };
+  error?: { code: string };
+}
+export type InputAddress = { elementToken: string; point?: never } | { point: PointClick; elementToken?: never };
 export type ChannelStatus = "usable" | "empty" | "degraded" | "truncated" | "unavailable";
 export type ObservationMode = "auto" | "ax" | "image" | "both";
 export type BatchAction =
   | { kind: "click"; selector: Selector }
   | { kind: "click_point"; point: PointClick }
   | { kind: "set_value"; elementToken: string; value: string }
-  | { kind: "type"; text: string; before?: Condition }
-  | { kind: "key"; key: string; modifiers?: string[]; before?: Condition }
+  | { kind: "type"; text: string; before?: Condition; input?: InputAddress }
+  | { kind: "key"; key: string; modifiers?: string[]; before?: Condition; input?: InputAddress }
   | { kind: "scroll"; spec: ScrollSpec }
   | { kind: "wait"; condition: Condition; timeoutMs: number };
 export interface BatchRequest {
@@ -120,6 +134,7 @@ export interface ActionReceipt {
   kind: BatchAction["kind"];
   status: "delivered" | "not_delivered" | "unknown" | "satisfied" | "not_run";
   error?: { code: string; message: string };
+  result?: ActionResult;
 }
 export interface Target {
   pid: number;
@@ -129,12 +144,12 @@ export interface Target {
 // exec script surface ---------------------------------------------------
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export interface ScriptComputer {
-  click(selector: Selector): Promise<void>;
-  clickPoint(point: PointClick): Promise<void>;
+  click(selector: Selector): Promise<ActionResult | void>;
+  clickPoint(point: PointClick): Promise<ActionResult | void>;
   setValue(elementToken: string, value: string): Promise<AxValueResult>;
-  type(text: string, before?: Condition): Promise<void>;
-  key(key: string, modifiers?: string[], before?: Condition): Promise<void>;
-  scroll(spec: ScrollSpec): Promise<void>;
+  type(text: string, before?: Condition, input?: InputAddress): Promise<ActionResult | void>;
+  key(key: string, modifiers?: string[], before?: Condition, input?: InputAddress): Promise<ActionResult | void>;
+  scroll(spec: ScrollSpec): Promise<ActionResult | void>;
   wait(condition: Condition, timeoutMs: number): Promise<void>;
   observe(options?: ObserveOptions): Promise<Observation>;
   batch(request: BatchRequest): Promise<BatchResult>;

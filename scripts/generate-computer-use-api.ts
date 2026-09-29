@@ -33,6 +33,8 @@ const RUNTIME_SURFACE = [
   "ImageChannel",
   "AxElement",
   "AxValueResult",
+  "ActionResult",
+  "InputAddress",
   "ChannelStatus",
   "ObservationMode",
   "BatchAction",

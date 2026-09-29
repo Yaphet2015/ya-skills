@@ -46,7 +46,7 @@ The agent-facing usage guide lives in the skill itself
 
 - macOS arm64, macOS 13+ (driver requirement). Other platforms fail fast
   with `unsupported_platform`; no other `yk` command is affected.
-- The Cua Driver SDK (0.27.0) runs inside the `yk` Bun runtime for one-shot
+- The Cua Driver SDK (0.30.4) runs inside the `yk` Bun runtime for one-shot
   commands. Persistent sessions manage one private driver worker themselves;
   users install no Node runtime, daemon, or extra dependency.
 - Accessibility + Screen Recording must be granted to the program that runs
@@ -55,13 +55,41 @@ The agent-facing usage guide lives in the skill itself
 
 ## Background input and desktop use
 
-Background delivery requests input without bringing the target to the front.
-It does not isolate the user's mouse and keyboard. SDK 0.27 coordinate clicks
-use synthetic events, and text insertion can fall back from AX to synthetic
-keystrokes; the `type_text` tool schema has no public AX-only/no-fallback
-input option. Unchanged frontmost/window-focus flags do not establish noninterference.
-Use an independent test desktop for native input when the user's current desktop
-must remain undisturbed. Observation and permission checks can remain read-only.
+The adapter explicitly requests `delivery_mode: "background"` for click,
+type, key, and scroll. On supported targets, the driver addresses the background
+process/window/control without changing the user's frontmost app or real cursor.
+Synthetic events can be targeted background input; their presence alone does not
+prove user interference. Unsupported surfaces can refuse or report an unverified
+effect. yk preserves that result and never automatically retries in the foreground.
+Use `--activate` only for an explicitly requested foreground operation.
+
+Type and key input can address a fresh AX token directly. For a visual target,
+the driver can focus and type/press in one call after yk validates and maps the
+observed coordinates. Prefer a persistent session so observations and tokens use
+the same driver:
+
+```sh
+yk computer-use observe --session SESSION --mode ax
+yk computer-use act --session SESSION --type "hello" --element-token TOKEN --format observation
+
+yk computer-use observe --session SESSION --mode both
+yk computer-use act --session SESSION --type "hello" --input-x 120 --input-y 80 --observation UUID --format observation
+```
+
+The same addressing flags work with `--key`. A batch action accepts
+`input: {elementToken: TOKEN}` or `input: {point: {observationId: UUID, x, y}}`.
+The script forms are `computer.type(text, before?, input?)` and
+`computer.key(key, modifiers?, before?, input?)`; both return driver metadata.
+Coordinate inputs use the same single-use image evidence and checks as clicks.
+
+One-shot `act` includes `actionResult` when the driver supplies metadata; batch
+and exec receipts include `result`. These carry `route`, `effect`, `delivery`,
+`escalation`, and a refusal `error.code`. Application text from raw SDK summaries
+and evidence details is omitted. `delivered` describes input dispatch, while
+`effect: "unverifiable"` means the application effect still needs observation.
+A driver `effect: "refused"` is `not_delivered` and stops the batch, even when
+its SDK wrapper reports `isError: false`. An escalation is advice for the next
+decision, never permission for an automatic foreground retry.
 
 ## Strict AX value writes
 

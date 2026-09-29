@@ -6,10 +6,10 @@ import { spawnSync } from "node:child_process";
 import type {
   AppRef,
   Backend,
+  NativeInputAddress,
   NativeObservationLike,
   ObserveCallOptions,
   Point,
-  ScrollDirection,
   ScrollSpec,
   Snapshot,
   Target,
@@ -48,12 +48,9 @@ interface DriverLike {
     elements?: Array<Record<string, unknown>>;
     images?: Array<{ dataBase64?: string }>;
   }>;
-  /** Generic SDK seam used only for the AX-only set_value operation. */
+  /** Full tool contract, including input addressing absent from typed inputs. */
   callTool(name: string, argumentsJson: string): Promise<ToolResultLike>;
   click(input: never): Promise<ToolResultLike | void>;
-  typeText(input: never): Promise<ToolResultLike>;
-  pressKey(input: never): Promise<ToolResultLike>;
-  scroll(input: never): Promise<ToolResultLike>;
   metadata(): Promise<{ driverVersion?: string; pid?: number }>;
   endSession(input: never): Promise<unknown>;
   shutdown(): Promise<unknown>;
@@ -95,7 +92,29 @@ function wakeAxOnce(
   }
 }
 
-function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
+function inputFields(input?: NativeInputAddress): Record<string, unknown> {
+  if (input?.elementToken !== undefined) return { element_token: input.elementToken };
+  if (input?.point !== undefined) return { x: input.point.x, y: input.point.y };
+  return {};
+}
+
+/** JSON integers must preserve all 64 window-id bits. Only the validated
+ * numeric identity is emitted as a literal; all user data uses JSON.stringify. */
+function callWindowTool(
+  driver: Pick<DriverLike, "callTool">,
+  name: string,
+  target: Target,
+  fields: Record<string, unknown>
+): Promise<ToolResultLike> {
+  if (!Number.isSafeInteger(target.pid) || target.pid <= 0 || typeof target.windowId !== "bigint" || target.windowId < 0n) {
+    throw new ComputerError("invalid_request", "invalid native window target", "not_delivered");
+  }
+  const body = JSON.stringify({ ...fields, delivery_mode: "background" });
+  const identity = `"target":{"kind":"window","pid":${target.pid},"window_id":${target.windowId}}`;
+  return driver.callTool(name, `{${identity},${body.slice(1)}`);
+}
+
+export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
   const woken = new Set<number>();
   const windowTarget = (target: Target) =>
     new sdk.ActionTarget.Window({ pid: target.pid, windowId: target.windowId });
@@ -224,38 +243,22 @@ function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
       );
     },
 
-    async type(target: Target, text: string): Promise<ToolResultLike> {
-      return driver.typeText(
-        sdk.TypeTextInput.new({ target: windowTarget(target), text }) as never
-      );
+    async type(target: Target, text: string, input?: NativeInputAddress): Promise<ToolResultLike> {
+      return callWindowTool(driver, "type_text", target, { text, ...inputFields(input) });
     },
 
-    async key(target: Target, key: string, modifiers?: string[]): Promise<ToolResultLike> {
-      return driver.pressKey(
-        sdk.PressKeyInput.new({
-          target: windowTarget(target),
-          key,
-          ...(modifiers ? { modifiers } : {})
-        }) as never
-      );
+    async key(target: Target, key: string, modifiers?: string[], input?: NativeInputAddress): Promise<ToolResultLike> {
+      return callWindowTool(driver, "press_key", target, {
+        key,
+        ...(modifiers ? { modifiers } : {}),
+        ...inputFields(input)
+      });
     },
 
     async scroll(target: Target, spec: ScrollSpec): Promise<ToolResultLike> {
-      const dir = {
-        up: sdk.ScrollDirection.Up,
-        down: sdk.ScrollDirection.Down,
-        left: sdk.ScrollDirection.Left,
-        right: sdk.ScrollDirection.Right
-      }[spec.direction as ScrollDirection];
-      return driver.scroll(
-        sdk.ScrollInput.new({
-          x: spec.x,
-          y: spec.y,
-          direction: dir,
-          target: windowTarget(target),
-          amount: BigInt(spec.amount)
-        }) as never
-      );
+      return callWindowTool(driver, "scroll", target, {
+        x: spec.x, y: spec.y, direction: spec.direction, amount: spec.amount
+      });
     },
 
     async metadata() {

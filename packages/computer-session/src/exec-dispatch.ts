@@ -24,7 +24,8 @@ export interface ExecDispatchDeps {
     index: number,
     kind: ActionReceipt["kind"],
     outcome: ActionReceipt["status"],
-    error?: { code: string; message: string }
+    error?: { code: string; message: string },
+    result?: ActionReceipt["result"]
   ): Promise<void> | void;
 }
 
@@ -58,7 +59,7 @@ export function createExecDispatch(
   };
   const addReceipt = async (receipt: ActionReceipt): Promise<void> => {
     receipts.push(receipt);
-    await deps.onActionFinished?.(receipt.index, receipt.kind, receipt.status, receipt.error);
+    await deps.onActionFinished?.(receipt.index, receipt.kind, receipt.status, receipt.error, receipt.result);
     if (receipt.status === "delivered" || receipt.status === "satisfied") mutationsSinceObservation++;
     if (receipt.status === "unknown") markUnknownDelivery();
   };
@@ -169,9 +170,9 @@ export function createExecDispatch(
     const step = singleResult.steps[0];
     const status = step?.status ?? "unknown";
     if (status === "delivered" || status === "satisfied") {
-      return method === "set_value" && status === "delivered"
+      return step?.result ?? (method === "set_value" && status === "delivered"
         ? { route: "accessibility", effect: "confirmed" }
-        : null;
+        : null);
     }
     throw new ComputerError(
       step?.error?.code ?? "action_failed",
@@ -199,6 +200,7 @@ function singleActionBatch(method: ScriptRpcMethod, args: Record<string, JsonVal
         actions: [{
           kind: "type",
           text: String(args.text ?? ""),
+          ...(args.input !== undefined ? { input: args.input as never } : {}),
           ...((args.before as Condition | undefined) !== undefined ? { before: args.before as Condition } : {})
         }]
       };
@@ -208,6 +210,7 @@ function singleActionBatch(method: ScriptRpcMethod, args: Record<string, JsonVal
           kind: "key",
           key: String(args.key ?? ""),
           ...(Array.isArray(args.modifiers) ? { modifiers: args.modifiers as string[] } : {}),
+          ...(args.input !== undefined ? { input: args.input as never } : {}),
           ...((args.before as Condition | undefined) !== undefined ? { before: args.before as Condition } : {})
         }]
       };

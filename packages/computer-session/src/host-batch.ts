@@ -46,7 +46,8 @@ export async function executeHostedBatch(
     actionFinished: async (receipt) => {
       await appendJournalEvent(requestId, "action_finished", {
         index: receipt.index, kind: receipt.kind, outcome: receipt.status,
-        ...(receipt.error !== undefined ? { error: receipt.error } : {})
+        ...(receipt.error !== undefined ? { error: receipt.error } : {}),
+        ...(receipt.result !== undefined ? { result: receipt.result } : {})
       });
       finishedActions?.add(receipt.index);
     },

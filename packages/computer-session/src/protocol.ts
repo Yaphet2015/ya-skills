@@ -6,6 +6,7 @@
 // an exec script's arbitrary JSON return value is not traversed for properties
 // named `windowId`.
 
+import { validateInputAddress, parseActionResult } from "@ya-skills/computer-runtime";
 import {
   DEFAULT_MAX_ACTIONS,
   MAX_ACTIONS_LIMIT,
@@ -217,6 +218,14 @@ function parseScrollSpec(value: unknown, context: ValidationContext, where: stri
   return { direction, amount, x, y };
 }
 
+function parseInputAddress(value: unknown, context: ValidationContext, where: string): import("@ya-skills/computer-runtime").InputAddress {
+  try {
+    return validateInputAddress(value);
+  } catch (error) {
+    return fail(context, `${where}.input`, error instanceof Error ? error.message : "invalid input address");
+  }
+}
+
 function parseBatchAction(value: unknown, context: ValidationContext, index: number): BatchAction {
   const where = `actions[${index}]`;
   const raw = requireRecord(value, context, where);
@@ -235,13 +244,17 @@ function parseBatchAction(value: unknown, context: ValidationContext, index: num
       return { kind, elementToken, value };
     }
     case "type": {
-      assertKnownKeys(raw, ["kind", "text", "before"], context, where);
+      assertKnownKeys(raw, ["kind", "text", "before", "input"], context, where);
       const text = requiredString(raw, "text", context, where, { nonEmpty: true, maxBytes: 10_000 });
       const before = raw.before === undefined ? undefined : parseCondition(raw.before, context, `${where}.before`);
-      return before === undefined ? { kind, text } : { kind, text, before };
+      return {
+        kind, text,
+        ...(before !== undefined ? { before } : {}),
+        ...(raw.input !== undefined ? { input: parseInputAddress(raw.input, context, where) } : {})
+      };
     }
     case "key": {
-      assertKnownKeys(raw, ["kind", "key", "modifiers", "before"], context, where);
+      assertKnownKeys(raw, ["kind", "key", "modifiers", "before", "input"], context, where);
       const key = requiredString(raw, "key", context, where, { nonEmpty: true, maxBytes: 64 });
       let modifiers: string[] | undefined;
       if (raw.modifiers !== undefined) {
@@ -256,7 +269,8 @@ function parseBatchAction(value: unknown, context: ValidationContext, index: num
         kind,
         key,
         ...(modifiers !== undefined ? { modifiers } : {}),
-        ...(before !== undefined ? { before } : {})
+        ...(before !== undefined ? { before } : {}),
+        ...(raw.input !== undefined ? { input: parseInputAddress(raw.input, context, where) } : {})
       };
     }
     case "scroll":
@@ -580,13 +594,15 @@ function parseActionReceipt(value: unknown, context: ValidationContext, where: s
   const kind = enumValue(raw.kind, ACTION_KINDS, context, `${where}.kind`);
   const status = enumValue(raw.status, RECEIPT_STATUSES, context, `${where}.status`);
   const error = raw.error === undefined ? undefined : parseError(raw.error, context, `${where}.error`);
+  const result = raw.result === undefined ? undefined : decodeActionResult(raw.result);
   const parsed: ActionReceipt = {
     index,
     kind,
     status,
-    ...(error !== undefined ? { error } : {})
+    ...(error !== undefined ? { error } : {}),
+    ...(result !== undefined ? { result } : {})
   };
-  return copyUnknownFields(raw, parsed, ["index", "kind", "status", "error"]);
+  return copyUnknownFields(raw, parsed, ["index", "kind", "status", "error", "result"]);
 }
 
 function parseBatchResult(value: unknown, context: ValidationContext, where: string, encoding: WindowIdEncoding): BatchResult {
@@ -829,4 +845,12 @@ export function deepRestoreWindowIds(value: unknown, hint?: "observe" | "batch" 
     return parseExecResult(value, "protocol_rpc", "rpc.exec", "wire");
   }
   return value;
+}
+
+export function decodeActionResult(value: unknown): import("@ya-skills/computer-runtime").ActionResult {
+  try {
+    const result = parseActionResult(value);
+    if (result !== undefined) return result;
+  } catch { /* Normalize driver validation into the wire error contract. */ }
+  throw new ProtocolError("protocol_result", "invalid action result");
 }

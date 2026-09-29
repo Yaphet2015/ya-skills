@@ -53,6 +53,33 @@ When a batch reports `unknown`, observe before any further input and never
 replay the same request id. When an action reports `delivered`, do not repeat
 it: inspect the returned observation and verify the effect.
 
+## Addressed background input and driver results
+
+For native fields, `--type TEXT --element-token TOKEN` and
+`--key KEY --element-token TOKEN` address that exact AX control. Use a fresh token
+from the same persistent session. A precondition observation supersedes old AX
+tokens; finish any precondition checks before choosing the input token.
+
+For Chromium/Electron fields that need renderer focus, inspect an image and use
+`--type TEXT --input-x PX --input-y PY --observation UUID` (also supported by
+`--key`). The runtime validates the image evidence and maps its coordinates; the
+driver focuses and types/presses in one background call. Open a closed control
+first, then observe and address its actual input field.
+
+Batch type/key actions accept `input: {elementToken: TOKEN}` or
+`input: {point: {observationId: UUID, x, y}}`. Exec scripts use
+`computer.type(text, before?, input?)` and
+`computer.key(key, modifiers?, before?, input?)` and receive action metadata.
+
+Read `actionResult` on one-shot act output and `result` on batch/exec step
+receipts. The driver reports `route`, `effect`, `delivery`, `escalation`, and
+refusal `error.code`. `delivered` does not convert `effect: "unverifiable"` into
+success. A refused effect stops the batch before subsequent input. An escalation
+to pixel, page, or foreground is a suggestion: inspect the state and choose the
+next action under the user's existing authorization. Never retry automatically.
+A `synthetic_events` route can be targeted background delivery; that route alone
+is not evidence that the user's cursor or focus changed.
+
 ## Batch and exec
 
 Put only already-decided serial actions in a batch. A batch is bound to one

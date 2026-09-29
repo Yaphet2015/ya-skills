@@ -4,6 +4,7 @@
 // windowId is a decimal bigint (macOS window ids exceed Number.MAX_SAFE_INTEGER);
 // pid must stay a positive safe integer.
 
+import type { InputAddress } from "@ya-skills/computer-runtime";
 import { tokenizeFlags, type FlagTokens } from "@ya-skills/core";
 import { parseSessionArgs } from "./session-command.js";
 
@@ -30,8 +31,8 @@ export type ActSpec =
   | { action: "click"; click: ClickSpec }
   | { action: "click_point"; clickPoint: { observationId: string; x: number; y: number } }
   | { action: "set_value"; elementToken: string; value: string }
-  | { action: "type"; type: string }
-  | { action: "key"; key: string; modifiers?: KeyModifier[] }
+  | { action: "type"; type: string; input?: InputAddress }
+  | { action: "key"; key: string; modifiers?: KeyModifier[]; input?: InputAddress }
   | { action: "scroll"; scroll: ScrollSpec };
 
 export type ObservationMode = "auto" | "ax" | "image" | "both";
@@ -95,6 +96,8 @@ const ALLOWED: Record<string, Set<string>> = {
     "type",
     "set-value",
     "element-token",
+    "input-x",
+    "input-y",
     "key",
     "modifiers",
     "format",
@@ -184,7 +187,7 @@ function parseRequestId(value: string | undefined): string {
   return requestId;
 }
 
-// These names come from the installed @trycua/cua-driver 0.27.0 native
+// These names come from the installed @trycua/cua-driver 0.30.4 native
 // contract. The driver accepts aliases for the three platform modifier names;
 // normalize them once so one-shot and session calls send the same wire values.
 const MODIFIER_ALIASES: ReadonlyMap<string, KeyModifier> = new Map([
@@ -266,11 +269,32 @@ function parseActFormat(raw: string | undefined): ActFormat {
   return format;
 }
 
+function parseInputAddress(tokens: FlagTokens): InputAddress | undefined {
+  const elementToken = tokens.values["element-token"];
+  const x = tokens.values["input-x"];
+  const y = tokens.values["input-y"];
+  const observationId = tokens.values["observation"];
+  const hasPoint = x !== undefined || y !== undefined || observationId !== undefined;
+  if (elementToken !== undefined) {
+    if (hasPoint) fail("--element-token and --input-x/--input-y --observation are exclusive");
+    const token = requireNonEmpty("element-token", elementToken);
+    if (Buffer.byteLength(token, "utf8") > 256) fail("--element-token must be <= 256 UTF-8 bytes");
+    return { elementToken: token };
+  }
+  if (!hasPoint) return undefined;
+  if (x === undefined || y === undefined || observationId === undefined) fail("input coordinates require --input-x, --input-y, and --observation");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(observationId)) fail("--observation must be a UUID returned by observe");
+  const px = parseNumber("input-x", x);
+  const py = parseNumber("input-y", y);
+  if (px < 0 || py < 0) fail("input coordinates must be non-negative");
+  return { point: { observationId, x: px, y: py } };
+}
+
 function parseActSpec(tokens: FlagTokens): ActSpec {
   const hasType = tokens.values["type"] !== undefined;
   const setValue = tokens.values["set-value"];
   const elementToken = tokens.values["element-token"];
-  const hasSetValue = setValue !== undefined || elementToken !== undefined;
+  const hasSetValue = setValue !== undefined;
   const hasKey = tokens.values["key"] !== undefined;
   const modifiers = tokens.values["modifiers"];
   const hasScroll = tokens.values["scroll"] !== undefined;
@@ -280,7 +304,11 @@ function parseActSpec(tokens: FlagTokens): ActSpec {
   const clickX = tokens.values["click-x"];
   const clickY = tokens.values["click-y"];
   const observation = tokens.values["observation"];
-  const hasClickPoint = clickX !== undefined || clickY !== undefined || observation !== undefined;
+  const hasClickPoint = clickX !== undefined || clickY !== undefined || (observation !== undefined && !hasType && !hasKey);
+  const hasInputPoint = tokens.values["input-x"] !== undefined || tokens.values["input-y"] !== undefined;
+  if (hasInputPoint && !hasType && !hasKey) fail("--input-x/--input-y require --type or --key");
+  if (elementToken !== undefined && !hasSetValue && !hasType && !hasKey) fail("--element-token requires --set-value, --type, or --key");
+  const input = hasType || hasKey ? parseInputAddress(tokens) : undefined;
   const count = [hasType, hasKey, hasScroll, hasClick, hasClickPoint, hasSetValue].filter(Boolean).length;
   if (count === 0) {
     fail("act needs exactly one action: --click-text/--click-contains [--click-role], --click-x/--click-y --observation, --set-value VALUE --element-token TOKEN, --type, --key, --scroll");
@@ -298,7 +326,7 @@ function parseActSpec(tokens: FlagTokens): ActSpec {
     return { action: "set_value", elementToken, value: setValue };
   }
   if (hasType) {
-    return { action: "type", type: requireNonEmpty("--type", tokens.values["type"]) };
+    return { action: "type", type: requireNonEmpty("--type", tokens.values["type"]), ...(input !== undefined ? { input } : {}) };
   }
   if (hasKey) {
     const key = parseKey(tokens.values["key"]);
@@ -306,7 +334,8 @@ function parseActSpec(tokens: FlagTokens): ActSpec {
     return {
       action: "key",
       key,
-      ...(parsedModifiers !== undefined ? { modifiers: parsedModifiers } : {})
+      ...(parsedModifiers !== undefined ? { modifiers: parsedModifiers } : {}),
+      ...(input !== undefined ? { input } : {})
     };
   }
   if (hasScroll) {

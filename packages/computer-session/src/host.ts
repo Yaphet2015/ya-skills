@@ -709,13 +709,14 @@ export async function startHost(config: HostConfig, deps: HostDeps = {}): Promis
                 );
               }
             },
-            onActionFinished: async (index, kind, outcome, error) => {
+            onActionFinished: async (index, kind, outcome, error, result) => {
               try {
                 await appendJournalEvent(request.requestId, "action_finished", {
                   index,
                   kind,
                   outcome,
-                  ...(error !== undefined ? { error } : {})
+                  ...(error !== undefined ? { error } : {}),
+                  ...(result !== undefined ? { result } : {})
                 });
               } catch (journalError) {
                 state.value = "unusable";

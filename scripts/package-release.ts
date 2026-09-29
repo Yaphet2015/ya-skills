@@ -13,8 +13,8 @@ import { spawnSync } from "node:child_process";
 import packageJson from "../package.json" with { type: "json" };
 
 const PINNED: Record<string, string> = {
-  "@trycua/cua-driver": "0.27.0",
-  "@trycua/cua-driver-darwin-arm64": "0.27.0",
+  "@trycua/cua-driver": "0.30.4",
+  "@trycua/cua-driver-darwin-arm64": "0.30.4",
   "@ubjs/core": "0.31.0-3",
   "@ubjs/node": "0.31.0-3"
 };

@@ -3,36 +3,44 @@
 // cross the boundary. Receipts are HOST-generated — the script cannot
 // self-report success.
 
-import type { AxValueResult, BatchRequest, Condition, ObserveOptions, PointClick, ScrollSpec, Selector } from "@ya-skills/computer-runtime";
-import { decodeAxValueResult, decodeBatchResultValue, decodeObservationValue } from "./protocol.js";
+import type {
+  ActionResult, AxValueResult, BatchRequest, Condition, InputAddress,
+  ObserveOptions, PointClick, ScrollSpec, Selector
+} from "@ya-skills/computer-runtime";
+import { decodeActionResult, decodeAxValueResult, decodeBatchResultValue, decodeObservationValue } from "./protocol.js";
 import type { JsonValue, ScriptComputer, ScriptRpcMethod } from "./exec-types.js";
 
 export function createScriptComputer(
   send: (method: ScriptRpcMethod, args: Record<string, JsonValue>) => Promise<JsonValue>
 ): ScriptComputer {
   return {
-    async click(selector: Selector): Promise<void> {
-      await send("click", { selector: selector as unknown as JsonValue });
+    async click(selector: Selector): Promise<ActionResult | void> {
+      return resultOf(await send("click", { selector: selector as unknown as JsonValue }));
     },
-    async clickPoint(point: PointClick): Promise<void> {
-      await send("click_point", { point: point as unknown as JsonValue });
+    async clickPoint(point: PointClick): Promise<ActionResult | void> {
+      return resultOf(await send("click_point", { point: point as unknown as JsonValue }));
     },
     async setValue(elementToken: string, value: string): Promise<AxValueResult> {
       const result = await send("set_value", { elementToken, value });
       return decodeAxValueResult(result);
     },
-    async type(text: string, before?: Condition): Promise<void> {
-      await send("type", { text, ...(before !== undefined ? { before: before as unknown as JsonValue } : {}) });
+    async type(text: string, before?: Condition, input?: InputAddress): Promise<ActionResult | void> {
+      return resultOf(await send("type", {
+        text,
+        ...(before !== undefined ? { before: before as unknown as JsonValue } : {}),
+        ...(input !== undefined ? { input: input as unknown as JsonValue } : {})
+      }));
     },
-    async key(key: string, modifiers?: string[], before?: Condition): Promise<void> {
-      await send("key", {
+    async key(key: string, modifiers?: string[], before?: Condition, input?: InputAddress): Promise<ActionResult | void> {
+      return resultOf(await send("key", {
         key,
         ...(modifiers !== undefined ? { modifiers } : {}),
-        ...(before !== undefined ? { before: before as unknown as JsonValue } : {})
-      });
+        ...(before !== undefined ? { before: before as unknown as JsonValue } : {}),
+        ...(input !== undefined ? { input: input as unknown as JsonValue } : {})
+      }));
     },
-    async scroll(spec: ScrollSpec): Promise<void> {
-      await send("scroll", { spec: spec as unknown as JsonValue });
+    async scroll(spec: ScrollSpec): Promise<ActionResult | void> {
+      return resultOf(await send("scroll", { spec: spec as unknown as JsonValue }));
     },
     async wait(condition: Condition, timeoutMs: number): Promise<void> {
       await send("wait", { condition: condition as unknown as JsonValue, timeoutMs });
@@ -46,4 +54,8 @@ export function createScriptComputer(
       return decodeBatchResultValue(result);
     }
   };
+}
+
+function resultOf(value: JsonValue): ActionResult | void {
+  return value == null ? undefined : decodeActionResult(value);
 }

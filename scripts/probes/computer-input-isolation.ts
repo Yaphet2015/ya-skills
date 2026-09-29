@@ -268,6 +268,21 @@ function inspectProductAdapter(): Finding {
     };
   }
 
+  const addressedBackgroundInput =
+    /callWindowTool\(driver, "type_text"/.test(backend) &&
+    /callWindowTool\(driver, "press_key"/.test(backend) &&
+    /delivery_mode: "background"/.test(backend);
+  const preservesActionResults = /parseActionResult\(result\)/.test(session) &&
+    /Promise<ActionResult \| void>/.test(runtimeTypes);
+  if (addressedBackgroundInput && preservesActionResults) {
+    return {
+      status: "observed",
+      detail: "The adapter uses the full tool contract for addressed background input and preserves driver route/effect/delivery/escalation. This source check does not measure desktop interference.",
+      evidence: [displayPath(backendPath), displayPath(runtimeTypesPath), displayPath(sessionPath)],
+      values: { addressedBackgroundInput, preservesActionResults, resultMetadataDropped: false }
+    };
+  }
+
   const typeAdapter = section(backend, /async type\(target[\s\S]*?(?=\n\s*async key\()/);
   const keyAdapter = section(backend, /async key\(target[\s\S]*?(?=\n\s*async scroll\()/);
   const clickBackgroundCount = (

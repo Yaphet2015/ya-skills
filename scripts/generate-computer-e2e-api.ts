@@ -23,6 +23,8 @@ const RUNTIME_SURFACE = [
   "AppRef",
   "AxElement",
   "AxValueResult",
+  "ActionResult",
+  "InputAddress",
   "Snapshot",
   "Predicate",
   "ScrollDirection",

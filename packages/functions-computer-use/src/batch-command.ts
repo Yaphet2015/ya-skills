@@ -214,7 +214,8 @@ export function batchCommand(
               index: context.index,
               kind: action.kind,
               status: receipt?.status ?? "unknown",
-              ...(receipt?.error !== undefined ? { error: receipt.error } : {})
+              ...(receipt?.error !== undefined ? { error: receipt.error } : {}),
+              ...(receipt?.result !== undefined ? { result: receipt.result } : {})
             }
           } satisfies StepExecutionResult;
         },
@@ -222,7 +223,8 @@ export function batchCommand(
         recorded: async (receipt) => {
           await appendEvent("action_finished", {
             index: receipt.index, kind: receipt.kind, outcome: receipt.status,
-            ...(receipt.error !== undefined ? { error: receipt.error } : {})
+            ...(receipt.error !== undefined ? { error: receipt.error } : {}),
+            ...(receipt.result !== undefined ? { result: receipt.result } : {})
           });
           finished.add(receipt.index);
         }

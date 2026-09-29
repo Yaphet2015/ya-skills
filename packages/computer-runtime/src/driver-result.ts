@@ -1,10 +1,11 @@
-import type { AxValueResult, ToolResultLike } from "./types.js";
+import type { ActionResult, AxValueResult, ToolResultLike } from "./types.js";
 
 export class ComputerError extends Error {
   constructor(
     public code: string,
     message: string,
-    public actionOutcome?: "delivered" | "not_delivered" | "unknown"
+    public actionOutcome?: "delivered" | "not_delivered" | "unknown",
+    public result?: ActionResult
   ) {
     super(message);
   }
@@ -135,4 +136,59 @@ export function parseAxValueResult(result: void | ToolResultLike): AxValueResult
         }
       : {})
   };
+}
+
+// Numeric positions match the pinned SDK 0.30.4 generated enums.
+const ROUTES = ["accessibility", "synthetic_events", "global_input", "system_api", "dom", "trusted_input"] as const;
+const EFFECTS = ["confirmed", "partial", "unverifiable", "suspected_noop", "refused"] as const;
+const DELIVERY_MODES = ["background", "foreground", "not_applicable", "unknown"] as const;
+const ESCALATION_TARGETS = ["pixel", "foreground", "page", "session"] as const;
+const ESCALATION_REASONS = ["route_unavailable", "delivery_failed", "effect_unconfirmed", "suspected_noop", "permission_required"] as const;
+
+function driverEnum<T extends string>(value: unknown, values: readonly T[], name: string): T {
+  const normalized = typeof value === "number" && Number.isInteger(value) ? values[value] : value;
+  if (typeof normalized !== "string" || !values.includes(normalized as T)) {
+    throw new ComputerError("invalid_driver_result", "invalid driver " + name, "unknown");
+  }
+  return normalized as T;
+}
+
+/** Normalize generic snake_case JSON and typed SDK numeric enums without
+ * loading the SDK. Keep machine metadata; omit arbitrary application text. */
+export function parseActionResult(value: unknown): ActionResult | undefined {
+  const tool = asRecord(value);
+  if (!tool) return undefined;
+  const raw = parseStructuredObject(tool.structuredJson as string | undefined) ?? asRecord(tool.action) ?? tool;
+  if (raw.route === undefined && raw.effect === undefined) return undefined;
+  const result: ActionResult = {
+    route: driverEnum(raw.route, ROUTES, "route"),
+    effect: driverEnum(raw.effect, EFFECTS, "effect")
+  };
+  if (raw.delivery != null) {
+    const delivery = asRecord(raw.delivery);
+    if (!delivery) throw new ComputerError("invalid_driver_result", "invalid driver delivery", "unknown");
+    const count = delivery.delivered_count !== undefined ? delivery.delivered_count : delivery.deliveredCount;
+    if (count != null && (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0)) {
+      throw new ComputerError("invalid_driver_result", "invalid driver delivered count", "unknown");
+    }
+    result.delivery = {
+      mode: driverEnum(delivery.mode, DELIVERY_MODES, "delivery mode"),
+      ...(count !== undefined ? { deliveredCount: count as number | null } : {})
+    };
+  }
+  if (raw.escalation != null) {
+    const escalation = asRecord(raw.escalation);
+    result.escalation = {
+      target: driverEnum(escalation?.target, ESCALATION_TARGETS, "escalation target"),
+      reason: driverEnum(escalation?.reason, ESCALATION_REASONS, "escalation reason")
+    };
+  }
+  if (raw.error != null) {
+    const error = asRecord(raw.error);
+    if (typeof error?.code !== "string" || !/^[a-z0-9_]{1,128}$/i.test(error.code)) {
+      throw new ComputerError("invalid_driver_result", "invalid driver refusal code", "unknown");
+    }
+    result.error = { code: error.code };
+  }
+  return result;
 }

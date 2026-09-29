@@ -1,11 +1,12 @@
 import type {
   ActionReceipt,
+  ActionResult,
   BatchAction,
   Computer,
   Condition,
   Target
 } from "./types.js";
-import { ComputerError } from "./driver-result.js";
+import { ComputerError, parseActionResult } from "./driver-result.js";
 import { evaluateCondition, isUnsupportedCondition } from "./conditions.js";
 import { selectorMatches } from "./observe.js";
 
@@ -39,7 +40,8 @@ function makeResult(
   action: BatchAction,
   status: StepExecutionResult["status"],
   receiptStatus: ActionReceipt["status"],
-  error?: { code: string; message: string }
+  error?: { code: string; message: string },
+  result?: ActionResult | void
 ): StepExecutionResult {
   return {
     status,
@@ -47,7 +49,8 @@ function makeResult(
       index,
       kind: action.kind,
       status: receiptStatus,
-      ...(error !== undefined ? { error } : {})
+      ...(error !== undefined ? { error } : {}),
+      ...(result !== undefined ? { result } : {})
     }
   };
 }
@@ -85,19 +88,18 @@ export async function executeStep(
     switch (action.kind) {
       case "click": {
         const selector = action.selector;
-        await computer.click(
+        const result = await computer.click(
           target,
           (element) => selectorMatches(selector, element),
           selector.match + " \"" + selector.text + "\"" + (selector.role ? " role=" + selector.role : "")
         );
-        return makeResult(index, action, "completed", "delivered");
+        return makeResult(index, action, "completed", "delivered", undefined, result);
       }
       case "click_point":
-        await computer.clickPoint(target, action.point);
-        return makeResult(index, action, "completed", "delivered");
+        return makeResult(index, action, "completed", "delivered", undefined, await computer.clickPoint(target, action.point));
       case "set_value":
-        await computer.setValue(target, action.elementToken, action.value);
-        return makeResult(index, action, "completed", "delivered");
+        return makeResult(index, action, "completed", "delivered", undefined,
+          parseActionResult(await computer.setValue(target, action.elementToken, action.value)));
       case "type":
       case "key": {
         if (action.before !== undefined) {
@@ -117,16 +119,13 @@ export async function executeStep(
             message: "batch timeout budget exhausted before dispatch"
           });
         }
-        if (action.kind === "type") {
-          await computer.type(target, action.text);
-        } else {
-          await computer.key(target, action.key, action.modifiers);
-        }
-        return makeResult(index, action, "completed", "delivered");
+        const result = action.kind === "type"
+          ? await computer.type(target, action.text, action.input)
+          : await computer.key(target, action.key, action.modifiers, action.input);
+        return makeResult(index, action, "completed", "delivered", undefined, result);
       }
       case "scroll":
-        await computer.scroll(target, action.spec);
-        return makeResult(index, action, "completed", "delivered");
+        return makeResult(index, action, "completed", "delivered", undefined, await computer.scroll(target, action.spec));
       case "wait": {
         const satisfied = await waitForConditionLocally(
           computer,
@@ -164,7 +163,8 @@ export async function executeStep(
       action,
       interrupted || outcome === "unknown" ? "interrupted" : "failed",
       outcome,
-      receiptError(error)
+      receiptError(error),
+      error instanceof ComputerError ? error.result : undefined
     );
   }
 }

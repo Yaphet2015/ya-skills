@@ -6,7 +6,7 @@ import {
   type BatchAction,
   type StepExecutionResult
 } from "@ya-skills/computer-runtime";
-import { FrameReader } from "./protocol.js";
+import { decodeActionResult, FrameReader } from "./protocol.js";
 import {
   spawnInternalWorker,
   stopProcessGroup,
@@ -72,7 +72,8 @@ function normalizeStepResult(
       index,
       kind: action.kind,
       status,
-      ...(isRecord(candidate?.error) ? { error: candidate.error as ActionReceipt["error"] } : {})
+      ...(isRecord(candidate?.error) ? { error: candidate.error as ActionReceipt["error"] } : {}),
+      ...(candidate?.result !== undefined ? { result: decodeActionResult(candidate.result) } : {})
     }
   };
 }

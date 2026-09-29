@@ -2,6 +2,8 @@
 // the host. Only these method names may cross the pipe; args are JSON.
 
 import type {
+  ActionResult,
+  InputAddress,
   AxValueResult,
   Condition,
   ObserveOptions,
@@ -36,12 +38,12 @@ export type ScriptRpcReply =
 /** The desktop facade a script sees. Selector/condition validation happens in
  * the host through the runtime — lambdas never cross the wire. */
 export interface ScriptComputer {
-  click(selector: Selector): Promise<void>;
-  clickPoint(point: PointClick): Promise<void>;
+  click(selector: Selector): Promise<ActionResult | void>;
+  clickPoint(point: PointClick): Promise<ActionResult | void>;
   setValue(elementToken: string, value: string): Promise<AxValueResult>;
-  type(text: string, before?: Condition): Promise<void>;
-  key(key: string, modifiers?: string[], before?: Condition): Promise<void>;
-  scroll(spec: ScrollSpec): Promise<void>;
+  type(text: string, before?: Condition, input?: InputAddress): Promise<ActionResult | void>;
+  key(key: string, modifiers?: string[], before?: Condition, input?: InputAddress): Promise<ActionResult | void>;
+  scroll(spec: ScrollSpec): Promise<ActionResult | void>;
   wait(condition: Condition, timeoutMs: number): Promise<void>;
   observe(options?: ObserveOptions): Promise<import("@ya-skills/computer-runtime").Observation>;
   batch(request: import("@ya-skills/computer-runtime").BatchRequest): Promise<import("@ya-skills/computer-runtime").BatchResult>;

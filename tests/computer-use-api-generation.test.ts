@@ -31,7 +31,7 @@ describe("computer-use api.d.ts generation (C4)", () => {
       "export interface ScriptComputer ",
       "export interface ExecResult ",
       "export type JsonValue",
-      "clickPoint(point: PointClick): Promise<void>;",
+      "clickPoint(point: PointClick): Promise<ActionResult | void>;",
       "wait(condition: Condition, timeoutMs: number): Promise<void>;",
       "stateCommitted: boolean;"
     ]) {

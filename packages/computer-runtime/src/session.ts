@@ -4,6 +4,10 @@
 
 import { randomUUID } from "node:crypto";
 import type {
+  ActionResult,
+  InputAddress,
+  NativeInputAddress,
+  Point,
   AxElement,
   AxValueResult,
   Backend,
@@ -34,7 +38,7 @@ import {
   type ObservationStore,
   type ResizeResult
 } from "./observation-store.js";
-import { validateBatch, runBatch, DEFAULT_BATCH_TIMEOUT_MS } from "./batch.js";
+import { validateBatch, validateInputAddress, runBatch, DEFAULT_BATCH_TIMEOUT_MS } from "./batch.js";
 import { executeStep as executeSingleStep, type StepExecutionResult } from "./step-execution.js";
 import { LeaseError, type LeaseHandle } from "./target-lease.js";
 import {
@@ -43,7 +47,8 @@ import {
   isAbortError,
   isKnownDriverRefusal,
   isTimeoutError,
-  parseAxValueResult
+  parseAxValueResult,
+  parseActionResult
 } from "./driver-result.js";
 import { combineAbortSignals, normalizeObserveCallOptions, withDeadline } from "./operation-control.js";
 import type { MutationLeases } from "./mutation-leases.js";
@@ -152,9 +157,10 @@ class SessionImpl implements ComputerSession {
         this.clickViaToken(target, predicate, description),
       setValue: (target: Target, elementToken: string, value: string) =>
         this.setValue(target, elementToken, value),
-      type: (target: Target, text: string) => this.action("type", target, (b) => b.type(target, text)),
-      key: (target: Target, key: string, modifiers?: string[]) =>
-        this.action("key", target, (b) => b.key(target, key, modifiers)),
+      type: (target: Target, text: string, input?: InputAddress) =>
+        this.inputAction("type", target, input, (b, address) => b.type(target, text, address)),
+      key: (target: Target, key: string, modifiers?: string[], input?: InputAddress) =>
+        this.inputAction("key", target, input, (b, address) => b.key(target, key, modifiers, address)),
       scroll: (target: Target, spec: ScrollSpec) => this.action("scroll", target, (b) => b.scroll(target, spec)),
       waitFor: (target: Target, predicate, description: string, opts?: { timeoutMs?: number; intervalMs?: number }) =>
         this.waitFor(target, predicate, description, opts)
@@ -603,10 +609,38 @@ class SessionImpl implements ComputerSession {
 
   // ---- clickPoint: evidence-bound visual click (A4) -----------------------
 
-  private async clickPoint(target: Target, point: PointClick): Promise<void> {
+  private clickPoint(target: Target, point: PointClick): Promise<ActionResult | void> {
+    return this.pointAction("click_point", target, point, (backend, mapped) => backend.clickPoint(target, mapped));
+  }
+
+  private async inputAction(
+    kind: "type" | "key",
+    target: Target,
+    input: InputAddress | undefined,
+    dispatch: (backend: Backend, input?: NativeInputAddress) => Promise<ToolResultLike>
+  ): Promise<ActionResult | void> {
+    if (input !== undefined) {
+      try {
+        input = validateInputAddress(input);
+      } catch (error) {
+        throw new ComputerError("invalid_request", error instanceof Error ? error.message : "invalid input address", "not_delivered");
+      }
+      if (input.point !== undefined) {
+        return this.pointAction(kind, target, input.point, (backend, point) => dispatch(backend, { point }));
+      }
+    }
+    return this.action(kind, target, (backend) => dispatch(backend, input));
+  }
+
+  private async pointAction(
+    kind: "click_point" | "type" | "key",
+    target: Target,
+    point: PointClick,
+    dispatch: (backend: Backend, point: Point) => Promise<ToolResultLike>
+  ): Promise<ActionResult | void> {
     const store = this.options.observationStore;
     if (!store) {
-      throw new ComputerError("observation_required", "clickPoint requires an observation store — run observe first");
+      throw new ComputerError("observation_required", "coordinate input requires an observation store — run observe first");
     }
     let observation: Observation;
     try {
@@ -674,10 +708,10 @@ class SessionImpl implements ComputerSession {
       );
     }
     const expectedRevisionAtDispatch = observation.revision + 1;
-    await this.action(
-      "click_point",
+    return this.action(
+      kind,
       target,
-      async (b) => b.clickPoint(target, driverPoint),
+      (b) => dispatch(b, driverPoint),
       {
         beforeDispatch: () => {
           if (this.revision !== expectedRevisionAtDispatch) {
@@ -709,14 +743,12 @@ class SessionImpl implements ComputerSession {
     target: Target,
     predicate: Predicate,
     description: string
-  ): Promise<void> {
+  ): Promise<ActionResult | void> {
     return clickUnique(
       {
         snapshot: async () =>
           (await this.read("click lookup", (b) => b.snapshot(target, false))).elements,
-        click: async (token) => {
-          await this.action("click", target, (b) => b.clickToken(target, token));
-        }
+        click: (token) => this.action("click", target, (b) => b.clickToken(target, token))
       },
       predicate,
       description
@@ -775,7 +807,7 @@ class SessionImpl implements ComputerSession {
     target: Target,
     fn: (backend: Backend) => Promise<void | ToolResultLike>,
     options?: { beforeDispatch?: () => void }
-  ): Promise<void>;
+  ): Promise<ActionResult | void>;
   private action<T>(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
@@ -793,7 +825,7 @@ class SessionImpl implements ComputerSession {
       validate?: (result: void | ToolResultLike) => T;
       beforeDispatch?: () => void;
     } = {}
-  ): Promise<void | T> {
+  ): Promise<ActionResult | void | T> {
     const deadlineAt = this.beginOp();
     try {
       // Shared target ownership (B3): the FIRST mutation of each app acquires
@@ -862,14 +894,21 @@ class SessionImpl implements ComputerSession {
         this.assertDispatchAllowed(deadlineAt, "not_delivered");
         options.beforeDispatch?.();
         const result = await withDeadline(kind, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
+        const driverResult = parseActionResult(result);
+        if (driverResult?.effect === "refused") {
+          throw new ComputerError(driverResult.error?.code ?? "action_refused", "driver refused the action", "not_delivered", driverResult);
+        }
         if (result && typeof result === "object" && result.isError) {
+          const code = typeof result.errorCode === "string" && /^[a-z0-9_]{1,128}$/i.test(result.errorCode)
+            ? result.errorCode : "action_refused";
           throw new ComputerError(
-            "action_refused",
+            code,
             `${kind} was refused: ${result.text ?? "no detail"}`,
-            "not_delivered"
+            driverResult ? "unknown" : "not_delivered",
+            driverResult
           );
         }
-        const projected = options.validate?.(result);
+        const projected = options.validate ? options.validate(result) : driverResult;
         await finish("delivered");
         return projected;
       } catch (error) {

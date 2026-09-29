@@ -415,3 +415,42 @@ describe("action outcome classification (A4 refinement)", () => {
     expect(outcomes).toContain("native:unknown");
   });
 });
+
+describe("observed coordinates for background keyboard input", () => {
+  for (const kind of ["type", "key"] as const) {
+    test(`${kind} validates the image and sends one addressed native call`, async () => {
+      const received: unknown[] = [];
+      const result = { route: "synthetic_events", effect: "unverifiable", delivery: { mode: "background" } } as const;
+      const { session, observation, root, imageDir } = await makeSession({
+        type: async (_target: unknown, _text: string, input: unknown) => { received.push(input); return { structuredJson: JSON.stringify(result) }; },
+        key: async (_target: unknown, _key: string, _modifiers: unknown, input: unknown) => { received.push(input); return { structuredJson: JSON.stringify(result) }; }
+      });
+      const input = { point: { observationId: observation.id, x: 240, y: 160 } };
+      try {
+        const actual = kind === "type"
+          ? await session.computer.type(target, "hello", input)
+          : await session.computer.key(target, "Return", undefined, input);
+        expect(actual).toEqual(result);
+        expect(received).toEqual([{ point: { x: 240, y: 160 } }]);
+        await expect(session.computer.type(target, "again", input)).rejects.toMatchObject({ code: "unknown_observation" });
+        expect(received).toHaveLength(1);
+      } finally {
+        await session.close();
+        await rm(root, { recursive: true, force: true });
+        await rm(imageDir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("expired image evidence refuses typing before native input", async () => {
+    const { session, observation, root, imageDir } = await makeSession({}, 61_000);
+    try {
+      await expect(session.computer.type(target, "hello", { point: { observationId: observation.id, x: 20, y: 30 } }))
+        .rejects.toMatchObject({ code: "stale_observation" });
+    } finally {
+      await session.close();
+      await rm(root, { recursive: true, force: true });
+      await rm(imageDir, { recursive: true, force: true });
+    }
+  });
+});

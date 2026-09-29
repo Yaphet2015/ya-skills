@@ -5,9 +5,11 @@
 import type { FunctionCommand } from "@ya-skills/core";
 import {
   ComputerError,
+  parseActionResult,
   ensureOutDir,
   saveScreenshot,
   selectWindow,
+  type ActionResult,
   type AxElement,
   type Computer,
   type ForegroundController,
@@ -45,10 +47,11 @@ export function clickPredicate(click: ClickSpec): (e: AxElement) => boolean {
   };
 }
 
-function encodePerception(target: Target, snapshot: Snapshot, outDir?: string): string {
+function encodePerception(target: Target, snapshot: Snapshot, outDir?: string, actionResult?: ActionResult | void): string {
   return stringifyJson(
     {
       ...target,
+      ...(actionResult ? { actionResult } : {}),
       title: snapshot.title,
       elements: snapshot.elements,
       ...(snapshot.imageBase64
@@ -58,8 +61,8 @@ function encodePerception(target: Target, snapshot: Snapshot, outDir?: string): 
   );
 }
 
-function encodeObservation(target: Target, observation: Observation): string {
-  return stringifyJson({ schemaVersion: 1, target, observation });
+function encodeObservation(target: Target, observation: Observation, actionResult?: ActionResult | void): string {
+  return stringifyJson({ schemaVersion: 1, target, observation, ...(actionResult ? { actionResult } : {}) });
 }
 
 function actSpecToSingleAction(request: ParsedRequest & { kind: "act" }): {
@@ -81,12 +84,13 @@ function actSpecToSingleAction(request: ParsedRequest & { kind: "act" }): {
     case "set_value":
       return { kind: "set_value", elementToken: request.elementToken, value: request.value };
     case "type":
-      return { kind: "type", text: request.type };
+      return { kind: "type", text: request.type, ...(request.input !== undefined ? { input: request.input } : {}) };
     case "key":
       return {
         kind: "key",
         key: request.key,
-        ...(request.modifiers !== undefined ? { modifiers: request.modifiers } : {})
+        ...(request.modifiers !== undefined ? { modifiers: request.modifiers } : {}),
+        ...(request.input !== undefined ? { input: request.input } : {})
       };
     case "scroll":
       return { kind: "scroll", spec: request.scroll };
@@ -95,7 +99,7 @@ function actSpecToSingleAction(request: ParsedRequest & { kind: "act" }): {
 
 type ActRequest = Extract<ParsedRequest, { kind: "act" }>;
 
-async function dispatchAct(computer: Computer, target: Target, request: ActRequest): Promise<void> {
+async function dispatchAct(computer: Computer, target: Target, request: ActRequest): Promise<ActionResult | void> {
   switch (request.action) {
     case "click":
       return computer.click(
@@ -106,20 +110,20 @@ async function dispatchAct(computer: Computer, target: Target, request: ActReque
     case "click_point":
       return computer.clickPoint(target, request.clickPoint);
     case "set_value":
-      await computer.setValue(target, request.elementToken, request.value);
-      return;
+      return parseActionResult(await computer.setValue(target, request.elementToken, request.value));
     case "type":
-      return computer.type(target, request.type);
+      return computer.type(target, request.type, request.input);
     case "key":
-      return computer.key(target, request.key, request.modifiers);
+      return computer.key(target, request.key, request.modifiers, request.input);
     case "scroll":
       return computer.scroll(target, request.scroll);
   }
 }
 
-function postActionObserveError(error: unknown): Error {
+function postActionObserveError(error: unknown, actionResult?: ActionResult | void): Error {
   return jsonError("post_action_observe_failed", error instanceof Error ? error.message : String(error), {
     actionDelivered: true,
+    ...(actionResult ? { actionResult } : {}),
     actionOutcome: "delivered",
     nextStep: "run perceive; do NOT repeat the act"
   });
@@ -177,6 +181,7 @@ function formatSessionActObservation(output: string): string {
         observationError?: { code?: unknown; message?: unknown };
         steps?: Array<{
           status?: unknown;
+          result?: ActionResult;
           error?: { code?: unknown; message?: unknown };
         }>;
       }
@@ -199,11 +204,12 @@ function formatSessionActObservation(output: string): string {
   ) {
     throw jsonError(stepError.code, stepError.message, {
       actionOutcome,
+      ...(step?.result ? { actionResult: step.result } : {}),
       nextStep: nextStepForActionOutcome(actionOutcome) ?? "run perceive; do NOT repeat the act"
     });
   }
   if (result?.observation !== undefined && actionOutcome === "delivered") {
-    return encodeObservation(result.observation.target, result.observation);
+    return encodeObservation(result.observation.target, result.observation, step?.result);
   }
   const observationError = result?.observationError;
   const message = typeof observationError?.message === "string"
@@ -211,6 +217,7 @@ function formatSessionActObservation(output: string): string {
     : "the action completed but the post-action observation was unavailable";
   throw jsonError("post_action_observe_failed", message, {
     actionDelivered: actionOutcome === "delivered",
+    ...(step?.result ? { actionResult: step.result } : {}),
     actionOutcome,
     ...(typeof observationError?.code === "string" ? { causeCode: observationError.code } : {}),
     nextStep: nextStepForActionOutcome(actionOutcome) ?? "run perceive; do NOT repeat the act"
@@ -273,6 +280,7 @@ function mapError(request: ParsedRequest, error: unknown): unknown {
     const nextStep = nextStepForActionOutcome(actionOutcome);
     const extra: Record<string, unknown> = {
       ...(actionOutcome !== undefined ? { actionOutcome } : {}),
+      ...(error.result !== undefined ? { actionResult: error.result } : {}),
       ...(nextStep !== undefined ? { nextStep } : {})
     };
     // set_value has a stricter no-replay instruction when the AX proof is
@@ -357,19 +365,19 @@ async function runReal(
             const snap = await session.computer.snapshot(target, { screenshot: request.shot });
             return encodePerception(target, snap, request.outDir);
           }
-          await dispatchAct(session.computer, target, request);
+          const actionResult = await dispatchAct(session.computer, target, request);
 
           try {
             if (request.format === "observation") {
               const observation = await session.computer.observe(target, {
                 mode: request.shot ? "both" : "auto"
               });
-              return encodeObservation(target, observation);
+              return encodeObservation(target, observation, actionResult);
             }
             const snap = await session.computer.snapshot(target, { screenshot: request.shot });
-            return encodePerception(target, snap, request.outDir);
+            return encodePerception(target, snap, request.outDir, actionResult);
           } catch (error) {
-            throw postActionObserveError(error);
+            throw postActionObserveError(error, actionResult);
           }
         }, (error) => mapError(request, error), foregroundController, closeSession);
       }
@@ -471,6 +479,7 @@ export function createComputerUseCommands(
       description: "Perform one background action (click/set-value/type/key/scroll), then re-perceive.",
       usage: [
         "yk computer-use act (--pid PID | --session ID) [--window ID] [--shot] [--activate] [--audit-foreground] [--format observation|legacy] with exactly one action:",
+        "  --type/--key optionally accept --element-token TOKEN or --input-x PX --input-y PY --observation UUID",
         "  --click-text TEXT | --click-contains TEXT [--click-role ROLE]   AX text click",
         "  --click-x PX --click-y PY --observation UUID                      visual click (from observe)",
         "  --set-value VALUE --element-token TOKEN                          set AX value",
