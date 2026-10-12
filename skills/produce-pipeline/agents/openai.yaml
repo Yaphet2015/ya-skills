@@ -1,0 +1,4 @@
+interface:
+  display_name: "Produce Pipeline"
+  short_description: "由 Leader 协调规划、实现、审查和测试，保留阶段 Hook 与验证证据"
+  default_prompt: "使用 $produce-pipeline 完整实现并验证这个需求。"
