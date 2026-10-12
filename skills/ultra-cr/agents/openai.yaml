@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ultra CR"
+  short_description: "协调独立审查员检查代码、验证发现并讨论分歧，生成可恢复的审查报告"
+  default_prompt: "使用 $ultra-cr 审查当前变更，并对照需求给出有证据的修复建议。"
