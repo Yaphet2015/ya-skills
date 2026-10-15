@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.28.0](https://github.com/Yaphet2015/ya-skills/compare/v0.27.1...v0.28.0) (2026-10-15)
+
+
+### Features
+
+* **scripts:** add dev:link/dev:clean to test a local build as the global yk ([c644b88](https://github.com/Yaphet2015/ya-skills/commit/c644b887c28e22de2211de5b536eedefcd79d053))
+* **skills:** add produce-pipeline skill for Planner/Builder/Verifier orchestration ([fa83865](https://github.com/Yaphet2015/ya-skills/commit/fa83865b4371f96a7753362e91a20a33ebbe7a6f))
+* **skills:** add ultra-cr skill for multi-agent code review ([f51bc35](https://github.com/Yaphet2015/ya-skills/commit/f51bc35701dea945f0100e9cfb593cc97a6438e4))
+
+
+### Bug Fixes
+
+* **computer-use:** upgrade embedded Cua driver and support chooser sheets ([9d59531](https://github.com/Yaphet2015/ya-skills/commit/9d595318ad2bb705101ffe8bd68e950a39720dbc))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
