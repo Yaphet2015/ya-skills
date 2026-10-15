@@ -1,0 +1,27 @@
+{
+  "version": "0.35.4",
+  "sameProcess": true,
+  "driverVersion": "0.35.4",
+  "fixture": {
+    "attachedSheetId": 134120,
+    "frontmostPid": 86665,
+    "panelWindowId": 134120,
+    "parentWindowId": 134119,
+    "pid": 89487
+  },
+  "parentElements": 46,
+  "cancelToken": "s00000001:45",
+  "action": {
+    "effect": 2,
+    "route": 0,
+    "delivery": {
+      "mode": 0
+    },
+    "summary": "✅ Performed AXPress on [45] AXButton \"Cancel\"."
+  },
+  "completion": {
+    "pid": 89487,
+    "response": 0
+  },
+  "cancelConfirmed": true
+}

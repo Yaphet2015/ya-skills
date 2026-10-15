@@ -1,0 +1,21 @@
+{
+  "version": "0.30.4",
+  "sameProcess": true,
+  "driverVersion": "0.30.4",
+  "fixture": {
+    "attachedSheetId": 134114,
+    "frontmostPid": 86665,
+    "panelWindowId": 134114,
+    "parentWindowId": 134113,
+    "pid": 89419
+  },
+  "parentElements": 46,
+  "cancelToken": "s00000001:45",
+  "error": {
+    "name": "Error",
+    "message": "DriverError.Tool",
+    "errorCode": "element_outside_target_window"
+  },
+  "completion": null,
+  "cancelConfirmed": false
+}

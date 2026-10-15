@@ -53,6 +53,33 @@ When a batch reports `unknown`, observe before any further input and never
 replay the same request id. When an action reports `delivered`, do not repeat
 it: inspect the returned observation and verify the effect.
 
+## Native file chooser targets
+
+macOS Open/Save panels can be attached sheets or standalone windows. Choose the
+target from the observed AX hierarchy:
+
+| Observed structure | Target for observation and actions |
+| --- | --- |
+| Parent `AXWindow` contains the chooser as an `AXSheet` | Keep the parent window target; use the sheet's selectors or fresh tokens. |
+| Chooser itself is a top-level `AXWindow` | Use the chooser's own window target. |
+
+An attached sheet can have its own CGWindowID in `windows` output while its AX
+controls live under the parent. Cua Driver 0.35.4 still resolves window-scoped
+observations through top-level `AXWindow` candidates: observing the sheet's ID
+can return `ax_window_unresolved` and zero elements. This does not establish
+that the chooser has no readable controls. Observe the window that opened it
+and check for the nested `AXSheet` before choosing another input route.
+
+The parent is the actual host of the sheet. In a multiwindow app it may be a
+main window, a quick-entry window, or another document window. Use the observed
+parent-child relationship; do not assume the main or frontmost window is the
+parent. This behavior also reproduces in a single-window AppKit app.
+
+Keep the parent target and the same persistent session when acting on a sheet's
+fresh controls. Cua Driver 0.35.4 fixes sheet-control action ownership through
+the parent; 0.30.4 could read those controls but refuse the action with
+`element_outside_target_window`.
+
 ## Addressed background input and driver results
 
 For native fields, `--type TEXT --element-token TOKEN` and

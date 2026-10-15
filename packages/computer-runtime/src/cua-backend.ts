@@ -303,7 +303,11 @@ export function createComputerSession(options: SessionOptions = {}): ComputerSes
       },
       create: async (sdk) => {
         const realSdk = (sdk ?? sdkRef) as Sdk;
-        const driver = realSdk.CuaDriver.create(undefined) as unknown as DriverLike;
+        // The SDK otherwise prefers an installed daemon, whose protocol may differ.
+        const driver = realSdk.CuaDriver.create({
+          embedded: true,
+          claudeCodeCompatibility: false
+        }) as unknown as DriverLike;
         return makeBackend(realSdk, driver);
       }
     },

@@ -273,7 +273,7 @@ async function runTarget(
     return;
   }
   const sdk = await loadSdk();
-  const driver = sdk.CuaDriver.create(undefined);
+  const driver = sdk.CuaDriver.create({ embedded: true, claudeCodeCompatibility: false });
   const report: ProbeReport = {
     mode: "target",
     driverStarted: true,

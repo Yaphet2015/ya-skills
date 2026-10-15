@@ -136,11 +136,11 @@ export function createRealDriverSession(config: DriverConfig): DriverSessionLike
             ? rawDeadline
             : undefined;
           const index = typeof args.index === "number" ? args.index : undefined;
-          const executeStep = ensure().executeStep;
-          if (executeStep === undefined) {
+          const runtimeSession = ensure();
+          if (runtimeSession.executeStep === undefined) {
             throw new ComputerError("invalid_request", "the driver does not support step dispatch");
           }
-          return executeStep(target, action, {
+          return runtimeSession.executeStep(target, action, {
             signal,
             ...(deadlineAt !== undefined ? { deadlineAt } : {}),
             ...(index !== undefined ? { index } : {})

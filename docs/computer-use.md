@@ -46,9 +46,11 @@ The agent-facing usage guide lives in the skill itself
 
 - macOS arm64, macOS 13+ (driver requirement). Other platforms fail fast
   with `unsupported_platform`; no other `yk` command is affected.
-- The Cua Driver SDK (0.30.4) runs inside the `yk` Bun runtime for one-shot
-  commands. Persistent sessions manage one private driver worker themselves;
-  users install no Node runtime, daemon, or extra dependency.
+- The Cua Driver SDK (0.35.4) runs inside the `yk` Bun runtime for one-shot
+  commands. The adapter explicitly sets `embedded: true` to keep the driver
+  in-process and bypass installed daemons. Persistent sessions manage one private
+  driver worker themselves; users install no Node runtime, daemon, or extra
+  dependency.
 - Accessibility + Screen Recording must be granted to the program that runs
   `yk` (usually your terminal app). `doctor` reports the read-only status and
   prints the exact grant steps; it never opens permission dialogs itself.
@@ -62,6 +64,11 @@ Synthetic events can be targeted background input; their presence alone does not
 prove user interference. Unsupported surfaces can refuse or report an unverified
 effect. yk preserves that result and never automatically retries in the foreground.
 Use `--activate` only for an explicitly requested foreground operation.
+
+For an attached macOS file chooser, observe its parent window and address the
+nested `AXSheet` controls through their tokens. Cua Driver 0.35.4 supports
+these actions through the parent target. Observing the sheet's separate native
+window ID can still return `ax_window_unresolved`.
 
 Type and key input can address a fresh AX token directly. For a visual target,
 the driver can focus and type/press in one call after yk validates and maps the

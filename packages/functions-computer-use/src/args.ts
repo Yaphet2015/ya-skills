@@ -187,7 +187,7 @@ function parseRequestId(value: string | undefined): string {
   return requestId;
 }
 
-// These names come from the installed @trycua/cua-driver 0.30.4 native
+// These names come from the installed @trycua/cua-driver 0.35.4 native
 // contract. The driver accepts aliases for the three platform modifier names;
 // normalize them once so one-shot and session calls send the same wire values.
 const MODIFIER_ALIASES: ReadonlyMap<string, KeyModifier> = new Map([

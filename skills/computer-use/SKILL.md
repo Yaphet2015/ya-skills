@@ -60,6 +60,11 @@ fresh element tokens. Use `mode both` only when a screenshot is needed. Use a
 short `batch` or one `exec` session for already-decided serial steps; stop at
 every new judgment. Read the returned observation after an action.
 
+For a native file chooser, distinguish an attached `AXSheet` from a standalone
+`AXWindow`. Read an attached sheet through its actual parent window. See
+[file chooser targets](references/native-orchestration.md#native-file-chooser-targets)
+before switching the target to the chooser's separate window ID.
+
 Visual coordinates are evidence-bound. Observe with `mode both`, look at the
 exact returned image, and click only on that image's pixel coordinates. A
 stale, degraded, ambiguous, or expired observation is a reason to observe

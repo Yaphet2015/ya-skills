@@ -1,0 +1,91 @@
+{
+  "mode": "standalone",
+  "fixture": {
+    "attachedSheetId": -1,
+    "frontmostPid": 43822,
+    "panelWindowId": 133976,
+    "parentWindowId": 133975,
+    "pid": 84501
+  },
+  "nativeAX": {
+    "nodes": [
+      {
+        "path": "app.AXWindows[0]",
+        "role": "AXWindow",
+        "title": "YK panel diagnosis Open",
+        "windowId": 133976,
+        "windowIdError": 0
+      },
+      {
+        "path": "app.AXWindows[0].AXChildren[0].AXChildren[8]",
+        "role": "AXButton",
+        "title": "Cancel",
+        "windowId": 133977,
+        "windowIdError": 0
+      },
+      {
+        "path": "app.AXWindows[0].AXChildren[0].AXChildren[9]",
+        "role": "AXButton",
+        "title": "Open",
+        "windowId": 133977,
+        "windowIdError": 0
+      },
+      {
+        "path": "app.AXWindows[1]",
+        "role": "AXWindow",
+        "title": "YK panel diagnosis fixture",
+        "windowId": 133975,
+        "windowIdError": 0
+      }
+    ],
+    "nodesCount": 95,
+    "pid": 84501,
+    "trusted": true,
+    "windowsCount": 2,
+    "windowsError": 0
+  },
+  "parent": {
+    "truncated": false,
+    "elementsCount": 2,
+    "surfaces": [
+      {
+        "elementIndex": "0",
+        "role": "AXWindow",
+        "depth": 0,
+        "elementToken": "s00000001:0",
+        "label": "YK panel diagnosis fixture",
+        "actions": [
+          "AXRaise"
+        ],
+        "frame": {
+          "x": 100,
+          "y": 508,
+          "w": 600,
+          "h": 452
+        }
+      }
+    ]
+  },
+  "panel": {
+    "truncated": false,
+    "elementsCount": 41,
+    "surfaces": [
+      {
+        "elementIndex": "0",
+        "role": "AXWindow",
+        "depth": 0,
+        "elementToken": "s00000002:0",
+        "label": "YK panel diagnosis Open",
+        "actions": [
+          "AXRaise"
+        ],
+        "frame": {
+          "x": 520,
+          "y": 181,
+          "w": 880,
+          "h": 448
+        }
+      }
+    ]
+  }
+}

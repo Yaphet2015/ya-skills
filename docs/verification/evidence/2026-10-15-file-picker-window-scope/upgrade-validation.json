@@ -1,0 +1,84 @@
+{
+  "sdkVersion": "0.35.4",
+  "nativeVersion": "0.35.4",
+  "doctor": {
+    "ok": true,
+    "platform": "darwin",
+    "arch": "arm64",
+    "sdk": {
+      "loaded": true,
+      "version": "0.35.4"
+    },
+    "driver": {
+      "created": true,
+      "sameProcess": true
+    },
+    "permissions": {
+      "accessibility": true,
+      "screenRecording": true
+    },
+    "hints": []
+  },
+  "checks": {
+    "typecheck": {
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "defaultTests": {
+      "command": "bun run test",
+      "exitCode": 0,
+      "passed": 772,
+      "skipped": 11,
+      "failed": 0
+    },
+    "package": {
+      "command": "bun run package:release --version 0.27.1",
+      "exitCode": 0
+    },
+    "releaseTests": {
+      "command": "YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts tests/computer-use-packaging.test.ts",
+      "exitCode": 0,
+      "passed": 8,
+      "failed": 0
+    },
+    "build": {
+      "command": "bun run build",
+      "exitCode": 0
+    },
+    "smoke": {
+      "command": "bun run smoke",
+      "exitCode": 0
+    }
+  },
+  "nativePicker": {
+    "outcome": "passed",
+    "evidence": "upgraded-package.json",
+    "driverReceipt": {
+      "index": 0,
+      "kind": "click",
+      "status": "delivered",
+      "result": {
+        "route": "accessibility",
+        "effect": "unverifiable",
+        "delivery": {
+          "mode": "background"
+        }
+      }
+    },
+    "independentAppKitCallback": {
+      "pid": 43299,
+      "response": 0
+    },
+    "cancelConfirmed": true,
+    "cleanup": {
+      "driverTerminated": true,
+      "leaseReleased": true,
+      "unresolvedRequests": []
+    },
+    "earlierLockedDesktopAttempt": "upgraded-package-locked.json"
+  },
+  "regressions": [
+    "Real factory remains lazy and selects the embedded driver despite an incompatible installed daemon.",
+    "Real worker step dispatch retains the ComputerSession receiver and dispatches one background input."
+  ]
+}

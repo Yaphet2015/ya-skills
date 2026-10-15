@@ -6,6 +6,75 @@ import {
 } from "@ya-skills/functions-computer-use";
 import { ComputerError, type Computer, type ComputerSession } from "@ya-skills/computer-runtime";
 
+test("real sessions and worker steps stay lazy and bypass an incompatible installed daemon", () => {
+  // Isolate module mocks so other tests keep the real SDK loader.
+  const probe = Bun.spawnSync([process.execPath, "--eval", `
+    import assert from "node:assert/strict";
+    import { mock } from "bun:test";
+    let loads = 0;
+    let creates = 0;
+    let ended = 0;
+    let stopped = 0;
+    let destroyed = 0;
+    const inputs = [];
+    delete process.env.YK_CU_SESSION_ROOT;
+    const sdk = {
+      CuaDriver: { create(options) {
+        creates++;
+        if (!options?.embedded) throw new Error("incompatible installed daemon");
+        return {
+          metadata: async () => ({ driverVersion: "fixture", pid: process.pid }),
+          callTool: async (name, body) => { inputs.push({ name, body: JSON.parse(body) }); return { isError: false }; },
+          endSession: async () => { ended++; },
+          shutdown: async () => { stopped++; },
+          uniffiDestroy: () => { destroyed++; }
+        };
+      } },
+      EndSessionInput: { new: () => ({}) }
+    };
+    const sdkUrl = ${JSON.stringify(new URL("../packages/computer-runtime/src/sdk.ts", import.meta.url).href)};
+    const originalLoader = await import(sdkUrl);
+    mock.module(sdkUrl, () => ({
+      ...originalLoader,
+      isSupportedPlatform: () => true,
+      loadSdk: async () => { loads++; return sdk; }
+    }));
+    const { createComputerSession } = await import(${JSON.stringify(new URL("../packages/computer-runtime/src/cua-backend.ts", import.meta.url).href)});
+    const session = createComputerSession();
+    assert.equal(loads, 0);
+    assert.equal(creates, 0);
+    try {
+      assert.equal((await session.metadata()).pid, process.pid);
+      await session.metadata();
+      assert.equal(loads, 1);
+      assert.equal(creates, 1);
+    } finally { await session.close(); }
+    assert.equal(ended, 1);
+    assert.equal(stopped, 1);
+    assert.equal(destroyed, 1);
+    const { createRealDriverSession } = await import(${JSON.stringify(new URL("../packages/computer-session/src/driver-worker.ts", import.meta.url).href)});
+    const worker = createRealDriverSession({ sessionId: "fixture", target: { pid: 42, windowId: "7" } });
+    assert.equal(creates, 1);
+    try {
+      const result = await worker.call("step", {
+        action: { kind: "type", text: "fixture" }, index: 3, deadlineAt: Date.now() + 1000
+      });
+      assert.equal(result.status, "completed");
+      assert.equal(result.receipt.index, 3);
+      assert.equal(result.receipt.status, "delivered");
+      assert.deepEqual(inputs, [{ name: "type_text", body: {
+        target: { kind: "window", pid: 42, window_id: 7 }, text: "fixture", delivery_mode: "background"
+      } }]);
+      assert.equal(creates, 2);
+    } finally { await worker.close(); }
+    assert.equal(ended, 2);
+    assert.equal(stopped, 2);
+    assert.equal(destroyed, 2);
+  `], { stdout: "pipe", stderr: "pipe" });
+  expect(new TextDecoder().decode(probe.stderr)).toBe("");
+  expect(probe.exitCode).toBe(0);
+});
+
 describe("compiled SDK location", () => {
   test("locates the SDK beside the real executable, not the cwd", async () => {
     const dir = (await Bun.$`mktemp -d /tmp/cu-loc-XXXXXX`.text()).trimEnd();

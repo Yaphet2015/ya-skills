@@ -1,0 +1,64 @@
+{
+  "parent": {
+    "id": "a739afbf-2c90-436e-8aa3-f73630dbccea",
+    "target": {
+      "pid": 36221,
+      "windowId": "132388"
+    },
+    "status": "truncated",
+    "reason": "elements_incomplete",
+    "controls": [
+      {
+        "role": "AXSheet",
+        "label": "open",
+        "elementToken": "s00000001:200",
+        "frame": {
+          "x": 893,
+          "y": 370,
+          "w": 880,
+          "h": 448
+        }
+      },
+      {
+        "role": "AXTextField",
+        "label": "Search",
+        "elementToken": "s00000001:330",
+        "frame": {
+          "x": 1558,
+          "y": 388.5,
+          "w": 196,
+          "h": 26.5
+        },
+        "enabled": true
+      },
+      {
+        "role": "AXButton",
+        "label": "Cancel",
+        "elementToken": "s00000001:332",
+        "frame": {
+          "x": 1586,
+          "y": 773,
+          "w": 81,
+          "h": 26
+        },
+        "enabled": true
+      }
+    ]
+  },
+  "panel": {
+    "id": "cf128d63-1c9c-4b4f-a2a6-aec5a5e0e44c",
+    "target": {
+      "pid": 36221,
+      "windowId": "133610"
+    },
+    "status": "degraded",
+    "reason": "ax_window_unresolved: window_id 133610 exists and is owned by pid 36221, but none of the 1 AXWindow element(s) under that pid reports this CGWindowID. The tree is returned EMPTY on purpose: the accessibility elements reachable under this pid belong to other surfaces (the menu bar, other windows), not to the requested window, so presenting them would misground the next action.",
+    "elements": [],
+    "bounds": {
+      "x": 893,
+      "y": 370,
+      "width": 880,
+      "height": 448
+    }
+  }
+}

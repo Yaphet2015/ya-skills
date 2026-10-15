@@ -138,7 +138,7 @@ export function parseAxValueResult(result: void | ToolResultLike): AxValueResult
   };
 }
 
-// Numeric positions match the pinned SDK 0.30.4 generated enums.
+// Numeric positions match the pinned SDK 0.35.4 generated enums.
 const ROUTES = ["accessibility", "synthetic_events", "global_input", "system_api", "dom", "trusted_input"] as const;
 const EFFECTS = ["confirmed", "partial", "unverifiable", "suspected_noop", "refused"] as const;
 const DELIVERY_MODES = ["background", "foreground", "not_applicable", "unknown"] as const;

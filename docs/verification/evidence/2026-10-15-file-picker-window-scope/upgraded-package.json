@@ -1,0 +1,183 @@
+{
+  "sdkVersion": "0.35.4",
+  "nativeVersion": "0.35.4",
+  "fixture": {
+    "attachedSheetId": 134377,
+    "frontmostPid": 43822,
+    "panelWindowId": 134377,
+    "parentWindowId": 134376,
+    "pid": 43299
+  },
+  "session": {
+    "id": "2e36d250-1b97-4252-91e5-65f7117d97dc",
+    "target": {
+      "pid": 43299,
+      "windowId": "134376"
+    },
+    "state": "idle",
+    "hostPid": 43307,
+    "generation": "c26c4b27-47e1-49d3-8306-3b95c5281932",
+    "idleTimeoutMs": 30000
+  },
+  "before": {
+    "id": "a83701ae-26a2-491f-bcf6-5d964e9ff22a",
+    "target": {
+      "pid": 43299,
+      "windowId": "134376"
+    },
+    "capturedAt": 1792050061914,
+    "epoch": "7e4725f7-0911-4855-932f-40b9ba49e126",
+    "revision": 0,
+    "title": "YK panel diagnosis fixture",
+    "ax": {
+      "status": "truncated",
+      "reason": "elements_incomplete",
+      "elements": [
+        {
+          "role": "AXWindow",
+          "label": "YK panel diagnosis fixture",
+          "elementToken": "s00000001:0",
+          "frame": {
+            "x": 140,
+            "y": 508,
+            "w": 600,
+            "h": 452
+          }
+        },
+        {
+          "role": "AXSheet",
+          "label": "yk panel diagnosis open",
+          "elementToken": "s00000001:1",
+          "frame": {
+            "x": 0,
+            "y": 540,
+            "w": 880,
+            "h": 448
+          }
+        },
+        {
+          "role": "AXTextField",
+          "label": "Search",
+          "elementToken": "s00000001:43",
+          "frame": {
+            "x": 665,
+            "y": 558.5,
+            "w": 196,
+            "h": 26.5
+          },
+          "enabled": true
+        },
+        {
+          "role": "AXButton",
+          "label": "Cancel",
+          "elementToken": "s00000001:45",
+          "frame": {
+            "x": 693,
+            "y": 943,
+            "w": 81,
+            "h": 26
+          },
+          "enabled": true
+        }
+      ],
+      "total": 46,
+      "returned": 46,
+      "complete": false,
+      "evidenceFilter": "Only window, sheet, Search, and Cancel controls retained; counts describe the original observation."
+    },
+    "image": {
+      "status": "unavailable"
+    }
+  },
+  "action": {
+    "schemaVersion": 1,
+    "session": "2e36d250-1b97-4252-91e5-65f7117d97dc",
+    "result": {
+      "status": "completed",
+      "steps": [
+        {
+          "index": 0,
+          "kind": "click",
+          "status": "delivered",
+          "result": {
+            "route": "accessibility",
+            "effect": "unverifiable",
+            "delivery": {
+              "mode": "background"
+            }
+          }
+        }
+      ],
+      "observation": {
+        "id": "724d6dea-5706-49ed-b34a-7a3166a2286a",
+        "target": {
+          "pid": 43299,
+          "windowId": "134376"
+        },
+        "capturedAt": 1792050062653,
+        "epoch": "7e4725f7-0911-4855-932f-40b9ba49e126",
+        "revision": 1,
+        "title": "YK panel diagnosis fixture",
+        "ax": {
+          "status": "truncated",
+          "reason": "elements_incomplete",
+          "elements": [
+            {
+              "role": "AXWindow",
+              "label": "YK panel diagnosis fixture",
+              "elementToken": "s00000003:0",
+              "frame": {
+                "x": 100,
+                "y": 508,
+                "w": 600,
+                "h": 452
+              }
+            },
+            {
+              "role": "AXButton",
+              "elementToken": "s00000003:1",
+              "frame": {
+                "x": 108,
+                "y": 516,
+                "w": 16,
+                "h": 16
+              },
+              "enabled": true
+            }
+          ],
+          "total": 2,
+          "returned": 2,
+          "complete": false
+        },
+        "image": {
+          "status": "unavailable"
+        }
+      }
+    }
+  },
+  "completion": {
+    "pid": 43299,
+    "response": 0
+  },
+  "cancelConfirmed": true,
+  "close": {
+    "schemaVersion": 1,
+    "session": {
+      "id": "2e36d250-1b97-4252-91e5-65f7117d97dc",
+      "target": {
+        "pid": 43299,
+        "windowId": "134376"
+      },
+      "state": "closed",
+      "hostPid": 43307,
+      "generation": "c26c4b27-47e1-49d3-8306-3b95c5281932",
+      "idleTimeoutMs": 30000
+    },
+    "cleanup": {
+      "driverTerminated": true,
+      "leaseReleased": true,
+      "unresolvedRequests": []
+    }
+  },
+  "fixtureExit": 143
+}

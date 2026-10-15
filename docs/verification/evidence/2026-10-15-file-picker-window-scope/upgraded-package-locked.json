@@ -1,0 +1,58 @@
+{
+  "sdkVersion": "0.35.4",
+  "nativeVersion": "0.35.4",
+  "fixture": {
+    "attachedSheetId": 134352,
+    "frontmostPid": 426,
+    "panelWindowId": 134352,
+    "parentWindowId": 134351,
+    "pid": 37699
+  },
+  "before": {
+    "id": "fc98a2ee-2366-4351-9d68-6cdb2a9db8b1",
+    "target": {
+      "pid": 37699,
+      "windowId": "134351"
+    },
+    "capturedAt": 1792049945840,
+    "epoch": "d960aebc-e01f-45b2-8700-539c539b4d31",
+    "revision": 0,
+    "title": "YK panel diagnosis fixture",
+    "ax": {
+      "status": "degraded",
+      "reason": "ax_window_unresolved: window_id 134351 exists and is owned by pid 37699, but none of the 0 AXWindow element(s) under that pid reports this CGWindowID. The tree is returned EMPTY on purpose: the accessibility elements reachable under this pid belong to other surfaces (the menu bar, other windows), not to the requested window, so presenting them would misground the next action.",
+      "elements": [],
+      "total": 0,
+      "returned": 0,
+      "complete": false
+    },
+    "image": {
+      "status": "unavailable"
+    }
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Parent observation must expose one Cancel button\n\n0 !== 1\n",
+  "close": {
+    "schemaVersion": 1,
+    "session": {
+      "id": "5229a1a6-8e07-4560-8437-bd7ee21753ef",
+      "target": {
+        "pid": 37699,
+        "windowId": "134351"
+      },
+      "state": "closed",
+      "hostPid": 37708,
+      "generation": "f764c1b4-0910-4470-9843-b3a4eeec85f3",
+      "idleTimeoutMs": 30000
+    },
+    "cleanup": {
+      "driverTerminated": true,
+      "leaseReleased": true,
+      "unresolvedRequests": []
+    }
+  },
+  "fixtureExit": 143,
+  "desktop": {
+    "frontmostProcess": "loginwindow",
+    "frontmostPid": 426
+  }
+}

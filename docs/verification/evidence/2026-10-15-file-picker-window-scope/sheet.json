@@ -1,0 +1,93 @@
+{
+  "mode": "sheet",
+  "fixture": {
+    "attachedSheetId": 133970,
+    "frontmostPid": 43822,
+    "panelWindowId": 133970,
+    "parentWindowId": 133969,
+    "pid": 84447
+  },
+  "nativeAX": {
+    "nodes": [
+      {
+        "path": "app.AXWindows[0]",
+        "role": "AXWindow",
+        "title": "YK panel diagnosis fixture",
+        "windowId": 133969,
+        "windowIdError": 0
+      },
+      {
+        "path": "app.AXWindows[0].AXChildren[4]",
+        "role": "AXSheet",
+        "title": "",
+        "windowId": 133970,
+        "windowIdError": 0
+      },
+      {
+        "path": "app.AXWindows[0].AXChildren[4].AXChildren[0].AXChildren[8]",
+        "role": "AXButton",
+        "title": "Cancel",
+        "windowId": 133971,
+        "windowIdError": 0
+      },
+      {
+        "path": "app.AXWindows[0].AXChildren[4].AXChildren[0].AXChildren[9]",
+        "role": "AXButton",
+        "title": "Open",
+        "windowId": 133971,
+        "windowIdError": 0
+      }
+    ],
+    "nodesCount": 103,
+    "pid": 84447,
+    "trusted": true,
+    "windowsCount": 1,
+    "windowsError": 0
+  },
+  "parent": {
+    "truncated": false,
+    "elementsCount": 46,
+    "surfaces": [
+      {
+        "elementIndex": "0",
+        "role": "AXWindow",
+        "depth": 0,
+        "elementToken": "s00000001:0",
+        "label": "YK panel diagnosis fixture",
+        "actions": [
+          "AXRaise"
+        ],
+        "frame": {
+          "x": 140,
+          "y": 508,
+          "w": 600,
+          "h": 452
+        }
+      },
+      {
+        "elementIndex": "1",
+        "role": "AXSheet",
+        "depth": 1,
+        "elementToken": "s00000001:1",
+        "label": "yk panel diagnosis open",
+        "actions": [
+          "AXRaise"
+        ],
+        "parentIndex": "0",
+        "frame": {
+          "x": 0,
+          "y": 540,
+          "w": 880,
+          "h": 448
+        }
+      }
+    ]
+  },
+  "panel": {
+    "degraded": true,
+    "degradedReason": "ax_window_unresolved: window_id 133970 exists and is owned by pid 84447, but none of the 1 AXWindow element(s) under that pid reports this CGWindowID. The tree is returned EMPTY on purpose: the accessibility elements reachable under this pid belong to other surfaces (the menu bar, other windows), not to the requested window, so presenting them would misground the next action.",
+    "truncated": false,
+    "elementsCount": 0,
+    "surfaces": []
+  }
+}

@@ -85,7 +85,7 @@ For computer-use coordinate actions, pass the same `--out-dir` to `observe` and
 input in that session. For controls with a writable AXValue, use
 `act --set-value VALUE --element-token TOKEN`; this path never falls back to
 keyboard events and accepts only a confirmed Accessibility result. With Cua Driver
-0.30.4, `--type` and `--key` also accept `--element-token TOKEN` or
+0.35.4, `--type` and `--key` also accept `--element-token TOKEN` or
 `--input-x PX --input-y PY --observation UUID` for direct background targeting.
 The latter focuses and types/presses in one driver call. `act.actionResult` and
 batch/exec receipt `result` retain the driver's route, effect, delivery mode, and
