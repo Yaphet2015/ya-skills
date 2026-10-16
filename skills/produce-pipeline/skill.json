@@ -1,7 +1,0 @@
-{
-  "name": "produce-pipeline",
-  "description": "Orchestrate Planner, Builder and Verifier agents to implement and test a requirement, with stage hooks and local commits.",
-  "dependsOn": [
-    "ultra-cr"
-  ]
-}

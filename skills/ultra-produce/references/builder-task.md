@@ -1,6 +1,6 @@
 # Builder 任务卡与交付
 
-Planner 为每个可独立验收的结果填写一张卡，Leader 保留已决策契约派发；调整时限等执行元数据时记录原因。契约未定时先返回 Planner，不能把设计工作隐含交给 Builder。
+Planner 为每个可独立验收的结果填写一张卡，Leader 保留已决策契约派发；调整执行元数据时记录原因。契约未定时先返回 Planner，不能把设计工作隐含交给 Builder。
 
 ## 任务卡
 
@@ -17,7 +17,6 @@ Plan：绝对路径、版本/哈希、相关条款（全文按需读取）
 固定行为：输入/动作 → 预期结果 → 对应测试或证据
 首个行动：直接实施或验证哪个已确定的行为
 首个里程碑：预期补丁、具体阻塞诊断或测试结果；检查点路径
-预算：准备/实现/测试/恢复时间估计、执行器实测记录或“无基线估算”、本次 --timeout
 测试：授权命令、适用用例、已通过且可复用的证据
 交付：代码/commit、行为证据、剩余问题、指定 result.json
 ```
@@ -26,9 +25,9 @@ Plan：绝对路径、版本/哈希、相关条款（全文按需读取）
 
 ## 执行与恢复
 
-新会话先读 [执行控制](execution.md)，按任务中提供的 helper、attempt 和 unit 写 checkpoint、ack、gate。同会话补交只读新指令和当前纠正，不重复加载完整协议。压缩前保存已完成事实、有效证据和下一动作；恢复先读该检查点，不重新搜索计划路径。遵守任务权限，缺少工具或权限返回 blocked。
+新会话先读 [执行控制](execution.md)，按任务中提供的 helper、attempt 和 unit 写 checkpoint、ack、gate。补交只读新指令、旧回执和当前纠正。每轮结束及压缩前保存完整 handoff.md 并发布 checkpoint；恢复先读 recovery.json、handoff.md 和必要原始产物，核对现场后继续，不依赖会话历史。遵守任务权限，缺少工具或权限返回 blocked。
 
-Builder 负责代码检查、simplify、相关测试和本地 commit，不 push；子工作者不操作共享 Git index。交付 summary 简短说明结果和未解决问题，原始测试日志与详细报告用绝对路径引用，避免将全文返回 Leader。结果最小结构：
+Builder 负责代码检查、simplify、相关测试和本地 commit，不 push；子工作者不操作共享 Git index。交付 summary 简短说明结果和未解决问题，原始测试日志与详细报告用绝对路径引用，避免将全文返回 Leader。结果写入指定 result.json，完整说明留在文件中。最终回复只含 task_id、status、回执路径。结果最小结构：
 
 ```json
 {

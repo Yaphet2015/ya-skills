@@ -5,8 +5,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("produce-pipeline process contracts stay desktop-free", () => {
-  const result = Bun.spawnSync(["python3", "tests/produce_pipeline_test.py"], {
+test("ultra-produce native-agent file contracts stay desktop-free", () => {
+  const result = Bun.spawnSync(["python3", "tests/ultra_produce_test.py"], {
     cwd: resolve("."),
     env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
   });
@@ -16,16 +16,16 @@ test("produce-pipeline process contracts stay desktop-free", () => {
   expect(result.exitCode).toBe(0);
 }, 30000);
 
-test("produce-pipeline installs executable helpers and referenced role contracts", async () => {
+test("ultra-produce installs executable helpers and referenced role contracts", async () => {
   const catalog = await loadCatalog(resolve("skills"));
-  const root = await mkdtemp(join(tmpdir(), "produce-pipeline-install-"));
+  const root = await mkdtemp(join(tmpdir(), "ultra-produce-install-"));
   try {
-    const skill = catalog.byName.get("produce-pipeline");
+    const skill = catalog.byName.get("ultra-produce");
     expect(skill).toBeDefined();
-    await installSkills({ catalog, skillNames: ["produce-pipeline"], projectDir: root });
+    await installSkills({ catalog, skillNames: ["ultra-produce"], projectDir: root });
     for (const file of ["SKILL.md", "scripts/pipeline.py", "references/protocol.md", "references/roles.md", "references/hooks.md", "references/execution.md", "references/builder-task.md"]) {
-      expect(await readFile(join(root, ".agents/skills/produce-pipeline", file), "utf8"))
-        .toBe(await readFile(join("skills/produce-pipeline", file), "utf8"));
+      expect(await readFile(join(root, ".agents/skills/ultra-produce", file), "utf8"))
+        .toBe(await readFile(join("skills/ultra-produce", file), "utf8"));
     }
   } finally {
     await rm(root, { recursive: true, force: true });

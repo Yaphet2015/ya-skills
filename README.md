@@ -64,7 +64,8 @@ yk pbench capture --source codex --yes   # run a domain command
 | **pbench** | Capture real Codex or Claude workflow misses as local, private benchmark cases, then replay finalized cases through registered runners without cloud sync or leaderboard upload. | `yk install pbench` |
 | **eli5** | Explain like the reader knows nothing about the topic, using an HTML artifact with big pictures and few words. | `yk install eli5` |
 | **eli10** | Explain a diagnosis, root cause, bug mechanism, or architecture at primitive granularity: every sentence bottoms out at facts the reader already owns. Triggers on "why does this happen" answers and 看不懂 feedback. | `yk install eli10` |
-| **produce-pipeline** | Let any main agent coordinate an independent coldx Planner (gpt-6-astra medium), Builder and Verifier through implementation, review and testing, with stage hooks, automatic process monitoring, compact status events, scoped task cards, session reuse for receipt repairs, partial budget updates, task-scoped and retractable corrections, orphan process observation, resumable verification stages and local commits. Requires local coldx, logoscode, bangboo and the named workflow skills; missing dependencies stop the run. | `yk install produce-pipeline` |
+| **produce** | Lightweight subagent planning with `brainstorming` and `grill-with-docs` → independent challenge → implementation with `simplify` per part → testing. Planners discuss technical choices with Main using SOLID, DRY, KISS, YAGNI and SSOT; Main consults the user on UX choices. Requires these skills installed in the host. | `yk install produce` |
+| **ultra-produce** | Coordinate native Planner, Builder and Verifier subagents through planning, independent challenges, implementation, review and testing. Main handles all spawning; full results and fresh-session recovery use local files. Keeps stage hooks, scoped task cards, corrections, evidence acceptance and local commits. Internal artifacts live in `~/.ya-skills/ultra-produce/logs/<run-id>`; Plans and reports in `reports/<declared-project>/<branch>/<run-id>`. Requires native subagent support and the named workflow skills. | `yk install ultra-produce` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
 | **computer-use** | Route browser pages through DOM/CDP with an explicit target before using native macOS UI; when native UI is required, use background-first AX perception and evidence-bound actions with short batches and clear delivery receipts. macOS arm64 only. | `yk install computer-use` |
@@ -149,7 +150,7 @@ On macOS arm64, after `bun install`:
 
 ```sh
 npm run dev:link       # package this checkout and link it as the global yk
-# Use yk list / yk install produce-pipeline in the project you want to test.
+# Use yk list / yk install ultra-produce in the project you want to test.
 npm run dev:clean      # restore the previous yk link and remove the local build
 ```
 

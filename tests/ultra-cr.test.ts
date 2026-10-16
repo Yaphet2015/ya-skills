@@ -21,8 +21,8 @@ test("pipeline installation includes portable ultra-cr assets in both skill targ
     await mkdir(join(root, ".agents/skills"), { recursive: true });
     await mkdir(join(root, ".claude/skills"), { recursive: true });
     const catalog = await loadCatalog(resolve("skills"));
-    const result = await installSkills({ catalog, projectDir: root, skillNames: ["produce-pipeline"] });
-    expect(result.installed.map((skill) => skill.name).sort()).toEqual(["produce-pipeline", "ultra-cr"]);
+    const result = await installSkills({ catalog, projectDir: root, skillNames: ["ultra-produce"] });
+    expect(result.installed.map((skill) => skill.name).sort()).toEqual(["ultra-cr", "ultra-produce"]);
     for (const target of [".agents", ".claude"]) {
       const skillRoot = join(root, target, "skills/ultra-cr");
       for (const resource of [

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ultra Produce"
+  short_description: "由 Main 统一派生，通过文件交接与恢复规划、实现和验证，保留阶段 Hook"
+  default_prompt: "使用 $ultra-produce 完整实现并验证这个需求。"

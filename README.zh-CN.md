@@ -62,6 +62,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
 | **pbench** | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
+| **produce** | 轻量流程：subagents 使用 brainstorming、grill-with-docs 规划 → 独立挑战 → 每部分实现后 simplify → 测试。规划代理与 Main 讨论技术选择，遵循 SOLID、DRY、KISS、YAGNI、SSOT；体验行为选择由 Main 咨询用户。需要宿主已安装这些 Skill。 | `yk install produce` |
 | **computer-use** | 通过后台优先的 AX 感知与操作驱动任意 macOS 桌面应用——检查应用状态、复现 UI 问题、操作可见窗口。仅 macOS arm64。 | `yk install computer-use` |
 | **computer-e2e** | 确定性桌面回放：项目本地 `*.e2e.ts` 套件由同一个 yk 执行，带执行历史与报告——使用方零 npm 安装、零 Node/Vitest/SDK 依赖。依赖 computer-use。 | `yk install computer-e2e` |
 | **eli5** | 当读者完全不懂这个主题来解释：用 HTML artifact，大图、少字。 | `yk install eli5` |
