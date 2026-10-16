@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/Yaphet2015/ya-skills/compare/v0.28.0...v1.0.0) (2026-10-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **skills:** replace the produce-pipeline catalog name with ultra-produce; add native subagent file handoffs and a lightweight produce workflow.
+
+### Features
+
+* **skills:** add produce and migrate pipeline to ultra-produce ([803a37f](https://github.com/Yaphet2015/ya-skills/commit/803a37fbc08c8c8a51bbead9cf9b0660d0a6d0ff))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
