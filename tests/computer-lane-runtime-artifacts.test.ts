@@ -1,3 +1,4 @@
+import { PNG } from "pngjs";
 import { describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -99,20 +100,16 @@ describe("runtime lane screenshot privacy", () => {
   test("resize repairs an existing permissive source and derived path", async () => {
     const dir = await mkdtemp(join(tmpdir(), "cu-lane-resize-"));
     const original = join(dir, "capture.png");
-    const derived = join(dir, "capture-64.png");
     try {
       await writeFile(original, syntheticPngBuffer(), { mode: 0o644 });
-      await writeFile(derived, syntheticPngBuffer(), { mode: 0o644 });
       const runner: ProcessRunner = async (_command, args) => {
-        if (args[0] === "-g" && args.includes(original)) {
-          return { stdout: "pixelWidth: 128\npixelHeight: 80\n", stderr: "", code: 0 };
-        }
-        return { stdout: "pixelWidth: 64\npixelHeight: 40\n", stderr: "", code: 0 };
+        await writeFile(args[args.indexOf("--out") + 1]!, PNG.sync.write(new PNG({ width: 64, height: 40 })), { mode: 0o644 });
+        return { stdout: "ok", stderr: "", code: 0 };
       };
       const result = await resizeScreenshot(original, 64, undefined, runner);
-      expect(result.path).toBe(derived);
+      expect(result.path).not.toBe(original);
       expect(await modeOf(original)).toBe(0o600);
-      expect(await modeOf(derived)).toBe(0o600);
+      expect(await modeOf(result.path)).toBe(0o600);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

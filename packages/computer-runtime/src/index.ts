@@ -107,3 +107,6 @@ export {
 export { executeStep, type StepExecutionOptions, type StepExecutionResult } from "./step-execution.js";
 
 export { parseActionResult } from "./driver-result.js";
+
+export { zoomObservation, mapZoomPointToParent, type ZoomResult, type ZoomOptions } from "./zoom.js";
+export { DEFAULT_MAX_DIMENSION, DEFAULT_MAX_PIXELS } from "./screenshot.js";

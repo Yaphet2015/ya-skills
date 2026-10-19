@@ -98,8 +98,8 @@ describe("computer-e2e control lane", () => {
                 expect(observation.image.geometry).toBeDefined();
                 await context.computer.clickPoint(contextTarget, {
                   observationId: observation.id,
-                  x: 320,
-                  y: 200
+                  x: observation.image.geometry!.sentWidth / 4,
+                  y: observation.image.geometry!.sentHeight / 4
                 });
               }
             }

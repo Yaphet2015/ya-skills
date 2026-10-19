@@ -27,9 +27,11 @@ yk computer-use apps [--name TEXT]
 yk computer-use windows --pid PID
 yk computer-use perceive --pid PID [--window ID] [--shot] [--out-dir DIR]
 yk computer-use observe --pid PID [--window ID] [--mode auto|ax|image|both] \
-    [--max-dimension N] [--select-text T [--select-match exact|contains] [--select-role R]]
+    [--max-dimension N] [--max-pixels N] [--select-text T [--select-match exact|contains] [--select-role R]]
 yk computer-use act --pid PID [--window ID] [--format observation|legacy] [--modifiers MOD[,MOD]] ACTION   # --click-text/--click-contains [--click-role] | --click-x/--click-y --observation ID | --set-value VALUE --element-token TOKEN | --type | --key | --scroll
 yk computer-use batch --pid PID [--window ID] --file steps.json --request-id ID
+yk computer-use zoom --observation UUID --region X,Y,W,H [--session ID] [--out-dir DIR] \
+    [--max-dimension N] [--max-pixels N]
 yk computer-use session open --pid PID [--window ID] [--idle-timeout-ms N (<=120000)]
 yk computer-use session status --session ID
 yk computer-use session cancel --session ID --request-id REQUEST
@@ -183,3 +185,20 @@ binary exists).
   refusals also passed. Full native acceptance remains incomplete, including
   the fixed native cancellation case while the desktop is locked; see
   `docs/verification/2026-09-16-native-acceptance.md`.
+
+### Image budgets and local zoom
+
+Observation images default to a 1280 px long side and 1,000,000 pixels. These
+are independent upper bounds: smaller images reuse the original file and never
+upscale. `auto` chooses AX/image channels independently of these limits. Batch,
+exec, and observation-format act follow-up images share the defaults; legacy
+snapshots retain their behavior.
+
+Zoom crops `image.originalPath` using a region in the parent observation's sent
+full-image pixels. It reads local evidence without a session socket or native
+SDK. The returned effective region accounts for source-pixel rounding. Convert
+zoom-local points with `x = region.x + u * region.width / image.width` (and the
+equivalent Y formula), then act with the parent id and full-image coordinates.
+Zoom keeps the parent's capture time and 60-second TTL. See the
+[native reference](../skills/computer-use/references/native-orchestration.md#image-budget-and-zoom)
+for output fields and flags.

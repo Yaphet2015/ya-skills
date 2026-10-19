@@ -50,15 +50,18 @@ Then use one target window at a time:
 yk computer-use apps --name Safari
 yk computer-use windows --pid PID
 yk computer-use observe --pid PID --window WINDOW --mode auto
-yk computer-use act --pid PID --window WINDOW --click-text "Search"
+yk computer-use act --pid PID --window WINDOW --click-text "Search" --format observation
 ```
 
 `perceive` remains available for strict snapshot output: `yk computer-use perceive --pid PID --window WINDOW --shot`. Use it when a legacy consumer needs the flat snapshot.
 
 `observe` is the normal native inspection command. Prefer AX selectors and
 fresh element tokens. Use `mode both` only when a screenshot is needed. Use a
-short `batch` or one `exec` session for already-decided serial steps; stop at
-every new judgment. Read the returned observation after an action.
+persistent `session` to preserve the driver, tokens, and state across calls.
+Use `batch` or `exec` within that session to combine already-decided steps and
+local waits; stop at every new judgment. Read the returned observation and
+verify the effect. For writable AX fields, use `setValue`; when keyboard events
+are needed, address `type`/`key` to a fresh token or evidence-bound point.
 
 For a native file chooser, distinguish an attached `AXSheet` from a standalone
 `AXWindow`. Read an attached sheet through its actual parent window. See
@@ -67,6 +70,9 @@ before switching the target to the chooser's separate window ID.
 
 Visual coordinates are evidence-bound. Observe with `mode both`, look at the
 exact returned image, and click only on that image's pixel coordinates. A
+small detail can be inspected with `zoom` from the original capture; map its
+coordinates back to the parent image before acting. Images default to at most
+1280 px on the long side and 1,000,000 pixels; small images keep their size. A
 stale, degraded, ambiguous, or expired observation is a reason to observe
 again, not to guess or activate the window.
 

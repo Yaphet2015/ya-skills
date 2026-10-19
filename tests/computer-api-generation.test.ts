@@ -65,7 +65,7 @@ describe("api.d.ts generation (agentic surface)", () => {
           "  { kind: 'type', text: 'penguin', before: condition },",
           "  { kind: 'wait', condition: { kind: 'window_exists' }, timeoutMs: 3000 },",
           "];",
-          "export const request: BatchRequest = { actions, observe: { mode: 'both', maxDimension: 1600 }, timeoutMs: 30000 };",
+          "export const request: BatchRequest = { actions, observe: { mode: 'both', maxDimension: 1600, maxPixels: 2000000 }, timeoutMs: 30000 };",
           "export const receiptStatus: ActionReceipt['status'] = 'delivered';",
           "export function geometryWidth(g: ImageGeometry): number { return g.sourceWidth; }",
           "export function firstStatus(r: BatchResult): ActionReceipt['status'] | undefined { return r.steps[0]?.status; }",

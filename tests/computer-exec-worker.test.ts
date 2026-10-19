@@ -11,7 +11,7 @@ describe("exec through the session host (C1, real exec-worker subprocess)", () =
         code: `
           await computer.type("a");
           await computer.key("Tab");
-          const view = await observe({ mode: "ax" });
+          const view = await observe({ mode: "ax", maxDimension: 1280, maxPixels: 900000 });
           return { title: view.title };
         `
       });

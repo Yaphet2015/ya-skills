@@ -161,7 +161,7 @@ function parseSelector(value: unknown, context: ValidationContext, where: string
 
 function parseObserveOptions(value: unknown, context: ValidationContext, where: string): ObserveOptions {
   const raw = requireRecord(value, context, where);
-  assertKnownKeys(raw, ["mode", "maxDimension", "selector"], context, where);
+  assertKnownKeys(raw, ["mode", "maxDimension", "maxPixels", "selector"], context, where);
   const mode = raw.mode === undefined
     ? undefined
     : enumValue(raw.mode, OBSERVATION_MODES, context, `${where}.mode`);
@@ -171,10 +171,14 @@ function parseObserveOptions(value: unknown, context: ValidationContext, where: 
   if (maxDimension !== undefined && maxDimension < 64) {
     fail(context, `${where}.maxDimension`, "must be >= 64");
   }
+  const maxPixels = raw.maxPixels === undefined
+    ? undefined
+    : positiveInteger(raw.maxPixels, context, `${where}.maxPixels`, 64 * 1024 * 1024);
   const selector = raw.selector === undefined ? undefined : parseSelector(raw.selector, context, `${where}.selector`);
   return {
     ...(mode !== undefined ? { mode } : {}),
     ...(maxDimension !== undefined ? { maxDimension } : {}),
+    ...(maxPixels !== undefined ? { maxPixels } : {}),
     ...(selector !== undefined ? { selector } : {})
   };
 }

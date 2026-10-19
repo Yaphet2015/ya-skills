@@ -2,10 +2,15 @@
   "name": "computer-use",
   "description": "Route web pages through browser DOM/CDP first, then drive native macOS UI when a visible desktop app is required.",
   "functions": [
-    { "domain": "computer-use", "action": "doctor" },
-    { "domain": "computer-use", "action": "apps" },
-    { "domain": "computer-use", "action": "windows" },
-    { "domain": "computer-use", "action": "perceive" },
-    { "domain": "computer-use", "action": "act" }
+    {"domain": "computer-use", "action": "doctor"},
+    {"domain": "computer-use", "action": "apps"},
+    {"domain": "computer-use", "action": "windows"},
+    {"domain": "computer-use", "action": "perceive"},
+    {"domain": "computer-use", "action": "observe"},
+    {"domain": "computer-use", "action": "zoom"},
+    {"domain": "computer-use", "action": "act"},
+    {"domain": "computer-use", "action": "batch"},
+    {"domain": "computer-use", "action": "session"},
+    {"domain": "computer-use", "action": "exec"}
   ]
 }

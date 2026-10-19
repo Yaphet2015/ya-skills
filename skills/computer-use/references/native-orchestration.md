@@ -37,11 +37,14 @@ for the next decision, not proof that the business operation succeeded.
 
 ## Economical action loop
 
+- Use `observe --mode auto` to try AX first and capture only if AX is insufficient.
+  Image budget flags do not change this channel choice.
 - Use `observe --mode ax` for a DOM-like native accessibility question.
 - Use `observe --mode both` only when AX cannot answer and a visual frame is
   needed. Pass the same `--out-dir` to `observe` and coordinate `act`.
-- Use a short batch or one `exec` flow for already-decided serial steps. Keep
-  a new observation as the boundary for a new judgment.
+- Open a persistent session when multiple calls need the same driver, fresh
+  AX tokens, or script state. Independently, use `batch` or `exec` to combine
+  already-decided steps and local waits. Keep observations as judgment boundaries.
 - Use `--key KEY --modifiers MOD[,MOD]` for shortcuts. For example:
   `--key I --modifiers cmd,option`. Do not pass `Cmd+Alt+I` as one key.
 - `--format observation|legacy` applies to one-shot and session `act` output;
@@ -117,9 +120,7 @@ must never be replayed. Example:
 ```json
 {
   "actions": [
-    { "kind": "click", "selector": { "text": "Search", "match": "exact", "role": "AXTextField" } },
-    { "kind": "type", "text": "penguin" },
-    { "kind": "key", "key": "Return" },
+    { "kind": "click", "selector": { "text": "Refresh", "match": "exact", "role": "AXButton" } },
     { "kind": "wait", "condition": { "kind": "element_exists", "selector": { "text": "Results", "match": "contains" } }, "timeoutMs": 3000 }
   ],
   "observe": { "mode": "auto" }
@@ -127,7 +128,7 @@ must never be replayed. Example:
 ```
 
 ```sh
-yk computer-use batch --pid PID --window WINDOW --file steps.json --request-id search-1
+yk computer-use batch --pid PID --window WINDOW --file steps.json --request-id refresh-1
 ```
 
 For loops, local waits, or a small bounded branch, open one session and run
@@ -160,8 +161,9 @@ observation without re-identifying the target.
 For a writable Accessibility value, use a fresh AX token:
 
 ```sh
-yk computer-use observe --pid PID --window WINDOW --mode ax
-yk computer-use act --pid PID --window WINDOW \
+yk computer-use session open --pid PID --window WINDOW
+yk computer-use observe --session SESSION --mode ax
+yk computer-use act --session SESSION \
   --set-value VALUE --element-token TOKEN --format observation
 ```
 
@@ -169,6 +171,56 @@ yk computer-use act --pid PID --window WINDOW \
 AXValue result. It never falls back to typing, but a confirmed AX value does
 not prove that arbitrary web content or a custom control applied the value;
 observe the page or app state afterward.
+
+## Image budget and zoom
+
+Observation images default to `maxDimension: 1280` and `maxPixels: 1000000`.
+Both are upper bounds. Images already within both bounds reuse the original
+file, with no image-processing child. Larger images shrink proportionally;
+the source capture remains at `image.originalPath`, while `image.path` and
+`geometry.sentWidth/sentHeight` describe the returned image. Budgeting does not
+change `auto`'s AX-first decision. Legacy snapshots keep their original behavior.
+
+Override either limit independently with `observe --max-dimension PX
+--max-pixels N`, or `ObserveOptions` in a batch/exec. Dimensions accept 64–8192;
+pixels accept 1–67108864. Raising one leaves the other limit active.
+The same defaults apply to `act --format observation` follow-up observations.
+The strict unchanged target neighbourhood remains 32 **sent-image** pixels;
+a smaller sent image covers a larger source area and can refuse more stale clicks.
+
+For unreadable details, crop the stored original capture:
+
+```sh
+yk computer-use zoom --observation UUID --region 100,80,240,160 --session SESSION
+# One-shot evidence: use the same --out-dir as the original observe.
+yk computer-use zoom --observation UUID --region 100,80,240,160 --out-dir DIR
+```
+
+`--region` is X,Y,W,H in the parent observation's **sent full-image pixels**.
+Zoom resolves local evidence directly; it does not contact the session socket,
+load the driver, or read the current window. `--session` locates that session's
+store; `--out-dir` then only chooses the crop output directory. Without a session,
+it selects both the one-shot store and crop directory. Zoom shares the image
+budget flags and never upscales the crop beyond source pixels.
+
+The response is `{schemaVersion: 1, zoom: {observationId, capturedAt,
+image: {path, width, height}, region: {x, y, width, height},
+coordinateSpace: "parent-observation"}}`. The returned region is the **effective**
+source-pixel crop mapped back into parent coordinates; it can differ slightly
+from the requested region because source pixels have integer boundaries.
+Map a point `(u,v)` on the zoom image before calling `act`:
+
+```js
+x = zoom.region.x + u * zoom.region.width / zoom.image.width;
+y = zoom.region.y + v * zoom.region.height / zoom.image.height;
+```
+
+Keep fractional coordinates. Pass these full-image coordinates and the original
+observation id to `act --click-x X --click-y Y --observation UUID --format observation`.
+Zoom creates no new click credential and does not extend the parent's 60-second
+TTL. Expired/invalidated evidence, missing source, invalid regions, and failed
+transforms return structured errors. Zoom is a CLI/artifact helper, with no
+`computer.zoom` method in exec or E2E.
 
 ## Foreground ownership
 

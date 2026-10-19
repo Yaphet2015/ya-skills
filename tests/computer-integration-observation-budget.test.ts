@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   ComputerError,
   createSessionWithBackend,
@@ -135,12 +135,21 @@ describe("observation request budget finalization", () => {
   });
 });
 
+const transformDirs: string[] = [];
+afterEach(async () => { for (const dir of transformDirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
+async function transformSource(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "cu-deadline-source-")); transformDirs.push(dir);
+  const path = join(dir, "source.png");
+  await writeFile(path, Buffer.from(SYNTHETIC_PNG_BASE64, "base64"));
+  return path;
+}
+
 describe("derived screenshot request budget", () => {
   test("passes only the remaining deadline to each child process and fails after expiry", async () => {
     const calls: Array<{ args: string[]; timeoutMs: number }> = [];
     const runner: ProcessRunner = async (_command, args, options) => {
       calls.push({ args, timeoutMs: options.timeoutMs });
-      await sleep(30);
+      await sleep(70);
       return {
         stdout: args[0] === "-g" ? "pixelWidth: 2880\npixelHeight: 1800\n" : "pixelWidth: 1440\npixelHeight: 900\n",
         stderr: "",
@@ -148,7 +157,7 @@ describe("derived screenshot request budget", () => {
       };
     };
     const deadlineAt = Date.now() + 50;
-    const error = await resizeScreenshot("/tmp/missing-observation.png", 1440, undefined, runner, deadlineAt)
+    const error = await resizeScreenshot(await transformSource(), 64, undefined, runner, deadlineAt)
       .then(() => null, (value: unknown) => value);
 
     expect(error).toBeInstanceOf(Error);
@@ -162,7 +171,7 @@ describe("derived screenshot request budget", () => {
       await sleep(30);
       return { stdout: "pixelWidth: 100\npixelHeight: 80\n", stderr: "", code: 0 };
     };
-    const request = resizeScreenshot("/tmp/missing-observation.png", 1440, controller.signal, runner);
+    const request = resizeScreenshot(await transformSource(), 64, controller.signal, runner);
     setTimeout(() => controller.abort(), 5);
     await expect(request).rejects.toThrow(/aborted|cancel/i);
   });

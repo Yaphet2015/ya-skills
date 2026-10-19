@@ -7,9 +7,20 @@
 //   yk computer-use session open --pid 123 --window 456
 //   yk computer-use exec --session <ID> --file search.js --request-id r1
 
-await computer.click({ text: "Search", match: "exact", role: "AXTextField" });
-await computer.type("penguin");
-await computer.key("Return");
+// This example assumes the Search field exposes a writable AX value.
+// Resolve exactly one fresh field, and do not insert another observation
+// between choosing its token and using it.
+async function searchField() {
+  const view = await observe({ mode: "ax", selector: { text: "Search", match: "exact", role: "AXTextField" } });
+  if (view.ax.elements.length !== 1 || !view.ax.elements[0].elementToken) {
+    throw new Error("Expected one Search field with a fresh token");
+  }
+  return view.ax.elements[0].elementToken;
+}
+await computer.setValue(await searchField(), "penguin");
+// If the app requires keyboard events, use addressed type instead of setValue:
+// await computer.type("penguin", undefined, { elementToken: await searchField() });
+await computer.key("Return", undefined, undefined, { elementToken: await searchField() });
 
 // Local wait: structured predicate polled on this machine, no model round trip.
 await computer.wait(

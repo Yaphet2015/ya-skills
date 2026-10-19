@@ -56,7 +56,7 @@ describe("computer-use one-shot observation artifacts", () => {
           "--mode", "both",
           "--out-dir", outDir
         ])) as string
-      ) as { observation: { id: string } };
+      ) as { observation: { id: string; image: { geometry: { sentWidth: number; sentHeight: number } } } };
 
       expect(observed.observation.id).toMatch(/^[0-9a-f-]{36}$/i);
       expect(existsSync(join(outDir, "observations", `${observed.observation.id}.json`))).toBe(true);
@@ -64,8 +64,8 @@ describe("computer-use one-shot observation artifacts", () => {
       await act.run([
         "--pid", String(FIXTURE_TARGET.pid),
         "--window", FIXTURE_TARGET.windowId.toString(),
-        "--click-x", "640",
-        "--click-y", "400",
+        "--click-x", String(observed.observation.image.geometry.sentWidth / 2),
+        "--click-y", String(observed.observation.image.geometry.sentHeight / 2),
         "--observation", observed.observation.id,
         "--out-dir", outDir
       ]);

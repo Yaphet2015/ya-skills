@@ -4,7 +4,7 @@
 // requested coordinate, and bound unrelated global drift. Decode failures
 // always return false so malformed/unsupported evidence cannot authorize input.
 
-import { readFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync } from "node:fs";
 import { PNG } from "pngjs";
 
 interface DecodedPng {
@@ -70,6 +70,22 @@ function assertHeaderBounded(data: Uint8Array): void {
     throw new Error("PNG dimensions are out of bounds");
   }
   if (width > Math.floor(MAX_PIXELS / height)) throw new Error("PNG has too many pixels");
+}
+
+/** Read bounded PNG metadata without decoding pixels or spawning a process. */
+export function readPngDimensions(path: string, expected?: { width: number; height: number }): { width: number; height: number } {
+  const fd = openSync(path, "r");
+  const bytes = Buffer.alloc(33);
+  try {
+    if (readSync(fd, bytes, 0, bytes.length, 0) !== bytes.length) throw new Error("PNG is truncated");
+  } finally { closeSync(fd); }
+  assertHeaderBounded(bytes);
+  const width = readU32(bytes, 16);
+  const height = readU32(bytes, 20);
+  if (expected && (width !== expected.width || height !== expected.height)) {
+    throw new Error("PNG dimensions do not match screenshot geometry");
+  }
+  return { width, height };
 }
 
 function decode(path: string, expected?: { width: number; height: number }): DecodedPng {

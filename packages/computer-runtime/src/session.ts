@@ -29,6 +29,8 @@ import type {
 import { clickUnique, waitForElements } from "./actions.js";
 import { normalizeElements, projectObservation } from "./observe.js";
 import { persistObservationImage } from "./artifacts.js";
+import { DEFAULT_MAX_DIMENSION, DEFAULT_MAX_PIXELS, validateImageBudget } from "./screenshot.js";
+import { readPngDimensions } from "./image-evidence.js";
 import { mapImagePointToDriverPixels } from "./coordinates.js";
 import {
   frameMatchesObservation,
@@ -73,7 +75,7 @@ export interface SessionOptions {
   screenshotResizer?: (
     originalPath: string,
     maxDimension: number,
-    options: { signal?: AbortSignal; deadlineAt: number }
+    options: { signal?: AbortSignal; deadlineAt: number; maxPixels: number }
   ) => Promise<ResizeResult>;
   /** Shared target-lease enforcement for mutation entry paths. */
   leases?: MutationLeases;
@@ -432,9 +434,10 @@ class SessionImpl implements ComputerSession {
     if (mode !== "auto" && mode !== "ax" && mode !== "image" && mode !== "both") {
       throw new ComputerError("invalid_request", `unknown observation mode: ${String(mode)}`);
     }
-    if (opts?.maxDimension !== undefined &&
-      (!Number.isSafeInteger(opts.maxDimension) || opts.maxDimension < 64 || opts.maxDimension > 8192)) {
-      throw new ComputerError("invalid_request", "maxDimension must be a safe integer between 64 and 8192");
+    try {
+      validateImageBudget(opts ?? {});
+    } catch (error) {
+      throw new ComputerError("invalid_request", (error as Error).message);
     }
     if (opts?.selector !== undefined &&
       (typeof opts.selector.text !== "string" || opts.selector.text.length === 0 ||
@@ -484,7 +487,7 @@ class SessionImpl implements ComputerSession {
           axOnly.degraded !== true &&
           axOnly.truncated !== true &&
           normalizeElements(axOnly.elements).length > 0;
-        if (axUsable && !opts?.maxDimension) {
+        if (axUsable) {
           requested = { accessibility: true, screenshot: false };
           raw = axOnly;
         } else {
@@ -515,18 +518,26 @@ class SessionImpl implements ComputerSession {
           );
         }
         view.image = { ...view.image, originalPath: path, ...(view.image.geometry ? { path } : {}) };
-        if (view.image.geometry && opts?.maxDimension !== undefined) {
-          // Explicit same-frame derived image via system sips; the original
+        if (view.image.geometry) {
+          const maxDimension = opts?.maxDimension ?? DEFAULT_MAX_DIMENSION;
+          const maxPixels = opts?.maxPixels ?? DEFAULT_MAX_PIXELS;
+          // Budgeted same-frame image; the original
           // PNG stays on disk as evidence. Never upscale. The derivation uses
           // only the remaining request budget for every child process.
           let resized: ResizeResult;
           try {
+            if (this.options.screenshotResizer) {
+              readPngDimensions(path, { width: view.image.geometry.sourceWidth, height: view.image.geometry.sourceHeight });
+            }
             const resizePromise = this.options.screenshotResizer
-              ? this.options.screenshotResizer(path, opts.maxDimension, {
+              ? this.options.screenshotResizer(path, maxDimension, {
+                maxPixels,
                 signal: operationSignal,
                 deadlineAt
               })
-              : resizeScreenshot(path, opts.maxDimension, operationSignal, undefined, deadlineAt);
+              : resizeScreenshot(path, maxDimension, operationSignal, undefined, deadlineAt, maxPixels, {
+                  width: view.image.geometry.sourceWidth, height: view.image.geometry.sourceHeight
+                });
             // A deadline wrapper only reports the caller-visible timeout. The
             // child process cleanup belongs to the derived operation, so keep
             // that promise tracked until it has reaped its child.

@@ -48,7 +48,7 @@ describe("parseRequest (agentic additions)", () => {
 
   test("observe parses mode, max-dimension, and structured selector", () => {
     const request = parseRequest("observe", [
-      "--pid", "9", "--window", "5", "--mode", "both", "--max-dimension", "1600",
+      "--pid", "9", "--window", "5", "--mode", "both", "--max-dimension", "1600", "--max-pixels", "2000000",
       "--select-text", "Save", "--select-match", "contains", "--select-role", "AXButton"
     ]);
     expect(request).toMatchObject({
@@ -57,6 +57,7 @@ describe("parseRequest (agentic additions)", () => {
       windowId: 5n,
       mode: "both",
       maxDimension: 1600,
+      maxPixels: 2000000,
       selector: { text: "Save", match: "contains", role: "AXButton" }
     });
     expect(() => parseRequest("observe", ["--pid", "1", "--mode", "wat"])).toThrow(/mode/);

@@ -93,6 +93,15 @@ batch/exec receipt `result` retain the driver's route, effect, delivery mode, an
 escalation advice. A refused action stops the batch; an unverified effect needs
 observation before deciding the next action. See [computer-use](docs/computer-use.md).
 
+Native observations use AX first in `auto` mode. Image budgets default to a
+1280 px long side and 1,000,000 pixels; they only shrink images that exceed a
+limit. Override each limit with `--max-dimension` and `--max-pixels`.
+`yk computer-use zoom --observation UUID --region X,Y,W,H [--session ID] [--out-dir DIR]`
+crops the stored original without a desktop read. Map zoom points back through
+the returned effective `region` and use the parent observation id for actions.
+Zoom does not refresh its 60-second TTL. See the
+[native reference](skills/computer-use/references/native-orchestration.md#image-budget-and-zoom).
+
 ## 📑 Table of Contents
 
 - [What is ya-skills?](#what-is-ya-skills)

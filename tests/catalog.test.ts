@@ -437,7 +437,12 @@ test("root catalog exposes the computer-use skill with its command functions", a
     "apps",
     "windows",
     "perceive",
-    "act"
+    "observe",
+    "zoom",
+    "act",
+    "batch",
+    "session",
+    "exec"
   ]);
 
   const skill = await readFile(resolve("skills", "computer-use", "SKILL.md"), "utf8");

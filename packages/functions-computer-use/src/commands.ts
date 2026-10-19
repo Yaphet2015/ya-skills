@@ -20,6 +20,7 @@ import {
 import { parseRequest, type ClickSpec, type ParsedRequest } from "./args.js";
 import { COMMAND_DEADLINE_MS } from "./consts.js";
 import { runDoctor } from "./runtime.js";
+import { zoomCommand } from "./zoom-command.js";
 import { observeCommand } from "./observe-command.js";
 import { applyBatchOverrides, batchCommand, readBatchFile } from "./batch-command.js";
 import { parseSessionArgs, runOnSession, sessionCommand, SESSION_USAGE_LINES, type SessionTransportDeps } from "./session-command.js";
@@ -234,6 +235,7 @@ async function runSessionRequest(request: SessionRequest, transport: SessionTran
         options: {
           mode: request.mode,
           ...(request.maxDimension !== undefined ? { maxDimension: request.maxDimension } : {}),
+          ...(request.maxPixels !== undefined ? { maxPixels: request.maxPixels } : {}),
           ...(request.selector !== undefined ? { selector: request.selector } : {})
         }
       }, 30_000, transport);
@@ -307,6 +309,7 @@ async function runReal(
   sessionTransport: SessionTransportDeps = {},
   foregroundController?: ForegroundController
 ): Promise<string> {
+  if (request.kind === "zoom") return zoomCommand(request);
   if (request.kind === "session") {
     const run = sessionCommand(sessionTransport);
     return run(parseSessionArgs(request.argv));
@@ -441,10 +444,17 @@ export function createComputerUseCommands(
         "Independent AX/image observation: returns observationId, per-channel validity, and image geometry for visual clicks.",
       usage: [
         "yk computer-use observe (--pid PID | --session ID) [--window ID] [--mode auto|ax|image|both]",
-        "                              [--max-dimension PX] [--out-dir DIR]",
+        "                              [--max-dimension PX] [--max-pixels N] [--out-dir DIR]",
         "                              [--select-text TEXT [--select-match exact|contains] [--select-role ROLE]]"
       ],
       run: run("observe")
+    },
+    {
+      domain,
+      action: "zoom",
+      description: "Crop original observation evidence without a desktop read; coordinates map back to the parent observation.",
+      usage: ["yk computer-use zoom --observation UUID --region X,Y,W,H [--session ID] [--out-dir DIR] [--max-dimension PX] [--max-pixels N]"],
+      run: run("zoom")
     },
     {
       domain,

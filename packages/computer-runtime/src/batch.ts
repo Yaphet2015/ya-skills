@@ -233,6 +233,13 @@ export function validateBatch(value: unknown): BatchRequest {
         fail("observe.maxDimension must be an integer between 64 and 8192");
       }
     }
+    const maxPixels = (observe as Record<string, unknown>).maxPixels;
+    if (maxPixels !== undefined) {
+      const pixels = validateFiniteNumber(maxPixels, "observe.maxPixels");
+      if (!Number.isSafeInteger(pixels) || pixels < 1 || pixels > 64 * 1024 * 1024) {
+        fail("observe.maxPixels must be a positive integer <= 67108864");
+      }
+    }
     if ((observe as Record<string, unknown>).selector !== undefined) {
       validateSelector((observe as Record<string, unknown>).selector, "observe.selector");
     }

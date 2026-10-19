@@ -16,6 +16,7 @@ export interface ObserveCommandRequest {
   windowId?: bigint;
   mode: "auto" | "ax" | "image" | "both";
   maxDimension?: number;
+  maxPixels?: number;
   selector?: { text: string; match: "exact" | "contains"; role?: string };
   outDir?: string;
 }
@@ -43,6 +44,7 @@ export function observeCommand(
       const options: ObserveOptions = {
         mode: request.mode,
         ...(request.maxDimension !== undefined ? { maxDimension: request.maxDimension } : {}),
+        ...(request.maxPixels !== undefined ? { maxPixels: request.maxPixels } : {}),
         ...(request.selector !== undefined ? { selector: request.selector } : {})
       };
       const observation = await session.computer.observe(target, options);

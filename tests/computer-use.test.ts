@@ -2,13 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { createComputerUseCommands, parseRequest } from "@ya-skills/functions-computer-use";
 
 describe("command registration", () => {
-  test("registers exactly the nine desktop operations", () => {
+  test("registers desktop operations and local zoom", () => {
     expect(createComputerUseCommands().map((command) => `${command.domain} ${command.action}`)).toEqual([
       "computer-use doctor",
       "computer-use apps",
       "computer-use windows",
       "computer-use perceive",
       "computer-use observe",
+      "computer-use zoom",
       "computer-use session",
       "computer-use exec",
       "computer-use batch",

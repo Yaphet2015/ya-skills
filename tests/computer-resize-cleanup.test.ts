@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -89,12 +89,21 @@ function observingBackend(): Backend {
   };
 }
 
+const sourceDirs: string[] = [];
+afterEach(async () => { for (const dir of sourceDirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
+async function source(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "cu-cleanup-source-")); sourceDirs.push(dir);
+  const path = join(dir, "source.png");
+  await writeFile(path, Buffer.from(SYNTHETIC_PNG_BASE64, "base64"));
+  return path;
+}
+
 describe("resize subprocess cleanup", () => {
   test("deadline kills a child that ignores SIGTERM and waits for exit", async () => {
     const harness = installTermResistantSips();
     try {
       const result = await resizeScreenshot(
-        "/tmp/review-placeholder.png",
+        await source(),
         64,
         undefined,
         undefined,
@@ -117,7 +126,7 @@ describe("resize subprocess cleanup", () => {
     try {
       const started = Date.now();
       const request = resizeScreenshot(
-        "/tmp/review-placeholder.png",
+        await source(),
         64,
         controller.signal,
         undefined,

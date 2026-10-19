@@ -37,6 +37,8 @@ export interface ScrollSpec {
 }
 export interface ObserveOptions {
   mode?: ObservationMode;
+  /** Upper bounds for sent images. Defaults: 1280 px and 1,000,000 pixels. Never upscales. */
+  maxPixels?: number;
   maxDimension?: number;
   selector?: Selector;
 }

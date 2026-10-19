@@ -281,7 +281,7 @@ describe("protocol lane request and control boundaries", () => {
         ],
         timeoutMs: 3_000,
         maxActions: 5,
-        observe: { mode: "both", maxDimension: 800, selector: { text: "保存", match: "contains" } }
+        observe: { mode: "both", maxDimension: 800, maxPixels: 500_000, selector: { text: "保存", match: "contains" } }
       }
     });
     expect(decodeRequest(encodeRequest(request))).toEqual(request);

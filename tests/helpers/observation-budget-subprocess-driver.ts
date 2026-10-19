@@ -11,7 +11,7 @@ import {
 } from "../../packages/computer-runtime/src/index.js";
 import type { DriverConfig, DriverSessionLike } from "../../packages/computer-session/src/driver-worker.js";
 
-const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+import { SYNTHETIC_PNG_BASE64 as PNG_BASE64 } from "./computer-fixtures.js";
 
 function delayedStore(root: string): ObservationStore {
   const controlDir = join(root, "observation-budget");

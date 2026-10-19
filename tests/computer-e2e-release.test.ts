@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import { createObservationStore, projectObservation } from "../packages/computer-runtime/src/index.js";
+import { makeNativeObservation, syntheticPngBuffer } from "./helpers/computer-fixtures.js";
 import packageJson from "../package.json" with { type: "json" };
 
 // The packaged closed loop, desktop-free: install the skill from the
@@ -130,4 +133,31 @@ export default { apiVersion: 1, id: 'ok', name: 'ok', tests: [{ id: 'only', name
       rmSync(consumer, { recursive: true, force: true });
     }
   });
+});
+
+maybe("packaged zoom crops local evidence with the native runtime absent", async () => {
+  const consumer = consumerDir("zoom-no-sdk");
+  try {
+    const standalone = join(consumer, "yk");
+    copyFileSync(yk, standalone);
+    const original = join(consumer, "source.png");
+    writeFileSync(original, syntheticPngBuffer(), { mode: 0o600 });
+    const observation = projectObservation(makeNativeObservation(), { mode: "image" });
+    observation.id = randomUUID(); observation.capturedAt = Date.now();
+    observation.image.originalPath = original; observation.image.path = original;
+    await createObservationStore(join(consumer, "observations")).save(observation);
+    const proc = Bun.spawnSync([standalone, "computer-use", "zoom", "--observation", observation.id,
+      "--region", "10,20,30,40", "--out-dir", consumer], {
+      cwd: consumer, env: { ...process.env, PATH: "/usr/bin:/bin", NODE_PATH: "", BUN_OPTIONS: "", YA_SKILLS_CATALOG_DIR: join(outDir, "skills") },
+      stdout: "pipe", stderr: "pipe"
+    });
+    expect(new TextDecoder().decode(proc.stderr)).toBe("");
+    expect(proc.exitCode).toBe(0);
+    const result = JSON.parse(new TextDecoder().decode(proc.stdout));
+    expect(result.zoom.observationId).toBe(observation.id);
+    expect(result.zoom.capturedAt).toBe(observation.capturedAt);
+    expect(result.zoom.image).toMatchObject({ width: 30, height: 40 });
+    expect(existsSync(result.zoom.image.path)).toBe(true);
+    expect(existsSync(join(consumer, "runtime"))).toBe(false);
+  } finally { rmSync(consumer, { recursive: true, force: true }); }
 });

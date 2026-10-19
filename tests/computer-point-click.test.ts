@@ -454,3 +454,26 @@ describe("observed coordinates for background keyboard input", () => {
     }
   });
 });
+
+test("downscaling preserves the strict 32 sent-pixel neighbourhood", async () => {
+  // A pixel 40 source pixels away is outside the original neighbourhood,
+  // but inside it after sending at half resolution. Distant drift stays valid.
+  for (const [offset, scale, accepted] of [[40, 1, true], [40, 0.5, false], [90, 0.5, true]] as const) {
+    const fresh = fixturePngBase64((data, width) => { data[(400 * width + 640 + offset) * 4] = 25; });
+    let delivered = false;
+    const { session, store, observation, root, imageDir } = await makeSession({
+      observe: async () => makeNativeObservation({ images: [{ mimeType: "image/png", dataBase64: fresh }] }),
+      clickPoint: async () => { delivered = true; return { isError: false }; }
+    });
+    observation.image.geometry!.sentWidth *= scale;
+    observation.image.geometry!.sentHeight *= scale;
+    await store.save(observation);
+    try {
+      const request = session.computer.clickPoint(target, { observationId: observation.id, x: 640 * scale, y: 400 * scale });
+      if (accepted) await request; else await expect(request).rejects.toThrow(/changed|stale/);
+      expect(delivered).toBe(accepted);
+    } finally {
+      await session.close(); await rm(root, { recursive: true, force: true }); await rm(imageDir, { recursive: true, force: true });
+    }
+  }
+});

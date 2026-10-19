@@ -4,11 +4,11 @@
 // windowId is a decimal bigint (macOS window ids exceed Number.MAX_SAFE_INTEGER);
 // pid must stay a positive safe integer.
 
-import type { InputAddress } from "@ya-skills/computer-runtime";
+import type { InputAddress, Rect } from "@ya-skills/computer-runtime";
 import { tokenizeFlags, type FlagTokens } from "@ya-skills/core";
 import { parseSessionArgs } from "./session-command.js";
 
-export const USAGE = "usage: yk computer-use <doctor|apps|windows|perceive|observe|act|batch|session>";
+export const USAGE = "usage: yk computer-use <doctor|apps|windows|perceive|observe|zoom|act|batch|exec|session>";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
 export type ActFormat = "legacy" | "observation";
@@ -40,10 +40,12 @@ export type ObservationMode = "auto" | "ax" | "image" | "both";
 export interface ObserveSpec {
   mode: ObservationMode;
   maxDimension?: number;
+  maxPixels?: number;
   selector?: { text: string; match: "exact" | "contains"; role?: string };
 }
 
 export type ParsedRequest =
+  | { kind: "zoom"; observationId: string; region: Rect; session?: string; outDir?: string; maxDimension?: number; maxPixels?: number }
   | { kind: "doctor" }
   | { kind: "apps"; name?: string }
   | { kind: "windows"; pid: number }
@@ -72,6 +74,7 @@ const BOOL_FLAGS = new Set(["shot", "activate", "audit-foreground"]);
 
 const ALLOWED: Record<string, Set<string>> = {
   doctor: new Set(),
+  zoom: new Set(["observation", "region", "session", "out-dir", "max-dimension", "max-pixels"]),
   apps: new Set(["name"]),
   windows: new Set(["pid"]),
   perceive: new Set(["pid", "window", "shot", "activate", "audit-foreground", "out-dir"]),
@@ -80,6 +83,7 @@ const ALLOWED: Record<string, Set<string>> = {
     "window",
     "mode",
     "max-dimension",
+    "max-pixels",
     "select-text",
     "select-match",
     "select-role",
@@ -381,15 +385,27 @@ function parseActSpec(tokens: FlagTokens): ActSpec {
   return { action: "click", click: { kind, text, role } };
 }
 
+function parseImageBudget(tokens: FlagTokens): Pick<ObserveSpec, "maxDimension" | "maxPixels"> {
+  const maxDimension =
+    tokens.values["max-dimension"] === undefined
+      ? undefined
+      : parseNumber("max-dimension", tokens.values["max-dimension"], { integer: true, positive: true });
+  const maxPixels = parseBudget("max-pixels", tokens.values["max-pixels"], 64 * 1024 * 1024);
+  if (maxDimension !== undefined && (maxDimension < 64 || maxDimension > 8192)) {
+    fail("--max-dimension must be between 64 and 8192");
+  }
+  return {
+    ...(maxDimension !== undefined ? { maxDimension } : {}),
+    ...(maxPixels !== undefined ? { maxPixels } : {})
+  };
+}
+
 function parseObserveSpec(tokens: FlagTokens): ObserveSpec {
   const mode = tokens.values["mode"] ?? "auto";
   if (mode !== "auto" && mode !== "ax" && mode !== "image" && mode !== "both") {
     fail(`--mode must be auto|ax|image|both (got: ${mode})`);
   }
-  const maxDimension =
-    tokens.values["max-dimension"] === undefined
-      ? undefined
-      : parseNumber("max-dimension", tokens.values["max-dimension"], { integer: true, positive: true });
+  const budget = parseImageBudget(tokens);
   const selectText = tokens.values["select-text"];
   const selectMatch = tokens.values["select-match"];
   const selectRole = tokens.values["select-role"];
@@ -401,7 +417,7 @@ function parseObserveSpec(tokens: FlagTokens): ObserveSpec {
   }
   return {
     mode,
-    ...(maxDimension !== undefined ? { maxDimension } : {}),
+    ...budget,
     ...(selectText !== undefined
       ? {
           selector: {
@@ -412,6 +428,18 @@ function parseObserveSpec(tokens: FlagTokens): ObserveSpec {
         }
       : {})
   };
+}
+
+function parseZoomRegion(tokens: FlagTokens): Rect {
+  const parts = requireNonEmpty("--region", tokens.values["region"]).split(",");
+  if (parts.length !== 4 || parts.some((part) => part.trim() === "" || !Number.isFinite(Number(part)))) {
+    fail("--region must be X,Y,W,H with finite numbers");
+  }
+  const [x, y, width, height] = parts.map(Number) as [number, number, number, number];
+  if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+    fail("--region needs non-negative X,Y and positive W,H");
+  }
+  return { x, y, width, height };
 }
 
 export function parseRequest(action: string, argv: string[]): ParsedRequest {
@@ -446,6 +474,22 @@ export function parseRequest(action: string, argv: string[]): ParsedRequest {
     }
   }
   switch (action) {
+    case "zoom": {
+      const observationId = requireNonEmpty("--observation", tokens.values["observation"]);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(observationId)) {
+        fail("--observation must be a UUID returned by observe");
+      }
+      const region = parseZoomRegion(tokens);
+      const budget = parseImageBudget(tokens);
+      return {
+        kind: "zoom",
+        observationId,
+        region,
+        session: tokens.values["session"] === undefined ? undefined : requireNonEmpty("--session", tokens.values["session"]),
+        outDir: tokens.values["out-dir"] === undefined ? undefined : requireNonEmpty("--out-dir", tokens.values["out-dir"]),
+        ...budget
+      };
+    }
     case "doctor":
       return { kind: "doctor" };
     case "apps": {
