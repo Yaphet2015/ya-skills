@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Yaphet2015/ya-skills/compare/v1.0.0...v1.1.0) (2026-10-19)
+
+
+### Features
+
+* **computer-use:** add image budgets and zoom ([7efe496](https://github.com/Yaphet2015/ya-skills/commit/7efe4962423314ce49b040cd9b28a56023f3e903))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
