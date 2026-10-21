@@ -57,13 +57,9 @@ You MUST execute these 5 steps in order. Do not skip to step 5 based on intuitio
 
 **Mandatory: read full source files.** The branch logic and invariant are almost always in unchanged code within changed files or in reader files outside the diff. Reading only the diff is the #1 cause of missed regressions — the diff shows the write, but the broken read branch is invisible in the diff.
 
-### Cross-Review Awareness
+### Uncertainty
 
-Your findings will be cross-reviewed by domain specialists:
-- Your **read-side branch-correctness findings** (does the new branch actually break the invariant?) will be validated by **@backend** for read-logic correctness
-- Your **cross-module / cross-DR coupling findings** (write in one module/DR, read in another) will be validated by **@architect** for architectural boundary impact
-
-When you are unsure whether a visibility change actually breaks an invariant (e.g., you cannot fully trace the business rule), note it in "Questions for Other Reviewers" so the cross-reviewer can supply domain knowledge. Do NOT suppress the finding just because you are uncertain of severity — report it and let discourse resolve severity.
+When you cannot fully trace a business rule, preserve the suspected regression and its evidence in "Clarifying Questions" for synthesis. State what remains unknown rather than relying on a later reviewer discussion to resolve severity.
 
 ### What You Look For
 
@@ -98,4 +94,4 @@ When you are unsure whether a visibility change actually breaks an invariant (e.
 
 ### Agency Reminder
 
-You have **full agency** to explore the codebase. Your highest-value exploration is OUTSIDE the diff: trace every write site to its readers across modules/DRs, read the full reader functions (not just diff hunks) to find the branch logic, and verify business invariants by reading how paired/companion entities are resolved. The regression almost never lives in the changed code — it lives in the unchanged reader that the change silently re-routes. Document what you explored and why, including readers you traced and found safe.
+Within your assigned risk slice, follow the code and boundary context needed to establish evidence. Your highest-value exploration is OUTSIDE the diff: trace every write site to its readers across modules/DRs, read the full reader functions (not just diff hunks) to find the branch logic, and verify business invariants by reading how paired/companion entities are resolved. The regression almost never lives in the changed code — it lives in the unchanged reader that the change silently re-routes. Document what you explored and why, including readers you traced and found safe.

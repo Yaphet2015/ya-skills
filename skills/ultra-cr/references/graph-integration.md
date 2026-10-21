@@ -38,18 +38,18 @@ Ultra CR 与 code-review-graph 知识图谱的集成参考。
 | 工具 | 用途 | 推荐参数 | 导航/分析 |
 |------|------|---------|-----------|
 | `list_graph_stats_tool` | 可用性检测（区分 server 不可用 / 图未构建） | 无参数 | 导航 |
-| `get_minimal_context_tool` | 入口上下文（~100 token，stats+risk+建议工具，Phase 2/3 复用） | task=..., base=$FIRST_COMMIT^, changed_files=[...] | 导航 |
+| `get_minimal_context_tool` | 入口上下文（~100 token，stats+risk+建议工具，Phase 2/3 复用） | task=..., base=$BASE_SHA, changed_files=[...] | 导航 |
 | `get_architecture_overview_tool` | 架构概览 | detail_level="minimal" | 导航 |
-| `detect_changes_tool` | 风险评分变更分析（聚合受影响函数/flows/测试缺口） | base=$FIRST_COMMIT^, changed_files=[...], detail_level="minimal" | 导航 |
-| `get_impact_radius_tool` | 爆炸半径（上游/下游依赖，文件级） | changed_files=[top-N 函数所在文件], base=$FIRST_COMMIT^, detail_level="minimal" | 导航 |
-| `get_affected_flows_tool` | 受影响执行路径 | changed_files=[...], base=$FIRST_COMMIT^（⚠️ 无 detail_level） | 导航 |
+| `detect_changes_tool` | 风险评分变更分析（聚合受影响函数/flows/测试缺口） | base=$BASE_SHA, changed_files=[...], detail_level="minimal" | 导航 |
+| `get_impact_radius_tool` | 爆炸半径（上游/下游依赖，文件级） | changed_files=[top-N 函数所在文件], base=$BASE_SHA, detail_level="minimal" | 导航 |
+| `get_affected_flows_tool` | 受影响执行路径 | changed_files=[...], base=$BASE_SHA（⚠️ 无 detail_level） | 导航 |
 | `query_graph_tool(pattern="callers_of")` | 上游调用方 | target=函数名, detail_level="minimal" | 导航 |
 | `query_graph_tool(pattern="callees_of")` | 下游依赖 | target=函数名, detail_level="minimal" | 导航 |
 | `query_graph_tool(pattern="tests_for")` | 测试覆盖 | target=函数/类名, detail_level="minimal" | 导航 |
 | `query_graph_tool(pattern="imports_of")` | 模块导入 | target=模块名, detail_level="minimal" | 导航 |
 | `query_graph_tool(pattern="children_of")` | 文件内函数/类列表 | target=文件名, detail_level="minimal" | 导航 |
 | `semantic_search_nodes_tool` | 语义搜索 | query=关键词, detail_level="minimal" | 导航 |
-| `get_review_context_tool` | 精简源码片段 | changed_files=[...], base=$FIRST_COMMIT^, include_source=True, max_lines_per_file=200, detail_level="minimal" | 导航→分析过渡 |
+| `get_review_context_tool` | 精简源码片段 | changed_files=[...], base=$BASE_SHA, include_source=True, max_lines_per_file=200, detail_level="minimal" | 导航→分析过渡 |
 | `get_knowledge_gaps_tool` | 结构级弱点（孤立节点/无测试热点/单文件社区） | 无参数 | 导航 |
 | `find_large_functions_tool` | 超长方法定位 | file_path_pattern=..., min_lines=200 | 导航 |
 | `get_hub_nodes_tool` | 架构热点（总度数最高的节点，变更爆炸半径大） | top_n=10（⚠️ 无 detail_level） | 导航 |
@@ -61,7 +61,7 @@ Ultra CR 与 code-review-graph 知识图谱的集成参考。
 注意: 所有 graph 工具都是"导航"性质——它们告诉你位置和关系，不告诉你代码有没有 bug。发现 bug 是 Diff/Grep/Read 的工作。
 注意: `get_affected_flows_tool` 没有 `detail_level` 参数，调用时不要传该参数，否则会报错。
 注意: `get_hub_nodes_tool` / `get_bridge_nodes_tool` / `get_surprising_connections_tool` / `traverse_graph_tool` **均无 `detail_level` 参数**，无法压缩输出，必须用 `top_n` / `token_budget` 控制成本，且**严格条件触发**（仅 risk_score >= 0.7 时）。
-注意: 涉及变更范围的工具（detect_changes/get_impact_radius/get_affected_flows/get_review_context/get_minimal_context）**必须传 base=$FIRST_COMMIT^ 和 changed_files**，否则默认只分析最后一个 commit（HEAD~1），全量审查场景下数据严重失真。
+注意: 涉及变更范围的工具（detect_changes/get_impact_radius/get_affected_flows/get_review_context/get_minimal_context）**必须传 base=$BASE_SHA 和 changed_files**，否则默认只分析最后一个 commit（HEAD~1），全量审查场景下数据严重失真。
 注意: `hub_nodes`/`bridge_nodes`/`surprising_connections` 是**全图静态分析**（不随本次变更变化），返回结果需与本次变更做**交集过滤**后才有针对性，否则是与本次变更无关的噪声。交集过滤用 `git diff --name-only` 变更文件列表匹配节点的 `file` 字段为主（因 `detect_changes_tool` minimal 模式不返回 `changed_functions`），辅以 `review_priorities` 函数名匹配。
 
 ## context_savings 元数据

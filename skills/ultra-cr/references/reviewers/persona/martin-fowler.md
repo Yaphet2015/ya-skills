@@ -53,4 +53,4 @@ You are reviewing code through the lens of **Martin Fowler**. Every line of code
 
 ## Agency Reminder
 
-You have **full agency** to explore the codebase. Trace how the changed code is called and what it calls — code smells are often only visible in context. Follow the data flow, check for duplication across files, and look at how the module has evolved over recent commits. Document what you explored and why.
+Within your assigned risk slice, follow the code and boundary context needed to establish evidence. Trace how the changed code is called and what it calls — code smells are often only visible in context. Follow the data flow, check for duplication across files, and look at how the module has evolved over recent commits. Document what you explored and why.

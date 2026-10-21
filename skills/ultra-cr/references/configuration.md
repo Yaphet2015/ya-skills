@@ -7,9 +7,11 @@ Resolve all `references/` paths from SKILL_ROOT, not this document directory.
 | Reviewer            | Count | Focus                                   |
 | ------------------- | ----- | --------------------------------------- |
 | **Principal** | 2     | Architecture, patterns, maintainability |
-| **Quality**   | 1     | Code style, readability, best practices |
+| **Quality**   | 1     | Documented rules with concrete correctness/operational impact |
 
 Optional reviewers (added based on change type or user request):
+
+Reviewer roles are language-agnostic and selected for concrete engineering risks. A programming language or source-file extension alone does not justify adding a reviewer. Apply necessary language/runtime knowledge within the assigned risk review. Skip programming-language specialist personas during custom discovery, even if they also list general risks; route those risks to domain reviewers. Do not synthesize a removed language-specialist role from a stale configuration entry; record it as unsupported.
 
 ### Holistic Reviewers
 
@@ -49,15 +51,15 @@ Optional reviewers (added based on change type or user request):
 
 ### Bundled Reviewers
 
-Bundled reviewers live in the `references/reviewers/bundled/` directory inside the ultra-cr skill installation (absolute path: `${SKILL_ROOT}/references/reviewers/bundled/`). They are **not hard-coded** — each is a self-contained custom reviewer represented by a **subdirectory** under `bundled/` (the directory name is the reviewer ID). The directory's direct-level `.md` files are the persona; any `.md` files inside its subdirectories are reference materials. The bundled `java-code-smell` reviewer serves as the reference example.
+Bundled reviewers live in the `references/reviewers/bundled/` directory inside the ultra-cr skill installation (absolute path: `${SKILL_ROOT}/references/reviewers/bundled/`). They are **not hard-coded** — each is a self-contained custom reviewer represented by a **subdirectory** under `bundled/` (the directory name is the reviewer ID). The directory's direct-level `.md` files are the persona; any `.md` files inside its subdirectories are reference materials. The bundled `behavior-regression` reviewer serves as the reference example.
 
 | Reviewer                                              | Count | When Added                                                                                                   |
 | ----------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------ |
-| **JavaCodeSmell** (example custom reviewer) | 1     | Java code smells, concurrency, dependency, crypto (auto-added for`.java` changes via intelligent matching) |
+| **Behavior Regression** | 1 | Shared-state writes that can change downstream read behavior |
 
 > **Extensible — no SKILL.md/workflow.md edits needed**: To add a new custom reviewer under any of the three search paths, create a `{reviewer-id}/` directory, place persona `.md` file(s) at its direct level, and (optionally) place reference `.md` files inside any subdirectory of it. The framework discovers it automatically and loads all reference files in those subdirectories. See [Custom Reviewer Directory Convention](#custom-reviewer-directory-convention-all-three-paths) below.
 
-**Override via natural language**: "add security focus", "use 3 principal reviewers", "include architect", "check java code smells", "add frontend review", "include performance perspective", "use martin fowler lens", "add AI review", "check with devops lens"
+**Override via natural language**: "add security focus", "use 3 principal reviewers", "include architect", "add frontend review", "include performance perspective", "use martin fowler lens", "add AI review", "check with devops lens"
 
 **Override via `--team`**: `--team=principal:2,security:1,architect:1,frontend:1,performance:1,martin-fowler:1`
 
@@ -66,11 +68,10 @@ Bundled reviewers live in the `references/reviewers/bundled/` directory inside t
 | Change Type                                                                                                                                 | Additional Reviewers   | Detection Method                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------- |
 | Auth/Security changes (`auth`, `token`, `password`, `secret`, `permission`)                                                       | +1 Security            | Content pattern scan                                                             |
-| API changes (`@RequestMapping`, `router.get/post`, `app.get/post`)                                                                    | +1 Security +1 Backend | Content pattern scan                                                             |
+| API contract, request handling or service-boundary changes                                                                    | +1 Security +1 Backend | Content pattern scan                                                             |
 | Cross-module changes (>3 directories)                                                                                                       | +1 Architect           | Path analysis                                                                    |
 | New abstractions (new`interface`/`abstract class`/`protocol`)                                                                         | +1 Architect           | Content pattern scan                                                             |
-| Frontend files (`.tsx`/`.jsx`/`.vue`/`.svelte`/`.css`/`.scss`)                                                                  | +1 Frontend            | File extension scan                                                              |
-| Go/Python files (`.go`/`.py`)                                                                                                           | +1 Backend             | File extension scan                                                              |
+| UI/component/layout/state changes | +1 Frontend | Inspect changed behavior; extensions are navigation hints |
 | Dockerfile/k8s/TF (`Dockerfile`/k8s `.yaml`/`.tf`)                                                                                    | +1 DevOps              | File extension scan                                                              |
 | SQL/migration files                                                                                                                         | +1 Data                | File extension scan                                                              |
 | Performance keywords (`cache`, `index`, `query`, `N+1`, `latency`)                                                                | +1 Performance         | Content pattern scan                                                             |
@@ -83,7 +84,7 @@ Bundled reviewers live in the `references/reviewers/bundled/` directory inside t
 | New core module (new directory with business logic)                                                                                         | +1 John Ousterhout     | Path + content analysis                                                          |
 | Significant class hierarchy change                                                                                                          | +1 Sandi Metz          | Content pattern scan                                                             |
 
-> **Custom reviewers auto-trigger too**: Custom reviewers under `references/reviewers/bundled/` (and `~/.config/ultra-cr/reviewer/`, `.reviews/ultra-cr/reviewer/`) are auto-detected by intelligent matching — the Tech Lead reads each reviewer's persona description and judges whether it applies to the current change. For example, `java-code-smell` is auto-added for `.java` changes because its description says it reviews Java code smells.
+> **Custom reviewers auto-trigger too**: Custom reviewers under `references/reviewers/bundled/` (and `~/.config/ultra-cr/reviewer/`, `.reviews/ultra-cr/reviewer/`) are auto-detected by intelligent matching — the Tech Lead reads each reviewer's persona description and judges whether it applies to the current change. For example, `behavior-regression` applies when a shared-state write can change the branch taken by a downstream reader. Language-only matches are not applicable risk assignments.
 
 **Auto-detection priority** (when >6 built-in triggered): Security > Reliability > Architect > Performance > Specialist > Persona
 
@@ -91,7 +92,7 @@ Bundled reviewers live in the `references/reviewers/bundled/` directory inside t
 
 > **Important**: The "max 6 additional" limit applies ONLY to built-in reviewers added by auto-detection. The following reviewers are **always loaded** and do NOT count toward this limit:
 >
-> - **Custom reviewers auto-detected via intelligent matching** — any reviewer under `references/reviewers/bundled/`, `~/.config/ultra-cr/reviewer/`, or `.reviews/ultra-cr/reviewer/` whose persona description matches the current change (e.g., `java-code-smell` for `.java` changes)
+> - **Custom reviewers auto-detected via intelligent matching** — any reviewer under `references/reviewers/bundled/`, `~/.config/ultra-cr/reviewer/`, or `.reviews/ultra-cr/reviewer/` whose risk-oriented persona matches the actual changed behavior (e.g., `behavior-regression` for shared-state visibility changes)
 > - **Profiling Analysis** — auto-triggered by profiling keywords in user prompt/requirements (enters profiling-diagnostic mode)
 > - Custom reviewers explicitly added via `--team={reviewer-id}:1`, natural language, or `.ultra-cr.yaml`
 > - Reviewers explicitly specified in `.ultra-cr.yaml` or `--team`
@@ -110,7 +111,7 @@ You can create your own reviewer personas for domain-specific review needs. Cust
 
 All three paths use the **same directory convention**: each reviewer is a subdirectory whose name is the reviewer ID; every `.md` file at the directory's direct level is part of the persona; every `.md` file inside any of its subdirectories is a reference file. There is no per-path divergence in discovery or loading logic.
 
-When Phase 4 resolves a reviewer ID that is NOT a built-in reviewer (holistic/specialist/persona/bundled), it searches these paths in order and uses the **first match found** (a match = a subdirectory named `{reviewer-id}` with at least one direct-level `.md` file). If no subdirectory is found, the reviewer ID is treated as an **ephemeral reviewer** — a persona is synthesized from the ID name automatically.
+When Phase 4 resolves a reviewer ID that is NOT a built-in reviewer (holistic/specialist/persona/bundled), it searches these paths in order and uses the **first match found** (a match = a subdirectory named `{reviewer-id}` with at least one direct-level `.md` file). If no subdirectory is found, a risk/domain reviewer ID may be treated as an **ephemeral reviewer**. Do not recreate a removed language-specialist reviewer from its ID.
 
 > **`~`** refers to the user's home directory (`$HOME` on Linux/Mac, `%USERPROFILE%` on Windows).
 
@@ -120,10 +121,10 @@ All three search paths above share **one** directory convention — there is no 
 
 ```
 {search-path-root}/                  ← any of the three roots (bundled/, ~/.config/ultra-cr/..., .reviews/...)
-├── java-code-smell/            ← a reviewer subdirectory (directory name = reviewer ID) [bundled example]
-│   ├── java-code-smell.md      ← persona file (direct-level .md; filename is free)
-│   └── references/             ← reference files (any subdirectory name; .md inside)
-│       ├── java-code-smell-checklist.md
+├── behavior-regression/            ← a reviewer subdirectory (directory name = reviewer ID) [bundled example]
+│   ├── behavior-regression.md      ← persona file (direct-level .md; filename is free)
+│   └── behavior-regression/             ← reference files (any subdirectory name; .md inside)
+│       ├── regression-checklist.md
 │       └── ...
 └── {your-reviewer-id}/              ← your custom reviewer subdirectory
     ├── persona.md                   ← persona file(s) at direct level (filename is free; multiple allowed)
@@ -134,21 +135,21 @@ All three search paths above share **one** directory convention — there is no 
 
 **To add a new custom reviewer** (works the same way under any of the three paths):
 
-1. Create a `{reviewer-id}/` subdirectory under the chosen search-path root — the directory name is the reviewer ID. Place one or more persona `.md` file(s) at its direct level. These are the reviewer persona (normal markdown documents). Write the persona, focus areas, review approach, and any cross-review awareness in plain prose, just like `java-code-smell/java-code-smell.md`.
+1. Create a `{reviewer-id}/` subdirectory under the chosen search-path root — the directory name is the reviewer ID. Place one or more persona `.md` file(s) at its direct level. These are the reviewer persona (normal markdown documents). Write the persona, focus areas, review approach, and evidence requirements in plain prose, just like `behavior-regression/behavior-regression.md`.
 2. (Optional) Create any subdirectory inside `{reviewer-id}/` and place supporting reference files (`.md`) there. The framework **automatically loads ALL `.md` files** from ALL subdirectories (recursively) and attaches them to the reviewer's prompt — you do NOT need to declare which files to load or when. Neither the persona filename nor the reference subdirectory name matters; only the directory level distinguishes persona (direct-level files) from references (files in subdirectories). The reviewer persona body simply tells the reviewer how to use them.
 
 **How the framework handles custom reviewers (no configuration needed)**:
 
 - **Discovery**: The Tech Lead scans every **subdirectory** directly under each search-path root. Each subdirectory name is a valid reviewer ID. A subdirectory with no direct-level `.md` file is skipped (not a valid reviewer). This applies identically to the BUNDLED path, the user-global path, and the project-level path.
 - **Reference loading**: When spawning a reviewer, the framework reads ALL `.md` files in ALL subdirectories of the reviewer's directory (recursively) and includes their full content in the reviewer's prompt. No declaration needed.
-- **Cross-review routing**: If the reviewer's persona body contains a "Cross-Review Awareness" section (natural language describing which domain reviewers should validate its findings), the Tech Lead reads it and routes findings accordingly during Phase 6 (Discourse).
-- **Triggering**: Custom reviewers ARE auto-triggered by intelligent matching. The Tech Lead reads each reviewer's persona description and judges whether it applies to the current change (file types, content). The reviewer's own self-description is the signal. You can also add any reviewer manually via `--team={reviewer-id}:1` or natural language.
+- **Legacy cross-review sections**: Treat any custom persona cross-review requests as context for synthesis, not as instructions to dispatch discussion tasks. Preserve unresolved meaningful questions separately in the final report.
+- **Triggering**: Custom reviewers ARE auto-triggered by intelligent matching. The Tech Lead reads each reviewer's persona description and judges whether its risk applies to the changed behavior; language/file type alone is insufficient. The reviewer's own self-description is the signal. You can also add any reviewer manually via `--team={reviewer-id}:1` or natural language.
 
-> **Reference example**: `references/reviewers/bundled/java-code-smell/` is a complete, working example — a reviewer subdirectory containing a persona `.md` at its direct level, backed by a subdirectory of reference files. Copy it as the starting point for new reviewers.
+> **Reference example**: `references/reviewers/bundled/behavior-regression/` is a complete, working example — a reviewer subdirectory containing a persona `.md` at its direct level, backed by a subdirectory of reference files. Copy it as the starting point for new reviewers.
 
 ### Custom Reviewer Auto-Trigger
 
-Custom reviewers are auto-triggered by intelligent matching — the Tech Lead reads each reviewer's persona description and judges whether it applies to the current change. For example, `java-code-smell` is auto-added for `.java` changes because its description says it reviews Java code smells.
+Custom reviewers are auto-triggered by intelligent matching — the Tech Lead reads each reviewer's persona description and judges whether it applies to the current change. For example, `behavior-regression` applies when a shared-state write can change the branch taken by a downstream reader. Language-only matches are not applicable risk assignments.
 
 You can also add any reviewer manually at any time:
 
@@ -196,10 +197,10 @@ You are a **{Title}** conducting a code review. You have expertise in {domain}.
 
 ## Agency Reminder
 
-You have **full agency** to explore the codebase. {Specific guidance on what to explore}. Document what you explored and why.
+Within your assigned risk slice, follow the code and boundary context needed to establish evidence. {Specific guidance on what to explore}. Document what you explored and why.
 ```
 
-> **Reference example**: `references/reviewers/bundled/java-code-smell/` is a complete, working custom reviewer — a reviewer subdirectory containing a persona `.md` at its direct level, backed by a subdirectory of reference files. Copy it as the starting point for new reviewers.
+> **Reference example**: `references/reviewers/bundled/behavior-regression/` is a complete, working custom reviewer — a reviewer subdirectory containing a persona `.md` at its direct level, backed by a subdirectory of reference files. Copy it as the starting point for new reviewers.
 
 ### Using Custom Reviewers
 
@@ -220,20 +221,20 @@ team:
 
 ## Reviewer Agency
 
-Each reviewer sub-agent has **full agency** to explore the codebase. They:
+Each reviewer receives an explicit risk assignment with starting paths, checks and exclusions. Within that assignment, they:
 
-- Autonomously decide which files to examine beyond the diff
-- Trace upstream and downstream dependencies at will
+- Follow the relevant changed functions and necessary boundary files beyond the assigned diff
+- Trace upstream/downstream dependencies to answer a concrete evidence question
 - Examine tests, configs, and documentation as needed
 - Use professional judgment to determine relevance
 
-Their persona guides their focus area but does NOT limit their exploration.
+The assignment defines the risk slice; the persona guides how to investigate it. Repeated personas receive different slices. Do not require every reviewer to scan the full PR. Initial reviewers must not read other reviewer outputs.
 
 > **Important**: Reviewers must NOT pause the review to ask questions. Any uncertainties should be documented as "Clarifying Questions" in the reviewer output file. These questions will be collected and surfaced in the final review's "待澄清问题" section.
 
 ## Subagent Dispatch Contract
 
-**Every reviewer instance runs as exactly one dedicated subagent.** This contract is the single source of truth for how reviewers (Phase 4), verification findings (Phase 5.5), and discourse responses (Phase 6) are dispatched. The three spawn sites in `references/workflow.md` reference this contract and add their site-specific mapping rules.
+**Every reviewer instance runs as exactly one dedicated subagent.** Phase 4 maps reviewers to risk assignments. Phase 5.5 maps related finding batches to independent verifiers, with one per-ID verdict for each finding. The two spawn sites in `references/workflow.md` reference this contract and add their site-specific mapping rules.
 
 ### The Three Rules
 
@@ -250,7 +251,7 @@ Their persona guides their focus area but does NOT limit their exploration.
 
 ### Reviewer subagents are read-only
 
-Reviewer / verification / discourse subagents may read and explore project files and write only their assigned review artifacts. They MUST NOT apply refactors, edit product source, or run apply-class tools — reviewed project code is read-only.
+Reviewer / verification subagents may read and explore project files and write only their assigned review artifacts. They MUST NOT apply refactors, edit product source, or run apply-class tools — reviewed project code is read-only.
 
 ### Forbidden behaviors (contract violations)
 
@@ -261,7 +262,7 @@ Reviewer / verification / discourse subagents may read and explore project files
 | Merging multiple reviewers into a single subagent | One subagent per `{type}-{n}` instance |
 | Reducing the dispatch count because "too many reviewers" | Dispatch exactly the Phase 3 resolved count |
 
-> These rules apply identically to Phase 5.5 (where the 1:1 unit is a *finding*, not a reviewer — see `workflow.md` Phase 5.5) and Phase 6 (where the 1:1 unit is a reviewer's discourse response).
+> In Phase 5.5 the 1:1 unit is a verification batch, not a single finding or source reviewer. Batch by shared call chain/state/lifecycle; unrelated batches remain independent. See workflow.md Phase 5.5.
 
 ## Configuration
 
@@ -272,6 +273,8 @@ Reviewer / verification / discourse subagents may read and explore project files
 ```yaml
 context: |
   Tech stack: TypeScript, React, Node.js
+
+# base: origin/main   # Optional target ref for branch scopes; --base=REF overrides it.
 
 output_dir: .reviews   # Review result output root directory. Default .reviews. User-specified dir becomes {output_dir}/ultra-cr/result/{date}-{branch}/
 
@@ -285,12 +288,9 @@ rules:
     - Security vulnerabilities
     - Breaking changes without migration
 
-discourse:
-  enabled: true   # Set false or use --quick to skip
-
 verification:
-  enabled: true          # Phase 5.5 Focused Verification (noise reduction). Default true. Set false or use --quick to skip.
-  max_findings: 8        # Optional: cap how many findings get verified. Excess (lowest-confidence) enter Phase 6 as unverified. Unset = no cap.
+  enabled: true          # Phase 5.5 Batch Verification (noise reduction). Default true. Set false or use --quick to skip.
+  max_findings: 8        # Optional: cap how many findings get verified. Prioritize blockers, then severity/uncertainty; overflow remains UNVERIFIED. Unset = no cap.
   # risk_types:          # Optional: override the default high false-positive-risk problem types
   #   - concurrency
   #   - security-injection
@@ -302,10 +302,12 @@ verification:
 **Mode 2: Arguments** (override config):
 
 ```
-/ultra-cr --team=principal:2,security:1 --quick --output-dir=./reports
+/ultra-cr --team=principal:2,security:1 --base=origin/main --quick --output-dir=./reports
 ```
 
-**Resolution order**: `$ARGUMENTS` > `.ultra-cr.yaml` > natural-language detection > defaults. This applies to `team`, `scope`, and `output_dir` alike. For `output_dir`: `--output-dir` argument > `.ultra-cr.yaml` `output_dir` field > natural-language "put results to <dir>" detection > default `.reviews`.
+**Resolution order**: `$ARGUMENTS` > `.ultra-cr.yaml` > natural-language detection > defaults. This applies to `team`, `scope`, `base`, and `output_dir` alike. For branch scopes, `base` selects the target ref; the actual diff starts at its merge-base with the reviewed ref. See workflow.md Phase 1 Step 1c for target detection and failure handling. For `output_dir`: `--output-dir` argument > `.ultra-cr.yaml` `output_dir` field > natural-language "put results to <dir>" detection > default `.reviews`.
+
+The legacy `discourse` configuration is ignored, including `discourse.enabled: true`. Reviews proceed from aggregation and focused verification directly to synthesis. `--quick` retains its existing effect on Phase 5.5 verification.
 
 ### Reading Config
 

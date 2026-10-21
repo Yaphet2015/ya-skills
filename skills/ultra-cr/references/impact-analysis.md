@@ -27,12 +27,12 @@ Understand not just WHAT changed, but HOW the change ripples through the system:
 ### Step 1: Detect Changes with Risk Scoring
 
 ```bash
-detect_changes_tool(base=$FIRST_COMMIT^, changed_files=[<git diff --name-only 的文件列表>], detail_level="minimal")
+detect_changes_tool(base=$BASE_SHA, changed_files=[<git diff --name-only 的文件列表>], detail_level="minimal")
 ```
 
 - 输出: 变更函数/类列表，每个带风险评分(risk_score)，**并聚合受影响 flows、测试覆盖缺口**
 - 用途: 识别高风险变更点，指导后续导航和 reviewer 重点关注
-- **必须传 base=$FIRST_COMMIT^**: 首个提交的父提交，使分析覆盖整个审查范围；默认 HEAD~1 只分析最后一个 commit，全量审查场景下严重失真
+- **必须传 base=$BASE_SHA**: 使用 workflow.md Phase 1 已解析的比较起点（分支范围为 merge-base），使分析覆盖整个审查范围；默认 HEAD~1 只分析最后一个 commit，全量审查场景下严重失真
 - **复用原则**: 该工具已聚合大部分结构信息，后续 Step 2/4 仅对 top-N 高风险函数补充查询（N 自适应：≤5 文件取全部，6-20 取 top-3，>20 取 top-5），避免逐文件重复调用
 
 **交叉验证**: 对比 `git diff --name-only` 输出与 `detect_changes_tool` 结果。如果某变更文件在 git diff 中出现但 `detect_changes_tool` 未返回该文件的任何函数/类，标注"⚠️ 图谱未索引此文件中的函数，reviewer 需自行 Grep/Read 检查"。这防止 graph 数据缺失时遗漏文件。
@@ -42,7 +42,7 @@ detect_changes_tool(base=$FIRST_COMMIT^, changed_files=[<git diff --name-only �
 **仅对 top-N 高风险函数**调用 graph 获取完整依赖图（N 自适应，见 Step 1；避免对每个变更文件都调用导致 token 超预算）：
 
 ```bash
-get_impact_radius_tool(changed_files=[<top-N 函数所在文件>], base=$FIRST_COMMIT^, detail_level="minimal")
+get_impact_radius_tool(changed_files=[<top-N 函数所在文件>], base=$BASE_SHA, detail_level="minimal")
 ```
 
 - 输出: 上游调用方（谁调用了我）、下游依赖（我调用了谁）
@@ -53,13 +53,13 @@ get_impact_radius_tool(changed_files=[<top-N 函数所在文件>], base=$FIRST_C
 ### Step 3: Trace Affected Execution Flows
 
 ```bash
-get_affected_flows_tool(changed_files=[<git diff --name-only 的文件列表>], base=$FIRST_COMMIT^)
+get_affected_flows_tool(changed_files=[<git diff --name-only 的文件列表>], base=$BASE_SHA)
 ```
 
 - 输出: 从入口点到变更点的完整调用链
 - 用途: 识别跨模块/跨层边界影响
 - **必须传 changed_files**: 用 `git diff --name-only` 获取变更文件列表传入，否则返回全图 flows 而非"受本次变更影响的 flows"，数据会误导（曾出现 partial fallback）
-- **注意**: 该工具无 `detail_level` 参数，不要传该参数；接受 base（全量审查传 $FIRST_COMMIT^）
+- **注意**: 该工具无 `detail_level` 参数，不要传该参数；接受 base（全量审查传 $BASE_SHA）
 - **优势 vs grep**: graph 追踪真实执行路径（如 HTTP → Controller → Service → Repository），grep 只能从 import 语句推断
 
 ### Step 4: Check Test Coverage Gaps
@@ -183,7 +183,7 @@ graph 的 `detect_changes_tool` 风险评分可以直接辅助判断：risk_scor
 ### Step 1: Identify Changed Files
 
 根据已解析的审查范围（staged / current-branch / branch:REF / commit:SHA / range:SHA1..SHA2），
-使用对应的 git diff 命令获取变更文件列表：
+使用对应的 git diff 命令获取变更文件列表。分支范围复用 workflow.md Phase 1 已固定的 BASE_SHA 和 REVIEW_SHA；all-branches 对每个已记录的分支范围分别执行：
 
 **Bash (Linux / macOS / Git Bash):**
 ```bash
@@ -192,12 +192,12 @@ git diff --cached --name-only
 git diff --cached --stat
 
 # current-branch 范围
-git diff $(git rev-list --max-parents=0 HEAD)..HEAD --name-only
-git diff $(git rev-list --max-parents=0 HEAD)..HEAD --stat
+git diff "$BASE_SHA..$REVIEW_SHA" --name-only
+git diff "$BASE_SHA..$REVIEW_SHA" --stat
 
 # branch:REF 范围
-git diff $(git rev-list --max-parents=0 REF)..REF --name-only
-git diff $(git rev-list --max-parents=0 REF)..REF --stat
+git diff "$BASE_SHA..$REVIEW_SHA" --name-only
+git diff "$BASE_SHA..$REVIEW_SHA" --stat
 
 # commit:SHA 范围
 git diff SHA~1..SHA --name-only
@@ -214,14 +214,12 @@ git diff --cached --name-only
 git diff --cached --stat
 
 # current-branch 范围
-$FIRST_COMMIT = git rev-list --max-parents=0 HEAD
-git diff "$FIRST_COMMIT..HEAD" --name-only
-git diff "$FIRST_COMMIT..HEAD" --stat
+git diff "$BASE_SHA..$REVIEW_SHA" --name-only
+git diff "$BASE_SHA..$REVIEW_SHA" --stat
 
 # branch:REF 范围
-$FIRST_COMMIT_REF = git rev-list --max-parents=0 REF
-git diff "$FIRST_COMMIT_REF..REF" --name-only
-git diff "$FIRST_COMMIT_REF..REF" --stat
+git diff "$BASE_SHA..$REVIEW_SHA" --name-only
+git diff "$BASE_SHA..$REVIEW_SHA" --stat
 
 # commit:SHA 范围
 git diff "SHA~1..SHA" --name-only
