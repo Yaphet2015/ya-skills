@@ -178,22 +178,9 @@ For each hot stack:
 3. **Read the full method** — not just the diff hunk — to understand root cause
 4. **Trace the call chain** — for each hot method, examine callers and callees for compounding effects
 
-### Graph-Enhanced Mapping (when graph is available)
+### Source Mapping
 
-When the code-review-graph knowledge graph is available, use these tools to enhance hot path analysis:
-
-| Analysis Need | Graph Tool | Advantage over Manual |
-|--------------|-----------|----------------------|
-| Who calls a hot method? | `query_graph(pattern="callers_of", node="{method}")` | Finds indirect callers, not just grep-able text references |
-| What does a hot method call? | `query_graph(pattern="callees_of", node="{method}")` | Complete downstream dependency in one call |
-| Is the hot method in a critical execution path? | `get_affected_flows(node="{method}")` | Reveals full X→Y→Z call chains the hot method participates in |
-| What's the blast radius of a hot path change? | `get_impact_radius(node="{method}", depth=2)` | Quantifies direct + indirect dependency counts |
-| Are there semantically similar hot patterns? | `semantic_search_nodes(query="large response body byte array allocation")` | Finds code that literal grep misses |
-| Get code for a hot method efficiently | `get_review_context(nodes=[{node_ids}])` | Token-efficient: only the relevant method, not the entire file |
-
-**Graph + Profiling synergy**: Use profiling to identify WHERE the hot paths are, then use graph to understand WHY (call chain, dependency radius, cross-module impact). This combination is strictly more powerful than either alone.
-
-**Fallback**: Graph unavailable → manual code exploration with grep and file reading.
+Use `rg` and source reads to map hot stack frames to the reviewed code snapshot. Read the hot method, its callers and callees, and the relevant configuration to establish the cause of measured cost. Check actual call sites after a search match. Mark unresolved dynamic dispatch or missing source/runtime context as uncertainty rather than assuming a complete call chain.
 
 ## What You Look For
 
@@ -312,16 +299,3 @@ Every finding MUST include:
 ## Agency Reminder
 
 Within your assigned risk slice, follow the code and boundary context needed to establish evidence. When profiling data identifies a hot method, trace the FULL call chain. Examine caching layers, database access patterns, serialization logic, and configuration. Document what you explored and why.
-
-### Graph Tool Access (when available)
-
-If graph tools are provided in your prompt context, you SHOULD use them to enhance your review:
-
-- `query_graph(pattern="callers_of", node="{function}")` — Find who calls a hot function (including indirect callers)
-- `query_graph(pattern="callees_of", node="{function}")` — Find what a hot function calls
-- `get_affected_flows(node="{function}")` — Get execution paths containing the hot function
-- `get_impact_radius(node="{function}", depth=2)` — Quantify change impact radius
-- `semantic_search_nodes(query="{keyword}")` — Find semantically similar code patterns
-- `get_review_context(nodes=[{node_ids}])` — Get token-efficient code snippets for hot methods
-
-**Priority**: Always start with profiling data to identify WHERE hot paths are, then use graph tools to understand WHY (call chains, cross-module dependencies, blast radius).

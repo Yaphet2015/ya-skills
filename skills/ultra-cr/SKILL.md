@@ -11,7 +11,7 @@ You are the **Tech Lead** orchestrating a multi-agent code review. Your role is 
 
 - Resolve `SKILL_ROOT` to the absolute directory containing this SKILL.md. All bundled references are relative to that directory, never to a particular agent installation or the reviewed project's CWD. For PowerShell use `$SkillRoot` for the same value.
 - Use the host's real subagent/delegation facility. One reviewer instance gets one independent context and an explicit output file. If delegation is unavailable, report the missing capability; do not role-play independent reviewers in the coordinator context.
-- Use available file/search/shell tools. `Grep`, `Glob`, `Read`, `Write` and graph tool names in references describe capabilities, not required host-specific API names. Prefer `rg` for local searches. Graph integration is optional and falls back to repository reads/searches.
+- Use available file/search/shell tools. `Grep`, `Glob`, `Read` and `Write` in references describe capabilities, not required host-specific API names. Prefer `rg` for local searches and read source/configuration to establish dependencies.
 - Reviewers may read project code and write their assigned review artifacts; they may not modify product code. Read an existing artifact before editing it.
 - Default outputs live under `.reviews/ultra-cr/result/`. Custom reviewers live under `~/.config/ultra-cr/reviewer/`, `.reviews/ultra-cr/reviewer/`, and `${SKILL_ROOT}/references/reviewers/bundled/`.
 - `$ARGUMENTS` in references means the current invocation text or structured task inputs; it does not require a host-defined variable.
@@ -101,17 +101,13 @@ When a user references a document, **read it**. Requirements are propagated to A
 
 Default team: principal:2, quality:1. Select additional roles by engineering risk; implementation language alone is not a reviewer role or trigger. Read [configuration](references/configuration.md) before resolving reviewer instances, custom reviewers or arguments.
 
-## Knowledge Graph Integration
-
-When code-review-graph tools are available, read [graph integration](references/graph-integration.md). Graph is optional navigation; verify findings against code and fall back to repository search when unavailable.
-
 ## Workflow Summary
 
 ```
-Phase 1: Context Discovery     → Load config, resolve scope, discover references, detect graph availability
-Phase 2: Gather Change Context → Git diff (scoped) + graph navigation (if available) / grep-only (if not) + architecture impact
-Phase 3: Tech Lead Analysis    → Summarize, identify risks (graph risk scores + hub/bridge/surprising connections if available), select reviewers
-Phase 4: Spawn Reviewers       → Inject navigation tips (if graph available, incl. dead_code for deletion scenarios), run each reviewer on its assigned risk slice
+Phase 1: Context Discovery     → Load config, resolve scope, discover references
+Phase 2: Gather Change Context → Git diff (scoped) + source/configuration reads + architecture impact
+Phase 3: Tech Lead Analysis    → Summarize, identify risks from code and contracts, select reviewers
+Phase 4: Spawn Reviewers       → Provide source locations and boundary context, run each reviewer on its assigned risk slice
 Phase 5: Aggregate Findings    → Deduplicate candidates into an evidence ledger
 Phase 5.5: Focused Verification → Verify related findings in independent batches (skip with --quick or when no high-risk findings)
 Phase 7: Synthesis             → Produce final prioritized review (in Chinese)
