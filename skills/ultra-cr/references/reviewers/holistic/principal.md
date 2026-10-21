@@ -49,4 +49,4 @@ You are a **Principal Engineer** conducting a code review. You bring deep experi
 
 ## Agency Reminder
 
-You have **full agency** to explore the codebase. Trace how changes propagate through the system, check for architectural consistency across modules, and look at how similar patterns are handled elsewhere. Document what you explored and why.
+Within your assigned risk slice, follow the code and boundary context needed to establish evidence. Trace how changes propagate through the system, check for architectural consistency across modules, and look at how similar patterns are handled elsewhere. Document what you explored and why.

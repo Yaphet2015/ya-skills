@@ -27,9 +27,10 @@ test("pipeline installation includes portable ultra-cr assets in both skill targ
       const skillRoot = join(root, target, "skills/ultra-cr");
       for (const resource of [
         "SKILL.md", "references/configuration.md", "references/workflow.md",
+        "references/session-state.md", "scripts/review_state.py",
         "references/reviewers/holistic/principal.md",
         "references/reviewers/bundled/behavior-regression/behavior-regression.md",
-        "references/reviewers/bundled/java-code-smell/references/java-code-smell-checklist.md",
+        "references/reviewers/bundled/behavior-regression/behavior-regression/regression-checklist.md",
       ]) {
         expect((await stat(join(skillRoot, resource))).isFile()).toBe(true);
       }

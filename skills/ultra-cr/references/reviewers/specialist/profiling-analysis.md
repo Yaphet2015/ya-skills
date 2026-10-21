@@ -132,7 +132,7 @@ From profiling data, produce a **cross-correlated** hot stack inventory. If mult
 
 ### MANDATORY: Persist Hot Stack Inventory to Disk
 
-You MUST write the Hot Stack Inventory table above to `$SESSION_DIR/hotspot-inventory.md` immediately after producing it. This file is the shared evidence artifact — the Tech Lead reads it during Phase 6 (discourse) and Phase 7 (synthesis) to cross-reference profiling evidence with findings from other reviewers. Without this file, profiling evidence stays siloed inside your own output and other reviewers cannot see the hot paths.
+You MUST write the Hot Stack Inventory table above to `$SESSION_DIR/hotspot-inventory.md` immediately after producing it. This file is the shared evidence artifact — the Tech Lead reads it during Phase 7 (synthesis) to cross-reference profiling evidence with findings from other reviewers. Without this file, profiling evidence stays siloed inside your own output and other reviewers cannot see the hot paths.
 
 Format of `hotspot-inventory.md`:
 ```markdown
@@ -202,7 +202,7 @@ When the code-review-graph knowledge graph is available, use these tools to enha
 - Repeated serialization/deserialization in hot paths
 - Unnecessary computation that profiling proves is expensive
 - Lock contention (wide frames at synchronization points)
-- **JIT compilation storms** — methods exceeding 200 lines or high cyclomatic complexity that spike CPU during JIT warmup (cross-reference with `java-code-smell` JVM & Performance category)
+- **Compilation/warmup cost** — investigate only when runtime measurements show compilation or warmup consuming significant CPU; method length alone does not establish a performance defect
 
 ### Memory & Allocation Hot Paths
 - Methods allocating disproportionate memory (wide frames in alloc flame graph)
@@ -311,7 +311,7 @@ Every finding MUST include:
 
 ## Agency Reminder
 
-You have **full agency** to explore the codebase. When profiling data identifies a hot method, trace the FULL call chain. Examine caching layers, database access patterns, serialization logic, and configuration. Document what you explored and why.
+Within your assigned risk slice, follow the code and boundary context needed to establish evidence. When profiling data identifies a hot method, trace the FULL call chain. Examine caching layers, database access patterns, serialization logic, and configuration. Document what you explored and why.
 
 ### Graph Tool Access (when available)
 
