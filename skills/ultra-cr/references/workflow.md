@@ -90,11 +90,11 @@ Store resolved scope in session context. This scope controls all git diff comman
 1. Resolve `TARGET_BRANCH` using `--base=REF` > `.ultra-cr.yaml` `base:` > the target explicitly stated by the user or recorded in the referenced PR > the default branch saved locally. For default detection, use `git symbolic-ref --quiet --short refs/remotes/origin/HEAD`; if unavailable, try existing refs in this order: `origin/main`, `origin/master`, `main`, `master`. Use local refs; fetching is not required. A feature branch's upstream (such as `origin/feature-x`) is not evidence of its merge target.
 2. Verify the chosen target resolves to a commit and pin it as `TARGET_SHA`. An invalid explicit target is an error; do not replace it with a default. If no target is available or `git merge-base` fails (for example, missing shallow history or unrelated histories), report that the comparison base cannot be resolved. Never fall back to the repository's root commit or the latest commit.
 3. Pin the reviewed commit as `REVIEW_SHA` (`HEAD` for `current-branch`, the specified ref for `branch:REF`). Compute `BASE_SHA` with `git merge-base "$TARGET_SHA" "$REVIEW_SHA"`. Compare `BASE_SHA..REVIEW_SHA`, not the target tip against the reviewed tip; target-only changes must stay outside the review. An empty comparison is a valid no-change result and must not expand the scope.
-4. Record the target ref, target SHA, review SHA, merge-base SHA and base-selection source in `discovered-standards.md` and the session snapshot in `state.json`. Reuse these pinned SHAs for the diff, commit list and graph analysis. For `all-branches`, resolve and record a separate review SHA and merge-base for each local branch; apply the same explicit target unless a branch has a known PR target.
+4. Record the target ref, target SHA, review SHA, merge-base SHA and base-selection source in `discovered-standards.md` and the session snapshot in `state.json`. Reuse these pinned SHAs for the diff, commit list and source analysis. For `all-branches`, resolve and record a separate review SHA and merge-base for each local branch; apply the same explicit target unless a branch has a known PR target.
 
-The Phase 2 snippets show the initialization commands; if these SHAs were already pinned in Phase 1 for graph analysis, reuse them rather than resolving moving refs again.
+The Phase 2 snippets show the initialization commands; if these SHAs were already pinned during scope resolution in Phase 1, reuse them rather than resolving moving refs again.
 
-**Shared analysis base**: `$BASE_SHA` always means the lower endpoint of the resolved comparison. For `staged`, use `HEAD` for working/index changes (or the parent for the existing latest-commit fallback); for `commit:SHA`, use its parent; for `range:X..Y`, use resolved `X`. A root commit uses the empty tree for diffing; if a graph tool cannot accept that base, fall back to repository reads. Graph tools must use the same review snapshot as the diff; if they only support the checked-out HEAD and it differs from `REVIEW_SHA`, use repository reads instead. For `all-branches`, analyze each recorded range separately rather than reusing the last branch's base.
+**Shared analysis base**: `$BASE_SHA` always means the lower endpoint of the resolved comparison. For `staged`, use `HEAD` for working/index changes (or the parent for the existing latest-commit fallback); for `commit:SHA`, use its parent; for `range:X..Y`, use resolved `X`. A root commit uses the empty tree for diffing. Read source from the reviewed snapshot; for a ref other than the working checkout, use `git show "$REVIEW_SHA:path/to/file"` or an equivalent read-only snapshot mechanism. For `all-branches`, analyze each recorded range separately rather than reusing the last branch's base.
 
 > **Profiling-diagnostic mode**: Enter **profiling-diagnostic mode** when EITHER condition holds: (a) user prompt / `requirements.md` contains profiling keywords (火焰图, flame graph, GC log, GC日志, profiling, heap dump, async-profiler, OOM, OutOfMemory, 内存泄漏, 性能分析, 性能热点, jfr, allocHumongous, Full GC, cpu profile), OR (b) the `profiling-analysis` reviewer is in the resolved team (whether auto-triggered by keywords per Phase 3 Step C, OR explicitly added via `--team=profiling-analysis:1` / natural language / `.ultra-cr.yaml`). **Equivalence invariant: profiling-analysis in team ⟺ diagnostic mode active** — there is no "profiling as enhancement dimension only" path; whenever the profiling-analysis reviewer runs, diagnostic mode is ON. In this mode:
 > - Profiling hot paths (from `hotspot-inventory.md`, produced by the profiling-analysis reviewer in Phase 4) become the **primary review scope** for ALL reviewers, not just the profiling-analysis reviewer. The hotspot inventory is the scope axis; the diff is not.
@@ -185,34 +185,7 @@ If requirements provided, save to `requirements.md` in session directory.
 [full content of CODEREVIEW.md — issue filtering, problem classification/grading, problem trimming]
 [ALL reviewers MUST apply these filtering/grading/trimming rules. When this file is absent, this section is omitted and reviewers use their default rules.]
 
-## 知识图谱
-- 状态: 可用 / 图未构建 / server 不可用
-- 检测方法: list_graph_stats_tool + get_minimal_context_tool
-- 全局上下文: [get_minimal_context_tool 返回的 stats/risk score/建议工具，供 Phase 2/3 复用]
-- 定位: 导航加速器（快速定位该查哪里），不替代 Diff/Grep/Read 的细节分析
-- 降级策略: server 不可用或图未构建时回退到 Grep/Glob/Read 流程
 ```
-
-**1g. Graph 可用性检测**
-
-分两步精确区分三种状态，避免把"图未构建"误判为"graph 可用"导致 Phase 2 调用失败：
-
-1. **调用 `list_graph_stats_tool`**（最轻量、无副作用）判断 server 与图状态：
-   - 工具不存在 / 连接失败 → **server 不可用**，标注"不可用"，走纯 grep 降级
-   - 工具成功但返回 `last_updated` 为 null 或 nodes=0 → **图未构建**，标注"图未构建"，走纯 grep 降级，并在 discovered-standards.md 提示"可运行 build_or_update_graph_tool 构建图谱后获得增强"
-   - 工具成功且有有效数据 → 图存在，进入第 2 步
-
-2. **调用 `get_minimal_context_tool(task="ultra-cr code review", base=$BASE_SHA, changed_files=[<git diff --name-only 的文件列表>])`**（约 100 token）：
-   - 一次拿到 graph stats + risk score + top communities/flows + 建议的下一步工具
-   - **必须传 base 参数**：用 scope 解析阶段确定的 `$BASE_SHA`（已解析的比较起点；分支范围为 merge-base），使风险评分覆盖整个审查范围；默认 HEAD~1 只分析最后一个 commit，全量审查场景下会严重失真。changed_files 用 `git diff --name-only` 的文件列表
-   - 结果存入 discovered-standards.md 的"全局上下文"字段，供 Phase 2/3 复用（避免重复查询，符合 code-review-graph 官方"ALWAYS start with get_minimal_context_tool"规则）
-   - 如果此调用失败但第 1 步成功 → 图可用但上下文获取失败，仍标记"可用"，Phase 2 自行调用 detect_changes_tool
-
-**设计原则**：
-- 检测只做一次，结果全局共享，后续所有 phase 根据此标记决定是否使用 graph
-- 当 graph 可用时，结构定位类任务优先使用 graph（调用链追踪、影响半径、测试覆盖）
-- Grep/Read 仍用于 graph 不覆盖的区域（MyBatis XML、配置文件、语句级分析）
-- 参见 `references/graph-integration.md` 了解 graph 的能力边界和正确使用方式
 
 ### Phase 1 Checkpoint
 
@@ -223,7 +196,6 @@ If requirements provided, save to `requirements.md` in session directory.
 - [ ] If profiling keywords present: profiling-diagnostic mode documented in `discovered-standards.md` (mode = profiling-diagnostic, diff strategy = N/A (profiling-diagnostic) if empty diff OR supplementary (profiling-diagnostic) if diff exists)
 - [ ] If profiling-diagnostic mode active: branch-fit reminder emitted to terminal AND recorded in `discovered-standards.md` (resolved scope + working branch + reminder text)
 - [ ] If user provided requirements: `requirements.md` written (persisted to disk)
-- [ ] Graph availability detected and recorded in `discovered-standards.md` (知识图谱 section with status: 可用/不可用)
 - [ ] Helper `complete --phase 1` succeeded
 
 ---
@@ -674,27 +646,12 @@ If requirements provided, save to `requirements.md` in session directory.
 
 3. **Analyze architectural impact** (see `references/impact-analysis.md`):
 
-   **当 graph 可用时**（graph 优先导航，grep 验证补充）：
-    - **Step 3a: Graph 导航定位** — 用 graph 快速定位"该查哪里"
-      - 调用 `detect_changes_tool(base=$BASE_SHA, changed_files=[<git diff --name-only 的文件列表>], detail_level="minimal")` 获取风险评分，识别高风险变更点。**必须传 base=$BASE_SHA**（已解析的比较起点；分支范围为 merge-base），否则默认 HEAD~1 只分析最后一个 commit，全量审查场景下风险评分严重失真。**该工具已聚合受影响函数、flows、测试覆盖缺口**，优先复用其输出，避免逐文件重复查询（对齐 code-review-graph 官方"≤5 tool calls"目标）
-      - **交叉验证**: 对比 `git diff --name-only` 输出与 `detect_changes_tool` 结果。如果某变更文件在 git diff 中出现但 `detect_changes_tool` 未返回该文件的任何函数/类，在导航提示中标注"⚠️ 图谱未索引此文件中的函数，reviewer 需自行 Grep/Read 检查"
-      - **仅对 top-N 高风险函数**调用 `get_impact_radius_tool(changed_files=[<top-N 函数所在文件>], base=$BASE_SHA, detail_level="minimal")` 获取上游调用方和下游依赖（替代 `grep -r "import.*from.*changed-file"`）。N 自适应：变更 ≤5 文件取全部，6-20 文件取 top-3，>20 文件取 top-5（避免对每个变更文件都调用导致 token 超预算）。注意 get_impact_radius_tool 按 changed_files（文件级）分析，传 top-N 高风险函数**所在文件**
-      - 调用 `get_affected_flows_tool(changed_files=[<git diff --name-only 的文件列表>], base=$BASE_SHA)` 获取受影响执行路径（识别跨模块/跨层边界影响）。**必须传入 changed_files 参数**（从 `git diff --name-only` 获取的变更文件列表），否则返回的是全图 flows 而非"受本次变更影响的 flows"，数据会误导。注意该工具无 `detail_level` 参数；base 必须使用已解析的 $BASE_SHA，避免默认 HEAD~1 缩小审查范围
-      - **仅对 top-N 高风险函数**调用 `query_graph_tool(pattern="tests_for")` 检查测试覆盖缺口（`detect_changes_tool` 已提供大部分测试缺口信息，此处仅补充高风险函数的精确匹配）
-      - 生成导航提示写入 context.md：只给出"该查哪里"的方向，不做代码级判断，控制在 500-800 token 以内（只列最关键的导航方向）
-      - 注意标注 graph 不覆盖的区域（MyBatis XML、配置文件等），提示 reviewer 用 Grep/Read 补充
-      - **Disk-offload 模式补偿**（当 diff > 500 行、Tech Lead 未读 diff 时）：额外调用 `get_review_context_tool(changed_files=[<git diff --name-only 的文件列表>], base=$BASE_SHA, include_source=True, max_lines_per_file=200, detail_level="minimal")` 拿到变更函数的精简源码片段，补偿"读不到 diff"的信息缺失。**必须传 base 和 changed_files**，否则默认 HEAD~1 只拿最后一个 commit 的源码。`include_source=True` 会增大返回，`max_lines_per_file` 上限控制单文件 token；仅在此 disk-offload 场景使用，inline 模式不需要
-      - **Disk-offload 模式架构概览补偿**（当 diff > 500 行时，可选）：调用 `get_architecture_overview_tool(detail_level="minimal")` 获取跨社区耦合警告与架构概览（minimal 模式 600KB→<5KB，token 友好）。这在 Tech Lead 无法读 diff 时提供结构级上下文，弥补"读不到 diff"的架构影响判断缺失。若 graph 工具调用已达软预算则 skip
-   - **Step 3b: Grep 验证补充** — 补充 graph 不覆盖的依赖
-     - 对变更的 Repository/DAO/Mapper 文件，搜索对应的 XML 映射：`grep -rl "namespace" --include="*.xml" src/main/resources/`
-     - 对变更文件，检查 Spring 配置引用：`grep -rl "beanName" --include="*.xml" --include="*.yml" --include="*.properties" src/main/resources/`
-     - 将 grep 补充发现追加到 context.md 的导航提示中
-   - **失败处理**：单个 graph 查询失败 → 对该部分回退 grep，标注回退原因；全部失败 → 视为 graph 不可用
-   - **记录到 Graph Usage Log**：每次 graph 工具调用后，立即向 context.md 的 Graph Usage Log 表追加一行（Phase=2, Tool, Target/Params, Status, Est. Tokens, Fallback）。Status 用 ok/partial/fail/skip。graph 不可用时不调用 graph 工具，故不追加 Phase 2 调用行（整体"未使用"标注见降级流程与 context.md 模板说明）
-
-   **当 graph 不可用时**（纯 grep 流程，与 v1.1.0 完全一致）：
-   - **Inline mode**: Analyze directly from the diff — trace specific code-level dependencies, identify affected interfaces, assess change propagation risk with full code visibility
-   - **Disk-offload mode**: Analyze from metadata — trace upstream/downstream dependencies based on file list and stats, identify which system boundaries are affected (from file paths and directory structure), determine if change crosses module/service boundaries (from path analysis), assess risk of change propagation (from stat numbers — large changes in core modules = high risk). Reviewer subagents will validate and refine with the full diff.
+   - Use the scoped diff and source/configuration reads to identify changed interfaces, callers, state owners, consumers and failure paths. Prefer `rg` for references; verify matches by reading the actual call sites and contracts.
+   - **Inline mode**: Trace dependencies directly from the changed functions and their necessary boundary context.
+   - **Disk-offload mode**: Start from file metadata, commit intent and selected source locations. Keep initial impact assumptions explicit; reviewers validate their assigned changes and necessary callers/callees from the persisted diff and pinned source snapshot.
+   - For shared-state writes, identify downstream readers and check whether new visibility can switch their execution branches. Record source locations and the invariant to verify.
+   - Inspect existing tests relevant to risky paths. Search results or no matching test name alone do not establish coverage; state any uncertainty.
+   - Record only relevant boundary risks and code locations in `context.md`; avoid a separate repository-wide structural scan.
 
 3b. **Profiling file path resolution** (execute when profiling keywords are present in prompt/requirements — trigger detection itself is Phase 3 Step C's job, NOT this step's):
 
@@ -756,27 +713,23 @@ If requirements provided, save to `requirements.md` in session directory.
    **提交**: 审查 {count} 个提交（适用于 current-branch/all-branches 范围）
    **Diff 策略**: {Inline | Disk-offload}（{DIFF_LINES} 行{，> 500 行触发磁盘卸载 | ，≤ 500 行直接读取}）
    **Diff 文件**: {$SESSION_DIR/diff.patch（供 reviewer subagent 读取） | N/A（inline 模式）}
-   **图谱增强**: {是 | 否}
 
    ## 变更摘要
    [{inline 模式：基于完整 diff 的详细摘要 | disk-offload 模式：基于文件列表、stat 数字和 commit message 推断的变更内容简述}]
-   [⚠️ 以业务功能脉络组织（按功能/特性分组描述变更意图），而非仅列模块/技术清单。图谱结构数据放下方"架构影响分析"独立章节，不得挤占本业务摘要]
+   [⚠️ 以业务功能脉络组织（按功能/特性分组描述变更意图），而非仅列模块/技术清单。依赖和边界分析放下方"架构影响分析"独立章节]
 
    ## 受影响文件
    - path/to/file1.ts
    - path/to/file2.ts
 
    ## 提交历史（适用于 current-branch/all-branches 范围）
-   [列出 commit 的 hash + message，便于用户将审查发现追溯到具体提交。数量自适应：≤20 个提交则全列；>20 个则列最近 ~10 个并在末尾标注"... 共 N 个提交（省略较早的 M 个）"。不可因 graph 数据挤占而省略本节]
+   [列出 commit 的 hash + message，便于用户将审查发现追溯到具体提交。数量自适应：≤20 个提交则全列；>20 个则列最近 ~10 个并在末尾标注"... 共 N 个提交（省略较早的 M 个）"]
    - abc1234: feat: add user authentication
    - def5678: fix: handle token expiry
    ...
 
    ## 架构影响分析
-   [graph 可用时: 知识图谱导航提示（高风险变更点、调用链、影响半径、测试覆盖缺口、边界跨越、共享状态可见性变更对读取侧的影响、graph 未覆盖区域标注）——作为独立章节，不挤占上方业务摘要和提交历史]
-   [graph 不可用时 inline 模式：基于完整 diff 的深度分析]
-   [graph 不可用时 disk-offload 模式：基于文件路径和目录结构推断的影响分析]
-   [disk-offload 模式附加：注意：此分析基于元数据推断，reviewer subagent 将基于完整 diff 进行验证]
+   [基于变更源码、调用方/被调用方、配置和已有测试，说明接口契约、边界跨越及共享状态读写影响。disk-offload 模式中的初步判断需明确标为待 reviewer 验证。]
    ```
 
 ### Phase 2 Checkpoint
@@ -790,13 +743,9 @@ If requirements provided, save to `requirements.md` in session directory.
 - [ ] `context.md` written with change summary AND impact analysis (persisted to disk)
 - [ ] `context.md` content is in Chinese (code/file paths remain in original form)
 - [ ] `context.md` 变更摘要以业务功能脉络组织（非仅模块技术清单）
-- [ ] `context.md` 提交历史按自适应数量列出 commit（不可因 graph 数据挤占而省略）
+- [ ] `context.md` 提交历史按自适应数量列出 commit
 - [ ] `context.md` documents the diff strategy (inline or disk-offload)
 - [ ] If profiling files referenced: Profiling Data Status section written in `context.md` with file paths; do NOT generate `hotspot-inventory.md` in the main agent (the profiling-analysis reviewer produces it in Phase 4)
-- [ ] `context.md` documents graph enhancement status (是/否)
-- [ ] If graph available: navigation tips generated with high-risk points, call chains, test coverage gaps, and graph-gap areas noted
-- [ ] If graph available: grep verification completed for graph-gap areas (MyBatis XML, config files)
-- [ ] If graph available: Graph Usage Log populated with Phase 1/2 tool calls (incl. skip/fail); if unavailable: single "未使用" line written
 - [ ] Helper `complete --phase 2` succeeded
 
 ---
@@ -846,31 +795,8 @@ If requirements provided, save to `requirements.md` in session directory.
    [Inline: Detailed findings from full diff analysis]
    [Disk-offload: Findings based on file paths and directory structure — reviewers will validate]
 
-   ### Graph Navigation Insights（当 graph 可用时）
-   [基于知识图谱的结构级洞察，指导 reviewer "该查哪里"]
-   [高风险变更点及其调用链上下文]
-   [测试覆盖缺口]
-   [跨层/跨模块边界违规]
-   [Graph 未覆盖区域标注，提示 reviewer 用 Grep/Read 补充]
-
-   ### Graph Usage Log（当 graph 可用时记录；不可用时标注"未使用"）
-   [每次 graph 工具调用追加一行，格式如下。用于事后审计 graph 使用情况与 token 成本]
-   | Phase | Tool | Target/Params | Status | Est. Tokens | Saved Tokens | Fallback |
-   |-------|------|---------------|--------|-------------|--------------|----------|
-   | 1 | list_graph_stats_tool | - | ok | ~50 | - | - |
-   | 1 | get_minimal_context_tool | task="ultra-cr code review" | ok | ~120 | - | - |
-   | 2 | detect_changes_tool | detail_level="minimal" | ok | ~400 | ~12932 (94%) | - |
-   | 2 | get_impact_radius_tool | top-N funcs | partial | ~300 | ~8500 (88%) | grep 补充 1 处 |
-   | 3 | get_hub_nodes_tool | top_n=10 | skip(无命中) | 0 | - | - |
-   | 3 | get_surprising_connections_tool | top_n=15 | skip(预算紧张) | 0 | - | - |
-   [Status 取值: ok / partial(部分回退 grep) / skip(条件不满足跳过) / fail(失败回退 grep)]
-   [Saved Tokens 取值: 从工具返回的 context_savings.saved_tokens 提取（格式 "~{n} ({p}%)"），无此字段的工具填 "-"]
-   [Saved Tokens 为 0/负时填 "0"，并在 Phase 8 汇总文案兜底]
-   [graph 不可用时仅写一行: "graph 未启用，本次审查未使用图谱工具"]
-
-   ### Risk-Based Reviewer Suggestions（当 graph 可用时）
-   [基于 detect_changes_tool 风险评分的 reviewer 建议]
-   [注意: 风险评分基于结构级分析，内容级风险仍需 grep 识别]
+   ### Source Navigation
+   [有关的源码位置、调用入口、配置引用、状态读写双方和已有测试；给出证据路径并注明不确定项]
 
    ### Clarifying Questions (Tech Lead)
    [Questions about requirements, scope, edge cases]
@@ -878,12 +804,10 @@ If requirements provided, save to `requirements.md` in session directory.
    ### Risk Areas
    [Inline: Specific code-level risks identified from the diff]
    [Disk-offload: Areas inferred from stat numbers and path patterns]
-   [Graph 可用时: 基于 detect_changes_tool 风险评分的结构级风险]
 
    ### Focus Points
    [Inline: Specific lines/patterns for reviewers to check]
    [Disk-offload: Areas/directories for reviewers to focus on]
-   [Graph 可用时: 基于 graph 导航提示的精准定位方向]
    ```
 
 4. **Resolve reviewer team**:
@@ -893,15 +817,6 @@ If requirements provided, save to `requirements.md` in session directory.
    - Handle `--reviewer` ephemeral reviewers if present
    - **Custom reviewer auto-detection (intelligent matching)**: Scan the BUNDLED reviewer directory (located inside the ultra-cr skill installation — try `${SKILL_ROOT}/references/reviewers/bundled` first, then `references/reviewers/bundled`) for ALL subdirectories (each subdirectory is a reviewer; the directory name is the reviewer ID), and scan `~/.config/ultra-cr/reviewer/`, `.reviews/ultra-cr/reviewer/` for ALL subdirectories too (same convention — each subdirectory is a reviewer). For each one NOT already in the team config, read its persona body (the direct-level `.md` file(s) inside the subdirectory; title, intro, Focus Areas, etc.) and judge whether its engineering risk applies to actual changed behavior. Skip programming-language specialist personas, even when they also mention general risks; assign those risks to domain reviewers. If applicable → add it to the team (does NOT count toward the 6-reviewer limit). This is an LLM judgment. The reviewer's own description is the signal. See Step H for the full procedure.
    > **Example**: The `behavior-regression/` persona examines shared-state write/read invariants. Add it when changed writes can alter downstream read behavior, independent of implementation language. Do not add custom reviewers for language/file-extension matches alone.
-   - **Graph-enhanced risk-based reviewer selection**（当 graph 可用时）:
-     - 从 Phase 2 的 graph 导航提示中提取高风险函数/类
-     - 高风险变更（risk_score >= 0.7，0-1 浮点数）但尚未有对应 reviewer 时，应当添加（受 Step E 6-reviewer 自动检测上限约束，优先级同自动检测规则）：
-       - 安全相关高风险 → 确保 Security reviewer 在团队中
-       - 并发相关高风险 → 确保 Architect reviewer 在团队中
-       - 数据相关高风险 → 确保 Data reviewer 在团队中
-     - 在 Tech Lead Guidance 中记录基于风险评分的 reviewer 建议（标注"知识图谱"来源）
-     - 注意: 风险评分基于结构级分析（调用链深度、依赖数量、是否在关键路径），内容级风险（如 SQL 注入、硬编码密钥）仍需 grep 扫描识别
-
 5. **Load reference files for custom reviewers** (MUST do this before Phase 4):
    For every custom reviewer in the resolved team, load its reference files. All three search paths use the **same** directory convention — there is no per-path divergence:
 
@@ -1166,64 +1081,9 @@ If requirements provided, save to `requirements.md` in session directory.
    - ⬜ +1 {reviewer-id} (available, not applicable: no matching files)
    ```
 
-   **Step I: Test Coverage Gap Scan**（当 graph 可用时执行，grep 无法精确完成此任务）
+   **Step I: Existing Test Evidence**
 
-   对每个变更文件，调用 `query_graph_tool(pattern="tests_for", target=变更函数/类)` 识别缺少测试覆盖的高风险变更。
-   这是 graph 的独特价值——grep 很难准确判断"哪些函数没有测试"，而 graph 的 tests_for 查询可以精确匹配测试函数与被测函数的调用关系。
-   **注意**: `target` 使用图谱节点名（限定名，不带括号 `()`）。若返回空，先用 `semantic_search_nodes_tool` 确认节点名。
-
-   ```markdown
-   ### 测试覆盖缺口（知识图谱）
-   - ✅ `AuthService.login` — 有 3 个测试 (AuthServiceTest.java)
-   - ⚠️ `TokenRefreshService.refresh` — 无测试覆盖
-   - ⚠️ `AuditLogService.recordLogin` — 无测试覆盖
-   ```
-
-   如果发现无覆盖的高风险变更，在 Tech Lead Guidance 中标注（作为导航提示，供已启用的 Testing reviewer 或其他 reviewer 参考）。⚠️ 不再自动添加 Testing reviewer——Testing reviewer 仅在用户显式要求时启用（--team=testing:1 或自然语言）。
-
-   **Step J: Structural Risk Supplement**（当 graph 可用时执行，grep 无法完成此任务）
-
-   这是 graph 的独有价值——发现 grep 无法感知的结构级弱点。**条件触发**：仅当 `detect_changes_tool` 显示有 risk_score >= 0.7 的变更时才调用，避免无谓增加工具调用次数。注意：`risk_score` 是 0-1 浮点数（非 0-10），0.7 即触发阈值。若 graph 工具调用已达软预算（≤8 次），优先 skip surprising_connections（成本最高），保留 hub/bridge/knowledge_gaps。
-
-   a) 调用 `get_knowledge_gaps_tool` 识别结构级弱点：
-      - 无测试的高扇入热点（high-degree nodes without test coverage）
-      - 孤立节点（disconnected）、单文件社区
-      - 将命中变更的弱点写入 Tech Lead Guidance，建议对应 reviewer 关注
-
-   b) **架构热点与瓶颈检测**（修复 hub/bridge 检测，原仅文档承诺无工具支撑）:
-      - 调用 `get_hub_nodes_tool(top_n=10)` 获取总度数最高的节点列表（⚠️ 无 detail_level，无法压缩，用 top_n 控制成本）
-      - 调用 `get_bridge_nodes_tool(top_n=10)` 获取 betweenness centrality 最高的架构瓶颈节点
-      - **交集过滤**（必须）：hub/bridge 返回的每个节点含 `qualified_name` 和 `file` 字段。将这两项与本次变更做交集——用 `git diff --name-only` 获取的变更文件列表（Phase 2 已获取）匹配节点的 `file`，或用 `detect_changes_tool` minimal 返回的 `review_priorities`（top-3 函数名）匹配节点的 `name`。任一匹配即视为命中。只保留命中的节点，未命中的丢弃（全图静态分析，与本次变更无关的 hub/bridge 是噪声）
-      - 交集非空 → 在 Tech Lead Guidance 标注，并自动添加 Architect reviewer（如尚未在团队中）:
-        "⚠️ {函数} 是 hub 节点（总度数 {total_degree}，扇入 {in_degree}），变更影响面大，Architect 重点关注"
-        "⚠️ {函数} 是 bridge 节点（介数 {betweenness}），断裂将导致多代码区域失联"
-      - 交集为空 → skip，记录到 Graph Usage Log（Status=skip, "无 hub/bridge 命中变更"）
-      - **注意**: hub/bridge 是全图静态分析，不随本次变更变化。同一仓库多次审查会得到相同的 hub/bridge 列表，交集过滤是获得针对性的唯一手段
-      - **注意**: `detect_changes_tool` 在 `detail_level="minimal"` 下**不返回 `changed_functions`**（只返回 `review_priorities` 纯函数名 top-3），故交集过滤用 `git diff --name-only` 文件列表匹配 hub/bridge 的 `file` 字段为主，`review_priorities` 函数名匹配为辅
-
-   c) **意外耦合检测**（grep 做不到的结构级发现）:
-      - 调用 `get_surprising_connections_tool(top_n=15)` 获取跨社区/跨语言/边缘直连 hub 的意外耦合边（⚠️ 无 detail_level，成本最高 ~1500 token，故在软预算紧张时优先 skip）
-      - **交集过滤**（必须）：surprising_connections 返回的每条边含 `source`/`source_qualified`/`target`/`target_qualified` 字段（⚠️ 边没有独立的 `file` 字段，文件路径需从 `source_qualified`/`target_qualified` 中推断，qualified_name 通常含路径前缀）。用 `git diff --name-only` 变更文件列表匹配 `source_qualified`/`target_qualified` 中的路径，或用 `review_priorities` 函数名匹配 `source`/`target`。只保留命中本次变更的边，未命中的丢弃（全图静态分析，与变更无关的耦合是噪声）
-      - 命中的边注入 Architect reviewer 导航提示:
-        "⚠️ {source}（社区 {src_community}）→ {target}（社区 {tgt_community}）存在意外耦合
-         原因: {reasons}，surprise_score: {score}
-         → Architect 检查此跨社区调用是否故意，是否违反架构边界"
-      - 模块化差的项目 cross-community 可能很多，交集后仍超 5 条时只取 surprise_score 最高的 3 条
-      - 无命中 → skip，记录 Graph Usage Log
-
-   d) 对 `detect_changes_tool` 识别的高风险函数，调用 `find_large_functions_tool(file_path_pattern=<变更路径>, min_lines=200)` 定位超长方法：
-      - 作为导航交给该风险的负责 reviewer；结合调用频次和实际证据检查，函数长度本身不是缺陷，也不触发语言专项角色
-
-   ```markdown
-   ### 结构级风险（知识图谱）
-   - ⚠️ `PaymentService.process` 是 hub 节点（总度数 12，扇入 8），本次变更影响面大，建议 Architect 重点关注
-   - ⚠️ `AuthRouter.dispatch` 是 bridge 节点（介数 0.43），断裂将导致认证/授权区域失联
-   - ⚠️ `OrderService.create`（社区 order）→ `InventoryService.lock`（社区 stock）存在意外耦合
-     原因: cross-community，surprise_score: 0.50 → Architect 检查是否违反架构边界
-   - ⚠️ `OrderHandler.parse` 超 250 行，由风险负责人结合实际性能证据检查
-   ```
-
-   **记录到 Graph Usage Log**：Step I 的 `query_graph_tool(tests_for)` 调用和 Step J 的 `get_knowledge_gaps_tool`/`get_hub_nodes_tool`/`get_bridge_nodes_tool`/`get_surprising_connections_tool`/`find_large_functions_tool` 调用（含 skip 情况），均向 context.md 的 Graph Usage Log 表追加一行（Phase=3）。skip 的调用也要记录，便于事后审计"为何未使用某工具"。
+   Search existing tests for the assigned high-risk behavior and read the relevant assertions. Record which scenario is covered and which remains uncertain. Do not infer coverage solely from a matching function name or an empty text search. A missing test alone is not a defect. Testing reviewers remain opt-in.
 
 7. Update `context.md` with Tech Lead guidance section.
 
@@ -1245,10 +1105,6 @@ Before dispatch, write a reviewer assignment list (schema in `references/session
 **STOP and verify before proceeding (self-check, do NOT ask the user):**
 - [ ] `context.md` updated with Tech Lead guidance
 - [ ] Reviewer team resolved (know which reviewers to spawn)
-- [ ] If graph available: risk-based reviewer suggestions documented in Tech Lead Guidance
-- [ ] If graph available: test coverage gaps identified and documented in Tech Lead Guidance (Testing reviewer is NOT auto-added — opt-in only)
-- [ ] If graph available and high-risk changes present: structural risk supplement (knowledge gaps / large functions) documented
-- [ ] If graph available: Graph Usage Log updated with Phase 3 tool calls (Step I/J, incl. skip)
 - [ ] Helper `complete --phase 3` succeeded
 
 ---
