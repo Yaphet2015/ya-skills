@@ -1,0 +1,23 @@
+{
+  "name": "v1.1.1",
+  "tagName": "v1.1.1",
+  "tagCommit": "0d6dd5da95592ccbae84facb194cdfeaf54fab36",
+  "url": "https://github.com/Yaphet2015/ya-skills/releases/tag/v1.1.1",
+  "publishedAt": "2026-10-22T09:17:42Z",
+  "assets": [
+    {
+      "name": "ya-skills-v1.1.1-macos-arm64.tar.gz",
+      "size": 48497309,
+      "state": "uploaded",
+      "digest": "sha256:d6a3fbf6588aa7a4ce637e308add3f1002302f7db4355640b4bf7044639650f5",
+      "url": "https://github.com/Yaphet2015/ya-skills/releases/download/v1.1.1/ya-skills-v1.1.1-macos-arm64.tar.gz"
+    },
+    {
+      "name": "ya-skills-v1.1.1-macos-arm64.tar.gz.sha256",
+      "size": 102,
+      "state": "uploaded",
+      "digest": "sha256:de103392519fd61c46fb04af90179c598a70f8a46433eeb871299963ae95b0e0",
+      "url": "https://github.com/Yaphet2015/ya-skills/releases/download/v1.1.1/ya-skills-v1.1.1-macos-arm64.tar.gz.sha256"
+    }
+  ]
+}
