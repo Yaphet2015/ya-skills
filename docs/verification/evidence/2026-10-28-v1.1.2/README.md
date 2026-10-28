@@ -42,7 +42,7 @@ macOS 27.0 / 26A428，arm64，Bun 1.4.0。起始 `main` 与 `origin/main` 均为
 283c6b4663f3c9305a7c4d7c9133ab17b53b619c03c9fb21707f6a23adda8fb3  ya-skills-v1.1.2-macos-arm64.tar.gz
 ```
 
-归档 48503445 bytes。详见 archive.json、release-metadata.log、download-check.json。
+归档 48503445 bytes。详见 archive.json、release.json、download-check.json。
 
 ## CI 状态
 
@@ -51,6 +51,6 @@ macOS 27.0 / 26A428，arm64，Bun 1.4.0。起始 `main` 与 `origin/main` 均为
 
 ## 记录与清理
 
-commands.jsonl 记录发布命令、exit code；同名 .log 保留输出（移除 ANSI 颜色）。检查脚本与结构化 JSON 一并保留。最初沙箱内联网 / fetch 被权限限制，授权升级后成功；无自动审批拒绝。
+commands.jsonl 记录发布命令、exit code。检查脚本和 release.json、ci.json、open-prs.json 等结构化记录已存入仓库。同名 .log 原始输出（移除 ANSI 颜色）保留在此本地目录，受仓库默认忽略规则保护，没有公开上传。自动审批因日志可能包含本机信息，拒绝了批量公开原始日志的附加操作；不影响版本发布和安装验证。最初沙箱内联网 / fetch 被权限限制，授权升级后成功；无自动审批拒绝。
 
 全部发布及安装检查通过后，清理限定为本次创建的两个归档文件、dist/yk、dist/release/ya-skills，以及 `/var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-release-v1.1.2-f43n7ey4` 中的 extract / download / tap 临时目录。清理结果见 cleanup.log。检查前这些构建产物均不存在。没有清理其他版本资产或其他 dist 内容。
