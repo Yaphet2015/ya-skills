@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Yaphet2015/ya-skills/compare/v1.1.1...v1.2.0) (2026-10-28)
+
+
+### Features
+
+* **skills:** add repro and deprecate legacy workflows ([647988f](https://github.com/Yaphet2015/ya-skills/commit/647988fab25b58bffa3dadf25a081600e2490198))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
