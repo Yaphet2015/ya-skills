@@ -1,0 +1,4 @@
+dist/yk: False
+dist/release/ya-skills: False
+ya-skills-v1.1.2-macos-arm64.tar.gz: False
+ya-skills-v1.1.2-macos-arm64.tar.gz.sha256: False

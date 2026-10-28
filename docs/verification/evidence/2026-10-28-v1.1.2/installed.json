@@ -1,0 +1,8 @@
+{
+  "prefix": "/opt/homebrew/opt/ya-skills",
+  "signature": "pass",
+  "help": "pass",
+  "version": "1.1.2",
+  "reproInCatalog": true,
+  "formula": "pass"
+}
