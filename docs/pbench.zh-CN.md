@@ -1,5 +1,7 @@
 # PBench 中文文档
 
+> **Deprecated（已弃用）。** PBench 不再推荐用于新工作流。
+
 PBench 是一套完全本地、隐私优先的 coding agent benchmark 工作流。它把真实工作中发生过的 agent 失误沉淀成可复现的私有 case，然后用这些 case 判断新的模型、skill、rules 包或 harness 改动，是否真的改善了你的日常工作流。
 
 PBench 不是公开排行榜，也不是为了衡量模型的通用能力。它的信号来自真实失败：agent 过早宣称完成、漏读上下文、工具使用方式不对、验证失败、或者需要用户指出问题后才重新做对。

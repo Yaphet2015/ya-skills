@@ -1,5 +1,7 @@
 # PBench
 
+> **Deprecated.** PBench is no longer recommended for new workflows.
+
 PBench is a fully local, privacy-first benchmark workflow for coding-agent work. It turns a real agent miss into a reproducible private case, then uses that case to check whether a model, skill, rules package, or harness change improves the user's actual workflow.
 
 PBench is not a public leaderboard and it does not try to measure general model ability. Its signal comes from failures that already happened in real work: the agent claimed success too early, missed context, used tools incorrectly, failed verification, or needed user correction before the task was actually usable.

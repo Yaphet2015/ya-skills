@@ -1,0 +1,4 @@
+{
+  "name": "repro",
+  "description": "Generate manual acceptance steps from a diff, with expected and before-change behavior, evidence, and optional mock setup. Use for /repro or human QA handoffs."
+}

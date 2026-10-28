@@ -1,9 +1,11 @@
 ---
 name: pbench
-description: PBench capture/replay. Use when a coding-agent outcome is wrong, or the user asks to capture, run, or compare runs.
+description: Deprecated. PBench capture/replay. Use when a coding-agent outcome is wrong, or the user asks to capture, run, or compare runs.
 ---
 
 # PBench
+
+> **Deprecated.** This skill is no longer recommended for new workflows.
 
 ## Outcome mismatch
 

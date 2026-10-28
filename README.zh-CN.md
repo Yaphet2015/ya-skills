@@ -61,14 +61,15 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **a-share-data** | 从公开数据源获取 A 股报价、K 线、财务指标、现金流和公告，并保留来源与缺失字段说明，避免编造数据。 | `yk install a-share-data` |
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
-| **pbench** | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
+| **pbench**（已弃用） | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
 | **produce** | 轻量流程：subagents 使用 brainstorming、grill-with-docs 规划 → 独立挑战 → 每部分实现后 simplify → 测试。规划代理与 Main 讨论技术选择，遵循 SOLID、DRY、KISS、YAGNI、SSOT；体验行为选择由 Main 咨询用户。需要宿主已安装这些 Skill。 | `yk install produce` |
+| **ultra-produce**（已弃用） | 通过原生 Planner、Builder 和 Verifier 子代理完成规划、实现和验证，使用文件交接、阶段 Hook 和本地提交。 | `yk install ultra-produce` |
 | **computer-use** | 通过后台优先的 AX 感知与操作驱动任意 macOS 桌面应用——检查应用状态、复现 UI 问题、操作可见窗口。仅 macOS arm64。 | `yk install computer-use` |
 | **computer-e2e** | 确定性桌面回放：项目本地 `*.e2e.ts` 套件由同一个 yk 执行，带执行历史与报告——使用方零 npm 安装、零 Node/Vitest/SDK 依赖。依赖 computer-use。 | `yk install computer-e2e` |
 | **eli5** | 当读者完全不懂这个主题来解释：用 HTML artifact，大图、少字。 | `yk install eli5` |
 | **eli10** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli10` |
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
-| **validator** | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
+| **validator**（已弃用） | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
 | **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |
 | **ultra-simplify** | 自主执行全库大简化冲刺：总 LOC 至少降 40%、拆巨型文件、统一重复助手函数、削平 if 嵌套链，完成后交付 PR。 | `yk install ultra-simplify` |
 
@@ -152,6 +153,8 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 **卸载语义** —— `yk uninstall` 只从已有的 `.claude/skills` 和 `.agents/skills` 目标中移除。使用 `-g` 或 `--global` 时，它使用用户主目录。它**不会**创建目标目录，也**不会**自动移除依赖 Skill。
 
 ### PBench
+
+> **Deprecated（已弃用）。** PBench 不再推荐用于新工作流。
 
 `yk pbench` 通过已注册 capture source 捕获真实的 Codex 或 Claude 工作流失误，再通过已注册 runner 重放已定稿用例。用它来判断模型、Skill、规则包或 harness 改动是否*真的*改善了*你自己的*工作流。
 

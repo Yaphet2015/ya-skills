@@ -1,9 +1,11 @@
 ---
 name: ultra-produce
-description: Coordinate native Planner, Builder and Verifier subagents through implementation and testing, with file-based handoffs, stage hooks and local commits. Use for an end-to-end delegated implementation workflow.
+description: Deprecated. Coordinate native Planner, Builder and Verifier subagents through implementation and testing, with file-based handoffs, stage hooks and local commits. Use for an end-to-end delegated implementation workflow.
 ---
 
 # Ultra Produce
+
+> **Deprecated（已弃用）。** 不再推荐用于新工作流。
 
 Main Agent（下文称 Leader）负责任务流转：派工、依赖、文件交接、状态、Hook、证据验收和用户沟通。不限制其宿主或模型；规划工作交给独立 Planner。向用户用简短中文报告进度、决策和阻塞。
 

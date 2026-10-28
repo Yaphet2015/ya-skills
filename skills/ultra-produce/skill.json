@@ -1,6 +1,6 @@
 {
   "name": "ultra-produce",
-  "description": "Coordinate native Planner, Builder and Verifier subagents with file-based handoffs, stage hooks and local commits.",
+  "description": "Deprecated. Coordinate native Planner, Builder and Verifier subagents with file-based handoffs, stage hooks and local commits.",
   "dependsOn": [
     "ultra-cr"
   ]

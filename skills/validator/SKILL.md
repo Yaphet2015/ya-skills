@@ -1,10 +1,12 @@
 ---
 name: validator
-description: Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete.
+description: Deprecated. Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete.
 disable-model-invocation: true
 ---
 
 # Validator
+
+> **Deprecated（已弃用）。** 不再推荐用于新工作流。
 
 Establish the Completion Standard for a completed Plan. This skill defines what evidence would prove the work complete; it does not perform the work or judge its result.
 

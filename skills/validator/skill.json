@@ -1,4 +1,4 @@
 {
   "name": "validator",
-  "description": "Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete."
+  "description": "Deprecated. Plan Completion Standard. Use only when the user invokes /validator after a Plan is complete."
 }
