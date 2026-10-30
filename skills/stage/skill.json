@@ -1,6 +1,6 @@
 {
   "name": "stage",
-  "description": "Read-only task, session and review status for the current registered clone or all registered clones. Includes the former Fleet overview.",
+  "description": "Read-only repository task status, automatically including same-project sibling repositories when present.",
   "dependsOn": [
     "bankai"
   ]

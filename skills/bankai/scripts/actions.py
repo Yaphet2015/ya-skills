@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-from cowork import TERMINAL_HOST_STATES, decision, digest, snapshot
+from workflow import TERMINAL_HOST_STATES, decision, digest, snapshot
 
 
 def runtime_inputs(repo, argv, definition):
@@ -25,7 +25,7 @@ def runtime_inputs(repo, argv, definition):
     environment = {name: hashlib.sha256(os.environ.get(name, '').encode()).hexdigest()
                    for name in set(['NODE_ENV', 'CI', 'TZ', *definition.get('environment', [])])}
     files = {}
-    for raw in [*definition.get('inputs', []), 'node_modules/.modules.yaml', 'native/.build-stamp']:
+    for raw in [*definition.get('inputs', []), 'node_modules/.modules.yaml']:
         path = (Path(repo) / raw).resolve()
         if not path.is_relative_to(Path(repo).resolve()):
             raise ValueError('Declared validation inputs must stay within the task repository')

@@ -1,30 +1,26 @@
 # Bankai execution contract
 
-Bankai is the explicit execution interface. Stage reads the same engine records for `current` or `all`; no argument means `all`. Project entry and ordinary conversation never launch or resume Bankai. Runtime state lives under the registered clones' parent `.fleet/` directory.
+Bankai executes one explicitly requested task in the current Git repository. Stage reads the same task records. Ordinary conversation and project entry never start or resume a task.
 
-The idempotent registration/installation command is `scripts/cowork_install.py --root CENTRAL_ROOT --repo EXACT_ROOT ...`. It previews by default. `--apply` keeps the skill packages under `CENTRAL_ROOT/skills`, creates discovery links only in each registered clone's `.agents/skills` and `.logoscode/skills`, and excludes those links through that clone's `.git/info/exclude`. It adds no tracked instructions and installs no user-level skills. An unchanged entry block from the earlier installer is removed during migration; other `AGENTS.md` content is preserved. `--uninstall` removes owned local links and exclude entries while preserving execution history.
+## Installation and repository registration
 
-## Catalog and local registration
+`yk install bankai` installs the complete skill. `yk install stage` installs Stage and its Bankai dependency. Global installation is available with `yk install -g bankai stage`.
 
-`yk install bankai` installs the complete execution skill without catalog dependencies. `yk install stage` installs the read-only entry and its Bankai dependency. Fleet's overview is part of `/stage all`, so no separate Fleet package is needed.
+The runtime root defaults to `~/.ya-skills/bankai/`. Use `--root PATH` for a different local state directory outside the target repository. The registry stores canonical repository roots and Git-directory identities; repositories need no remote, package manifest, shared origin or sibling layout. Git worktrees are separate working repositories. Records and run IDs are isolated by repository identity.
 
-Skill installation does not register clones or launch tasks. To enable discovery only in selected local clones, run the bundled installer from a catalog or installed skill directory containing `bankai` and, optionally, its sibling `stage` package:
+An explicit `start --invocation bankai` registers the current repository after validating its task contract and required tools. Optional `register` previews registration; `register --apply` records it without starting a task. Both use `--repo REPO`. Registration changes no repository files, instructions, installation links or Git excludes. Existing registrations are preserved when adding a repository. Status queries never register repositories.
 
-```text
-python3 -B <bankai>/scripts/cowork_install.py --root <clones-parent>/.fleet --repo <clone-1> --repo <clone-2>
-```
-
-List every intended clone with a separate `--repo`. All must share the same declared project and Git origin. Inspect the preview, then repeat with `--apply`. The default runtime root is the clone parent's `.fleet`; a different location requires `--root` on helper commands. Runtime manifests, ownership records, logs, backups and run history stay local and are not catalog assets. For compatibility, execution records remain under `.fleet/ultra-produce/`; this directory name is a storage format, not a skill dependency. Existing runs retain their frozen helpers. New runs freeze Bankai and all of its scripts, so recovery needs no Ultra Produce installation.
+Runs keep all state under `logs/<run-id>/` and reports under `reports/<project>/<branch>/<run-id>/`. Every run freezes its own helper and skill files. Existing runs continue through their saved helper; do not rewrite old records or replay their effects with a different engine.
 
 ## Commands
 
-Use `python3 -B <bankai>/scripts/pipeline.py cowork`. Global options precede the command: `--repo`, optional `--root`, `--session`, `--run`, `--token`, and repeated `--skill-root`. `status current|all` never writes workflow state. Mutation commands require the actual session ID, selected run ID, writer token, and the run's frozen helper.
+Use `python3 -B <bankai>/scripts/pipeline.py`. Global options precede the command: `--repo`, optional `--root`, `--session`, `--run`, `--token`, and repeated `--skill-root`. `status` automatically includes same-project direct siblings when present; `status current` stays strictly within the current repository and `status all` also includes explicitly registered repositories. All status queries are read-only. Mutation commands require the actual session ID, selected run ID, writer token, and the run's frozen helper.
 
 ```text
-... cowork --repo REPO status current
-... cowork --repo REPO --session SESSION start --invocation bankai --contract CONTRACT
-... cowork --repo REPO --session SESSION --run RUN continue --invocation bankai
-... cowork --repo REPO --session SESSION --run RUN --token TOKEN next
+... --repo REPO status current
+... --repo REPO --session SESSION start --invocation bankai --contract CONTRACT
+... --repo REPO --session SESSION --run RUN continue --invocation bankai
+... --repo REPO --session SESSION --run RUN --token TOKEN next
 ```
 
 Start returns the run ID, token and frozen helper path. Switch to that helper for every subsequent mutation. `next` prepares the next eligible engine task and returns its attempt directory. It does not execute source edits or invoke models itself; the agent executes the task, then calls `next` again after delivery. This loop supplies automatic progression within an active Bankai invocation.
@@ -46,7 +42,7 @@ Write the contract to an allowed temporary path before launch. Scope and deliver
      "criteria": ["Limit and counter behave correctly"], "skills": ["simplify"]},
     {"id": "verify", "phase": "verify", "role": "verifier", "after": ["implement"],
      "criteria": ["Input cannot exceed the requested limit"],
-     "checks": [{"id": "typecheck", "argv": ["pnpm", "typecheck"]}]}
+     "checks": [{"id": "typecheck", "argv": ["python3", "-m", "unittest"]}]}
   ]
 }
 ```
@@ -59,7 +55,7 @@ When a fix invalidates an accepted verification step, append a replacement verif
 
 `check --id ID -- COMMAND ARG...` executes a command without a shell, records its output and exit code, and compares its inputs before and after. Declared checks must match the contract argv. A completed check ID cannot silently execute again. For changed inputs or interrupted checks, first reconcile the old action, then use a new ID in a revised step.
 
-Checks also record executable identities, selected environment hashes, installed dependency metadata and the native build stamp. Declare additional ignored files in each check's `inputs` array and relevant variable names in its `environment` array. Values are hashed rather than copied into receipts. Changing these inputs makes the check stale even when tracked source is unchanged.
+Checks also record executable identities, selected environment hashes, available package-manager metadata. Declare ignored dependency files, generated build stamps and other validation inputs in each check's `inputs` array and relevant variable names in its `environment` array. Values are hashed rather than copied into receipts. Changing these inputs makes the check stale even when tracked source is unchanged.
 
 Write evidence files under the returned attempt's `artifacts/` or the run's reports directory. Build a result using the current `status current` input snapshot:
 

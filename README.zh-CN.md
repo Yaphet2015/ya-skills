@@ -63,8 +63,8 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
 | **pbench**（已弃用） | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
 | **produce** | 轻量流程：subagents 使用 brainstorming、grill-with-docs 规划 → 独立挑战 → 每部分实现后 simplify → 测试。规划代理与 Main 讨论技术选择，遵循 SOLID、DRY、KISS、YAGNI、SSOT；体验行为选择由 Main 咨询用户。需要宿主已安装这些 Skill。 | `yk install produce` |
-| **bankai** | 显式启动或恢复已登记的 Cowork 任务，保存执行证据并支持中断恢复。自带完整执行器和恢复脚本；克隆需单独登记。 | `yk install bankai` |
-| **stage** | 只读查看当前或全部已登记克隆的任务、会话和审查状态，包含原 Fleet 总览能力。 | `yk install stage` |
+| **bankai** | 显式启动或恢复任意 Git 仓库的任务，保存执行证据并支持中断恢复。自带完整执行器和恢复脚本；显式启动时登记当前仓库。 | `yk install bankai` |
+| **stage** | 只读查看任务、会话和审查状态；自动附带同级目录中确认属于同项目的仓库。 | `yk install stage` |
 | **ultra-produce**（已弃用） | 通过原生 Planner、Builder 和 Verifier 子代理完成规划、实现和验证，使用文件交接、阶段 Hook 和本地提交。 | `yk install ultra-produce` |
 | **computer-use** | 通过后台优先的 AX 感知与操作驱动任意 macOS 桌面应用——检查应用状态、复现 UI 问题、操作可见窗口。仅 macOS arm64。 | `yk install computer-use` |
 | **computer-e2e** | 确定性桌面回放：项目本地 `*.e2e.ts` 套件由同一个 yk 执行，带执行历史与报告——使用方零 npm 安装、零 Node/Vitest/SDK 依赖。依赖 computer-use。 | `yk install computer-e2e` |

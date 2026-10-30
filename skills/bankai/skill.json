@@ -1,4 +1,4 @@
 {
   "name": "bankai",
-  "description": "Explicitly launch or resume registered Cowork tasks with persistent evidence and interruption recovery."
+  "description": "Explicitly launch or resume tasks in any Git repository with persistent evidence and interruption recovery."
 }

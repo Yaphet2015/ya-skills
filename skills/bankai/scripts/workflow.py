@@ -9,6 +9,8 @@ import subprocess
 import time
 from types import SimpleNamespace
 import uuid
+from urllib.parse import urlsplit
+import re
 
 
 TERMINAL_HOST_STATES = {'ended', 'cancelled', 'completed', 'stopped'}
@@ -28,9 +30,9 @@ def identity(engine, repo):
     root = Path(engine.git(repo, 'rev-parse', '--show-toplevel').decode().strip()).resolve()
     if root != Path(repo).resolve():
         raise ValueError('Registration must name the canonical repository root')
-    origin = engine.git(repo, 'remote', 'get-url', 'origin').decode().strip().removesuffix('.git').rstrip('/')
+    git_dir = engine.git(root, 'rev-parse', '--absolute-git-dir').decode().strip()
     project, _ = engine.project_identity(root)
-    return {'path': str(root), 'origin': origin, 'project': project}
+    return {'path': str(root), 'git_dir': str(Path(git_dir).resolve()), 'project': project}
 
 
 def snapshot(engine, repo):
@@ -45,6 +47,15 @@ def snapshot(engine, repo):
         elif path.is_file():
             payload = path.read_bytes()
             kind = b'executable' if path.stat().st_mode & stat.S_IXUSR else b'file'
+        elif path.is_dir():
+            entry = engine.git(repo, 'ls-files', '--stage', '--', os.fsdecode(raw))
+            if not entry.startswith(b'160000 '):
+                raise ValueError(f'Unsupported source directory: {path}')
+            module = subprocess.run(['git', '-C', str(path), 'rev-parse', '--show-toplevel'],
+                                    capture_output=True, text=True)
+            initialized = module.returncode == 0 and Path(module.stdout.strip()).resolve() == path.resolve()
+            payload = json.dumps(snapshot(engine, path), sort_keys=True).encode() if initialized else entry
+            kind = b'submodule'
         elif path.exists():
             raise ValueError(f'Unsupported source entry: {path}')
         else:
@@ -122,15 +133,38 @@ class Profile:
         self.engine = engine
         self.args = args
         self.snapshots = {}
-        self.repo = Path(args.repo).resolve()
-        self.root = (Path(args.root).expanduser() if args.root else self.repo.parent / '.fleet').resolve()
+        requested = Path(args.repo).resolve()
+        git_root = subprocess.run(['git', '-C', str(requested), 'rev-parse', '--show-toplevel'],
+                                  capture_output=True, text=True)
+        self.repo = Path(git_root.stdout.strip()).resolve() if git_root.returncode == 0 else requested
+        self.root = (Path(args.root).expanduser() if args.root else Path.home() / '.ya-skills/bankai').resolve()
         if self.root.is_relative_to(self.repo):
             raise ValueError('Keep centralized state outside the repository')
         path = self.root / 'workspaces.json'
         self.manifest = engine.read(path) if path.is_file() else {'version': 1, 'workspaces': []}
         self.workspace = next((w for w in self.manifest['workspaces'] if w['path'] == str(self.repo)), None)
-        if self.workspace and identity(engine, self.repo) != {k: self.workspace[k] for k in ('path', 'origin', 'project')}:
-            raise ValueError('Registered repository identity changed; reconcile registration')
+        if self.workspace:
+            current = identity(engine, self.repo)
+            if any(current[k] != self.workspace[k] for k in ('path', 'git_dir')):
+                raise ValueError('Registered repository identity changed; reconcile registration')
+
+    def register(self, apply=False):
+        current = identity(self.engine, self.repo)
+        if not apply:
+            return {'repository': current, 'registered': bool(self.workspace), 'applied': False}
+        with self.engine.task_lock(self.root / 'registry'):
+            path = self.root / 'workspaces.json'
+            manifest = self.engine.read(path) if path.is_file() else {'version': 1, 'workspaces': []}
+            existing = next((w for w in manifest['workspaces'] if w['path'] == current['path']), None)
+            if existing:
+                if existing['git_dir'] != current['git_dir']:
+                    raise ValueError('Registered Git directory changed; reconcile registration')
+            else:
+                existing = {**current, 'id': uuid.uuid4().hex}
+                manifest['workspaces'].append(existing)
+                self.engine.write(path, manifest)
+            self.manifest, self.workspace = manifest, existing
+        return {'repository': existing, 'registered': True, 'applied': True}
 
     def require_workspace(self):
         if not self.workspace:
@@ -143,9 +177,9 @@ class Profile:
         result = []
         for run_id in workspace.get('runs', []):
             self.engine.safe_id(run_id)
-            path = self.root / 'ultra-produce/logs' / run_id / 'state.json'
+            path = self.root / 'logs' / run_id / 'state.json'
             value = self.engine.read(path)
-            if value.get('profile') != 'cowork' or value.get('workspace_id') != workspace['id']:
+            if value.get('profile') != 'bankai' or value.get('workspace_id') != workspace['id']:
                 raise ValueError('Registered run association differs from the actual workspace')
             result.append((path.parent, value))
         return result
@@ -193,7 +227,7 @@ class Profile:
 
     def pinned(self, state):
         if Path(state['helper']).resolve() != Path(self.engine.__file__).resolve():
-            raise ValueError(f'Use the pinned helper: {state["helper"]} cowork')
+            raise ValueError(f'Use the pinned helper: {state["helper"]}')
 
     def verify_owner(self, run, token=None):
         state = self.engine.read(run / 'state.json')
@@ -265,9 +299,9 @@ class Profile:
             if receipt.get('inputs', {}).get('content') != current['content']:
                 stale.append(item['step']['id'])
             for check in item['step'].get('checks', []):
-                import cowork_actions
+                import actions
                 result = self.engine.read(run / 'actions' / check['id'] / 'result.json')
-                if result.get('runtime') != cowork_actions.runtime_inputs(state['repo'], check['argv'], check):
+                if result.get('runtime') != actions.runtime_inputs(state['repo'], check['argv'], check):
                     stale.append(item['step']['id'])
         blockers = [x['error'] for x in records if x['error']]
         pending = self.pending_actions(run)
@@ -308,30 +342,112 @@ class Profile:
                           'history': str(run)}, 'helper': state['helper']}
 
 
+def repository_source(engine, repo):
+    common = engine.git(repo, 'rev-parse', '--path-format=absolute', '--git-common-dir').decode().strip()
+    remote = subprocess.run(['git', '-C', str(repo), 'config', '--get', 'remote.origin.url'],
+                            capture_output=True, text=True)
+    raw = remote.stdout.strip() if remote.returncode == 0 else ''
+    source = None
+    if raw:
+        scp = re.fullmatch(r'(?:[^/@:]+@)?([^/:]+):(.+)', raw) if '://' not in raw else None
+        if scp and not raw.startswith(('/', './', '../')):
+            raw = 'ssh://' + scp.group(1) + '/' + scp.group(2)
+        parsed = urlsplit(raw)
+        if parsed.scheme and parsed.scheme != 'file':
+            host = (parsed.hostname or '').lower()
+            port = parsed.port
+            default_port = {'ssh': 22, 'http': 80, 'https': 443, 'git': 9418}.get(parsed.scheme)
+            authority = host if port is None or port == default_port else f'{host}:{port}'
+            source = 'remote:' + authority + '/' + parsed.path.strip('/').removesuffix('.git')
+        else:
+            local = Path(parsed.path if parsed.scheme == 'file' else raw).expanduser()
+            source = 'local:' + str((local if local.is_absolute() else Path(repo) / local).resolve())
+    return {'common_dir': str(Path(common).resolve()), 'source': source}
+
+
+def sibling_workspaces(profile):
+    current = repository_source(profile.engine, profile.repo)
+    registered = {w['path']: w for w in profile.manifest['workspaces']}
+    matches = [{**identity(profile.engine, profile.repo), 'match': 'current'}]
+    unavailable = []
+    # Direct children only; never follow a directory link out of this parent.
+    try:
+        candidates = sorted(profile.repo.parent.iterdir())
+    except OSError:
+        candidates = []
+        unavailable.append({'path': str(profile.repo.parent), 'reason': 'parent directory unavailable'})
+    for candidate in candidates:
+        if candidate.is_symlink() or not candidate.is_dir() or not (candidate / '.git').exists():
+            continue
+        if candidate.resolve() == profile.repo:
+            continue
+        try:
+            found = identity(profile.engine, candidate)
+            source = repository_source(profile.engine, candidate)
+            reason = None
+            if source['common_dir'] == current['common_dir']:
+                reason = 'shared-git-directory'
+            elif current['source'] and source['source'] == current['source']:
+                reason = 'same-origin'
+            elif source['source'] == 'local:' + str(profile.repo) or current['source'] == 'local:' + str(candidate.resolve()):
+                reason = 'local-clone-origin'
+            if reason:
+                matches.append({**found, 'match': reason})
+        except (ValueError, OSError, subprocess.CalledProcessError):
+            unavailable.append({'path': str(candidate), 'reason': 'repository identity unavailable'})
+    workspaces = []
+    for found in matches:
+        workspace = registered.get(found['path'], {**found, 'id': None})
+        workspaces.append({**workspace, 'match': found['match']})
+    return workspaces, {'parent': str(profile.repo.parent), 'depth': 1,
+                        'match_rules': ['shared-git-directory', 'same-origin', 'local-clone-origin'],
+                        'unavailable': unavailable,
+                        'limits': 'Different or missing origins do not establish a match; no history scan or remote fetch was performed.'}
+
+
 def status(profile):
     args = profile.args
-    if args.scope not in ('current', 'all'):
+    if args.scope not in (None, 'current', 'all'):
         raise ValueError('Supported Stage scopes: current, all')
-    result = {'scope': args.scope, 'observed_at': time.time(), 'current': None, 'workspaces': []}
-    if not profile.workspace:
+    result = {'scope': args.scope or 'default', 'observed_at': time.time(), 'current': None, 'workspaces': []}
+    if args.scope is None or args.scope == 'all':
+        try:
+            workspaces, discovery = sibling_workspaces(profile)
+            result['discovery'] = discovery
+        except (ValueError, OSError, subprocess.CalledProcessError):
+            workspaces = [profile.workspace] if profile.workspace else []
+            result['discovery'] = {'unavailable': [{'path': str(profile.repo), 'reason': 'repository identity unavailable'}]}
+        if args.scope == 'all':
+            selected = {w['path'] for w in workspaces}
+            workspaces += [w for w in profile.manifest['workspaces'] if w['path'] not in selected]
+    elif not profile.workspace:
         return {**result, 'registration': 'not registered'}
-    try:
-        run, state = profile.select()
-        result['current'] = profile.inspect_run(run, state)
-    except ValueError as error:
-        result['selection'] = str(error)
-    workspaces = [profile.workspace] if args.scope == 'current' else profile.manifest['workspaces']
+    else:
+        workspaces = [profile.workspace]
+    if profile.workspace:
+        try:
+            run, state = profile.select()
+            result['current'] = profile.inspect_run(run, state)
+        except ValueError as error:
+            result['selection'] = str(error)
+    else:
+        result['registration'] = 'not registered'
     for workspace in workspaces:
         row = {'workspace': workspace['id'], 'path': workspace['path'],
-               'current': workspace['id'] == profile.workspace['id']}
+               'current': workspace['path'] == str(profile.repo),
+               'registered': workspace['id'] is not None}
+        if 'match' in workspace:
+            row['match'] = workspace['match']
         try:
-            if identity(profile.engine, workspace['path']) != {k: workspace[k] for k in ('path', 'origin', 'project')}:
+            current_identity = identity(profile.engine, workspace['path'])
+            if any(current_identity[k] != workspace[k] for k in ('path', 'git_dir')):
                 raise ValueError('Registered identity changed')
-            owner_path = profile.root / 'owners' / workspace['id'] / 'owner.json'
-            owner = profile.engine.read(owner_path) if owner_path.is_file() else None
+            owner_path = profile.root / 'owners' / workspace['id'] / 'owner.json' if row['registered'] else None
+            owner = profile.engine.read(owner_path) if owner_path and owner_path.is_file() else None
             row.update(branch=branch(profile.engine, workspace['path']),
                        owner=owner if owner and not owner.get('released') else None,
-                       tasks=[profile.inspect_run(r, s) for r, s in profile.runs(workspace)])
+                       tasks=[profile.inspect_run(r, s) for r, s in profile.runs(workspace)] if row['registered'] else [],
+                       dirty_files=len(profile.engine.git(workspace['path'], 'status', '--porcelain=v1').decode().splitlines()))
         except (ValueError, OSError, subprocess.CalledProcessError) as error:
             row['unavailable'] = str(error)
         result['workspaces'].append(row)
@@ -370,7 +486,6 @@ def claim(profile, run, state):
 
 
 def start(profile):
-    profile.require_workspace()
     if profile.args.invocation != 'bankai':
         raise ValueError('Only an explicit Bankai invocation starts execution')
     contract = profile.engine.read(profile.args.contract)
@@ -379,20 +494,20 @@ def start(profile):
     check = profile.engine.preflight(profile.repo, profile.args.skill_root, required)
     if not check['ok']:
         raise ValueError('Required dependencies unavailable: ' + json.dumps(check))
+    profile.register(apply=True)
     with profile.engine.task_lock(profile.owner_path().parent):
         old = profile.owner()
         if old and not old.get('released'):
             raise ValueError('Workspace already has a writer; explicitly continue or reconcile it')
         args = SimpleNamespace(repo=str(profile.repo), skill_root=profile.args.skill_root,
-                               profile='cowork', require_skill=required, dependencies_checked=True,
-                               project_name=None, project_file=None,
-                               root=str(profile.root / 'ultra-produce'), leader=profile.args.session,
+                               require_skill=required, dependencies_checked=True,
+                               root=str(profile.root), leader=profile.args.session,
                                goal=contract['goal'])
         run = profile.engine.create_run(args)
         if not isinstance(run, Path):
             raise ValueError('Required dependencies are unavailable')
         state = profile.engine.read(run / 'state.json')
-        state.update(workspace_id=profile.workspace['id'], sessions=[], invocation='bankai', cowork_profile_version=1)
+        state.update(workspace_id=profile.workspace['id'], sessions=[], invocation='bankai', bankai_version=1)
         (run / 'contracts').mkdir()
         contract_path = run / 'contracts/v0001.json'
         profile.engine.write(contract_path, contract)
@@ -503,13 +618,13 @@ def complete_step(profile, run):
         profile.engine.evidence_hashes(evidence)
         result.setdefault('artifacts', []).extend(evidence)
     for check in step.get('checks', []):
-        import cowork_actions
+        import actions
         action = run / 'actions' / profile.engine.safe_id(check['id'])
         receipt = profile.engine.read(action / 'result.json')
         intent = profile.engine.read(action / 'intent.json')
         if (receipt.get('exit_code') != 0 or not receipt.get('valid') or receipt['after']['content'] != current['content']
                 or intent.get('argv') != check['argv'] or receipt.get('output_hash') != digest(receipt['output'])
-                or receipt.get('runtime') != cowork_actions.runtime_inputs(profile.repo, check['argv'], check)):
+                or receipt.get('runtime') != actions.runtime_inputs(profile.repo, check['argv'], check)):
             raise ValueError(f'Check is failed, stale, or not the required command: {check["id"]}')
         result.setdefault('artifacts', []).extend([str(action / 'intent.json'), str(action / 'result.json'), receipt['output']])
     if not result.get('artifacts'):
@@ -623,7 +738,9 @@ def parser():
     root.add_argument('--skill-root', action='append', default=[])
     commands = root.add_subparsers(dest='command', required=True)
     view = commands.add_parser('status')
-    view.add_argument('scope', nargs='?', default='all', choices=('current', 'all'))
+    view.add_argument('scope', nargs='?', choices=('current', 'all'))
+    registration = commands.add_parser('register')
+    registration.add_argument('--apply', action='store_true')
     begin = commands.add_parser('start')
     begin.add_argument('--invocation', choices=('bankai',), required=True)
     begin.add_argument('--contract', required=True)
@@ -646,8 +763,8 @@ def parser():
     done.add_argument('--result', required=True)
     releasing = commands.add_parser('release')
     releasing.add_argument('--reason', choices=('handover', 'paused'), default='handover')
-    import cowork_actions
-    cowork_actions.add_arguments(commands)
+    import actions
+    actions.add_arguments(commands)
     return root
 
 
@@ -655,7 +772,9 @@ def main(arguments, engine):
     args = parser().parse_args(arguments)
     try:
         profile = Profile(engine, args)
-        if args.command == 'status':
+        if args.command == 'register':
+            result = profile.register(args.apply)
+        elif args.command == 'status':
             result = status(profile)
         else:
             if not args.session.strip():
@@ -672,8 +791,8 @@ def main(arguments, engine):
                     if args.command in handlers:
                         result = handlers[args.command](profile, run)
                     else:
-                        import cowork_actions
-                        result = cowork_actions.execute(profile, run)
+                        import actions
+                        result = actions.execute(profile, run)
         print(json.dumps(result, ensure_ascii=True, indent=2))
         if args.command == 'check' and not result.get('valid'):
             return 2

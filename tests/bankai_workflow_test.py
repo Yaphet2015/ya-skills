@@ -17,23 +17,23 @@ class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='bankai-test-')
         self.base = Path(self.temp.name).resolve()
-        self.repo = self.base / 'clone1'
-        self.other = self.base / 'clone2'
-        self.root = self.base / '.fleet'
+        self.repo = self.base / 'repo-one'
+        self.other = self.base / 'repo-two'
+        self.root = self.base / 'state'
         for repo in (self.repo, self.other):
             repo.mkdir()
             self.git(repo, 'init', '-q')
             self.git(repo, 'config', 'user.email', 'test@example.invalid')
             self.git(repo, 'config', 'user.name', 'Workflow Test')
             self.git(repo, 'config', 'core.hooksPath', '/dev/null')
-            self.git(repo, 'remote', 'add', 'origin', 'https://example.invalid/cowork.git')
-            (repo / 'package.json').write_text('{"name":"CoworkFixture"}\n')
+            self.git(repo, 'remote', 'add', 'origin', 'https://example.invalid/workflow.git')
+            (repo / 'package.json').write_text('{"name":"RepositoryFixture"}\n')
             (repo / 'source.txt').write_text('original\n')
             self.git(repo, 'add', '.')
             self.git(repo, 'commit', '-qm', 'Initial fixture')
         self.root.mkdir()
         self.write(self.root / 'workspaces.json', {'version': 1, 'workspaces': [
-            {'id': str(i), 'path': str(repo), 'origin': 'https://example.invalid/cowork', 'project': 'CoworkFixture'}
+            {'id': str(i), 'path': str(repo), 'git_dir': str((repo / '.git').resolve()), 'project': repo.name}
             for i, repo in enumerate((self.repo, self.other))]})
         self.helper = ENGINE
         self.run_id = self.token = None
@@ -60,7 +60,7 @@ class WorkflowTests(unittest.TestCase):
         return str(path)
 
     def call(self, *args, expected=0, session=None, repo=None):
-        command = [sys.executable, '-B', str(self.helper), 'cowork', '--repo', str(repo or self.repo),
+        command = [sys.executable, '-B', str(self.helper), '--repo', str(repo or self.repo),
                    '--root', str(self.root), '--session', session or self.session]
         if self.run_id:
             command += ['--run', self.run_id]
@@ -106,17 +106,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(current['workspaces']), 1)
         self.assertEqual(len(self.call('status', 'all')['workspaces']), 2)
         self.assertEqual(self.tree(), before)
-        self.assertFalse((self.root / 'ultra-produce').exists())
+        self.assertFalse((self.root / 'logs').exists())
 
-    def test_current_does_not_query_missing_other_clone(self):
+    def test_current_does_not_query_missing_other_repository(self):
         self.git(self.other, 'remote', 'remove', 'origin')
+        import shutil
+        shutil.rmtree(self.other / '.git')
         current = self.call('status', 'current')
         self.assertNotIn('unavailable', current['workspaces'][0])
         all_rows = self.call('status', 'all')['workspaces']
         self.assertIn('unavailable', all_rows[1])
 
     def test_unregistered_same_named_repo_does_not_create_runtime(self):
-        path = self.base / 'unregistered/clone1'
+        path = self.base / 'unregistered/repo-one'
         path.mkdir(parents=True)
         before = self.tree()
         self.assertEqual(self.call('status', repo=path)['registration'], 'not registered')
@@ -126,7 +128,7 @@ class WorkflowTests(unittest.TestCase):
     def test_declared_skills_are_required_but_unrelated_skills_are_not(self):
         self.contract['steps'][0]['skills'] = ['a-skill-that-is-not-installed']
         self.call('start', '--invocation', 'bankai', '--contract', self.write(self.base / 'c.json', self.contract), expected=2)
-        self.assertFalse((self.root / 'ultra-produce/logs').exists())
+        self.assertFalse((self.root / 'logs').exists())
 
     def test_one_writer_and_generation_fences_old_owner(self):
         self.start()
@@ -249,8 +251,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((self.repo / 'user.bin').read_bytes(), b'\x00\x01user')
 
     def test_concurrent_starts_admit_only_one_writer(self):
+        (self.root / 'workspaces.json').unlink()
         path = self.write(self.base / 'contract.json', self.contract)
-        processes = [subprocess.Popen([sys.executable, '-B', str(ENGINE), 'cowork', '--repo', str(self.repo),
+        processes = [subprocess.Popen([sys.executable, '-B', str(ENGINE), '--repo', str(self.repo),
                                        '--root', str(self.root), '--session', session, 'start',
                                        '--invocation', 'bankai', '--contract', path],
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -258,7 +261,7 @@ class WorkflowTests(unittest.TestCase):
         for process in processes:
             process.communicate(timeout=20)
         self.assertEqual(sorted(p.returncode for p in processes), [0, 2])
-        self.assertEqual(len(list((self.root / 'ultra-produce/logs').glob('*/state.json'))), 1)
+        self.assertEqual(len(list((self.root / 'logs').glob('*/state.json'))), 1)
 
     def test_staging_only_preserves_materialized_inputs(self):
         self.start()
@@ -285,74 +288,51 @@ class WorkflowTests(unittest.TestCase):
         expected = self.write(self.base / 'expected.json', {'parent': 'anything', 'tree': 'anything'})
         self.call('begin-action', '--id', 'unauthorized', '--kind', 'commit', '--expected', expected, expected=2)
 
-    def test_installer_is_idempotent_and_preserves_unrelated_instructions(self):
+    def test_registration_is_idempotent_and_preserves_unrelated_repositories(self):
         for repo in (self.repo, self.other):
-            (repo / 'AGENTS.md').write_text('Existing project instructions.\n')
-        command = [sys.executable, '-B', str(BUILD / 'bankai/scripts/cowork_install.py'), '--skills', str(self.root / 'skills'),
-                   '--root', str(self.root), '--repo', str(self.repo), '--repo', str(self.other)]
-        preview = subprocess.run(command, capture_output=True, text=True)
-        self.assertEqual(preview.returncode, 0, preview.stderr)
-        self.assertFalse((self.root / 'skills').exists())
-        first = subprocess.run([*command, '--apply'], capture_output=True, text=True)
-        self.assertEqual(first.returncode, 0, first.stderr)
+            (repo / 'AGENTS.md').write_text('Existing instructions.\n')
         before = self.tree()
-        second = subprocess.run([*command, '--apply'], capture_output=True, text=True)
-        self.assertEqual(second.returncode, 0, second.stderr)
-        self.assertEqual(before, self.tree())
-        text = (self.repo / 'AGENTS.md').read_text()
-        self.assertEqual(text, 'Existing project instructions.\n')
-        for repo in (self.repo, self.other):
-            for folder in ('.agents/skills', '.logoscode/skills'):
-                for name in ('bankai', 'stage'):
-                    link = repo / folder / name
-                    self.assertTrue(link.is_symlink())
-                    self.assertTrue(link.resolve().is_relative_to(self.root / 'skills'))
-                    self.git(repo, 'check-ignore', str(link))
-            self.assertNotIn('.agents/', self.git(repo, 'status', '--short'))
-        removed = subprocess.run([sys.executable, '-B', str(BUILD / 'bankai/scripts/cowork_install.py'), '--root', str(self.root), '--uninstall'],
-                                 capture_output=True, text=True)
-        self.assertEqual(removed.returncode, 0, removed.stderr)
-        self.assertEqual((self.repo / 'AGENTS.md').read_text(), 'Existing project instructions.\n')
+        self.call('register')
+        self.assertEqual(self.tree(), before)
+        self.call('register', '--apply')
+        applied = self.tree()
+        self.call('register', '--apply')
+        self.assertEqual(self.tree(), applied)
+        self.assertEqual(len(json.loads((self.root / 'workspaces.json').read_text())['workspaces']), 2)
+        self.assertEqual((self.repo / 'AGENTS.md').read_text(), 'Existing instructions.\n')
+        self.assertFalse((self.repo / '.agents').exists())
+
 
     def test_bankai_rejects_the_deprecated_default_workflow(self):
         result = subprocess.run([sys.executable, '-B', str(ENGINE), 'init', '--repo', str(self.repo)],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
-        self.assertIn('Bankai interface', result.stderr)
+        self.assertIn('invalid choice', result.stderr)
         self.assertEqual(self.tree().keys(), {'workspaces.json'})
 
     def test_standalone_bankai_installs_and_freezes_every_runtime_dependency(self):
         import shutil
         bundle = self.base / 'standalone'
         shutil.copytree(BUILD / 'bankai', bundle / 'bankai')
-        installer = bundle / 'bankai/scripts/cowork_install.py'
-        result = subprocess.run([sys.executable, '-B', str(installer), '--root', str(self.root),
-                                 '--repo', str(self.repo), '--repo', str(self.other), '--apply'],
-                                capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        installed = self.repo / '.agents/skills/bankai'
-        self.assertTrue((installed / 'scripts/pipeline.py').is_file())
-        self.assertFalse((self.repo / '.agents/skills/stage').exists())
-        self.assertFalse((self.root / 'skills/ultra-produce').exists())
-        self.helper = installed / 'scripts/pipeline.py'
+        self.helper = bundle / 'bankai/scripts/pipeline.py'
         self.start()
         frozen = self.helper.parent.parent
         self.assertEqual(frozen.name, 'skill')
-        self.assertTrue((frozen / 'references/cowork.md').is_file())
-        shutil.rmtree(self.root / 'skills')
+        self.assertTrue((frozen / 'references/execution.md').is_file())
         shutil.rmtree(bundle)
         self.deliver('build')
         self.assertEqual(self.call('next')['step']['id'], 'verify')
 
-    def test_current_never_reads_other_clones_runtime_records(self):
+
+    def test_current_never_reads_other_repositorys_runtime_records(self):
         self.start()
-        command = [sys.executable, '-B', str(ENGINE), 'cowork', '--repo', str(self.other),
+        command = [sys.executable, '-B', str(ENGINE), '--repo', str(self.other),
                    '--root', str(self.root), '--session', 'other-owner', 'start', '--invocation', 'bankai',
                    '--contract', self.write(self.base / 'other-contract.json', self.contract)]
         created = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(created.returncode, 0, created.stderr + created.stdout)
         other_run = Path(json.loads(created.stdout)['run'])
-        (other_run / 'state.json').write_text('intentionally corrupt other-clone state')
+        (other_run / 'state.json').write_text('intentionally corrupt other-repository state')
         self.assertEqual(self.call('status', 'current')['current']['run_id'], self.run_id)
         all_rows = self.call('status', 'all')['workspaces']
         self.assertIn('unavailable', all_rows[1])
@@ -432,27 +412,163 @@ class WorkflowTests(unittest.TestCase):
         self.token = resumed['token']
         self.assertEqual(self.call('next')['step']['id'], 'build')
 
-    def test_installer_rejects_globally_discoverable_destination(self):
-        command = [sys.executable, '-B', str(BUILD / 'bankai/scripts/cowork_install.py'),
-                   '--skills', str(self.base / 'user-skills'), '--root', str(self.root),
-                   '--repo', str(self.repo), '--repo', str(self.other), '--apply']
-        result = subprocess.run(command, capture_output=True, text=True)
+    def test_state_inside_repository_is_rejected(self):
+        result = subprocess.run([sys.executable, '-B', str(ENGINE), '--root', str(self.repo / 'state'),
+                                 '--repo', str(self.repo), 'register', '--apply'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
-        self.assertFalse((self.base / 'user-skills').exists())
+        self.assertFalse((self.repo / 'state').exists())
 
-    def test_local_migration_removes_only_the_owned_legacy_instruction_block(self):
-        import runpy
-        installer = BUILD / 'bankai/scripts/cowork_install.py'
-        legacy = runpy.run_path(str(installer))['ENTRY']
-        original = 'Original instructions.\n'
-        later = '\nAdditional user instruction.\n'
-        (self.repo / 'AGENTS.md').write_text(original + '\n' + legacy + '\n' + later)
-        command = [sys.executable, '-B', str(installer), '--root', str(self.root),
-                   '--repo', str(self.repo), '--repo', str(self.other), '--apply']
-        result = subprocess.run(command, capture_output=True, text=True)
+
+    def test_first_start_registers_plain_repository_without_remote_or_manifest(self):
+        self.git(self.repo, 'remote', 'remove', 'origin')
+        (self.repo / 'package.json').unlink()
+        (self.root / 'workspaces.json').unlink()
+        before = self.tree()
+        self.call('status')
+        self.call('register')
+        self.assertEqual(self.tree(), before)
+        self.start()
+        self.assertEqual(len(self.call('status')['workspaces']), 1)
+        self.deliver('build')
+        self.assertEqual(self.call('next')['step']['id'], 'verify')
+
+
+
+    def test_unrelated_repositories_and_worktrees_have_independent_owners(self):
+        self.start()
+        self.call('register', '--apply', repo=self.other)
+        contract = self.write(self.base / 'second-contract.json', self.contract)
+        command = [sys.executable, '-B', str(ENGINE), '--root', str(self.root), '--repo', str(self.other),
+                   '--session', 'second-session', 'start', '--invocation', 'bankai', '--contract', contract]
+        other = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(other.returncode, 0, other.stdout + other.stderr)
+        self.assertNotEqual(json.loads(other.stdout)['run_id'], self.run_id)
+        worktree = self.base / 'worktree'
+        self.git(self.repo, 'worktree', 'add', '-qb', 'test-worktree', str(worktree))
+        self.call('register', '--apply', repo=worktree)
+        rows = self.call('status', 'all')['workspaces']
+        self.assertEqual(len(rows), 3)
+        manifest = json.loads((self.root / 'workspaces.json').read_text())['workspaces']
+        self.assertEqual(len({w['git_dir'] for w in manifest}), 3)
+
+    def test_monorepo_manifest_names_and_remote_changes_do_not_change_identity(self):
+        (self.repo / 'Cargo.toml').write_text('[package]\nname = "different-name"\n')
+        (self.repo / 'pyproject.toml').write_text('[project]\nname = "another-name"\n')
+        self.git(self.repo, 'remote', 'set-url', 'origin', 'https://example.invalid/another.git')
+        self.start()
+        self.assertEqual(self.call('status')['current']['run_id'], self.run_id)
+
+    def test_new_repository_can_start_before_first_commit(self):
+        path = self.base / 'empty'
+        path.mkdir()
+        self.git(path, 'init', '-q')
+        contract = self.write(self.base / 'empty-contract.json', self.contract)
+        result = subprocess.run([sys.executable, '-B', str(ENGINE), '--repo', str(path), '--root', str(self.root),
+                                 '--session', 'empty-session', 'start', '--invocation', 'bankai', '--contract', contract],
+                                capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual((self.repo / 'AGENTS.md').read_text(), original + later)
-        self.assertFalse((self.other / 'AGENTS.md').exists())
+
+
+    def test_nested_directory_resolves_to_the_registered_repository(self):
+        nested = self.repo / 'src/deep'
+        nested.mkdir(parents=True)
+        before = self.tree()
+        rows = self.call('status', repo=nested)['workspaces']
+        self.assertEqual(rows[0]['path'], str(self.repo))
+        self.assertEqual(self.tree(), before)
+
+    def test_submodule_content_changes_invalidate_snapshots_even_when_already_dirty(self):
+        self.git(self.repo, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', str(self.other), 'module')
+        self.git(self.repo, 'commit', '-qam', 'Add submodule fixture')
+        self.start()
+        source = self.repo / 'module/source.txt'
+        source.write_text('first modification\n')
+        first = self.source_snapshot()['content']
+        source.write_text('second modification\n')
+        self.assertNotEqual(self.source_snapshot()['content'], first)
+
+
+    def test_default_state_is_external_and_queries_do_not_create_it(self):
+        home = self.base / 'home'
+        home.mkdir()
+        argv = [str(ENGINE), '--repo', str(self.repo), 'status']
+        script = ('import pathlib,runpy,sys; from unittest.mock import patch; '
+                  + 'sys.path.insert(0,' + repr(str(ENGINE.parent)) + '); sys.argv=' + repr(argv) + '; '
+                  + 'context=patch.object(pathlib.Path,"home",return_value=pathlib.Path(' + repr(str(home)) + ')); '
+                  + 'context.start(); runpy.run_path(' + repr(str(ENGINE)) + ',run_name="__main__")')
+        result = subprocess.run([sys.executable, '-B', '-c', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)['registration'], 'not registered')
+        self.assertEqual(list(home.iterdir()), [])
+        argv = [str(ENGINE), '--repo', str(self.repo), 'register', '--apply']
+        script = script.replace(repr([str(ENGINE), '--repo', str(self.repo), 'status']), repr(argv))
+        registered = subprocess.run([sys.executable, '-B', '-c', script], capture_output=True, text=True)
+        self.assertEqual(registered.returncode, 0, registered.stdout + registered.stderr)
+        self.assertTrue((home / '.ya-skills/bankai/workspaces.json').is_file())
+        self.assertFalse((self.repo / '.bankai').exists())
+
+
+    def test_default_query_reports_matching_siblings_without_registering_them(self):
+        self.git(self.repo, 'remote', 'set-url', 'origin', 'git@example.invalid:team/project.git')
+        self.git(self.other, 'remote', 'set-url', 'origin', 'https://example.invalid/team/project')
+        registry = json.loads((self.root / 'workspaces.json').read_text())
+        registry['workspaces'] = registry['workspaces'][:1]
+        self.write(self.root / 'workspaces.json', registry)
+        (self.other / 'source.txt').write_text('pending work\n')
+        before = self.tree()
+        result = self.call('status')
+        self.assertEqual([w['path'] for w in result['workspaces']], [str(self.repo), str(self.other)])
+        other = result['workspaces'][1]
+        self.assertFalse(other['registered'])
+        self.assertEqual(other['match'], 'same-origin')
+        self.assertEqual(other['dirty_files'], 1)
+        self.assertEqual(other['tasks'], [])
+        self.assertEqual(self.tree(), before)
+        current = self.call('status', 'current')
+        self.assertEqual(len(current['workspaces']), 1)
+        self.assertNotIn('discovery', current)
+
+    def test_default_query_excludes_different_projects_nested_repos_and_links(self):
+        import shutil
+        self.git(self.other, 'remote', 'set-url', 'origin', 'https://example.invalid/different.git')
+        nested = self.base / 'container/nested'
+        nested.parent.mkdir()
+        self.git(self.base, 'clone', '-q', str(self.repo), str(nested))
+        linked = self.base / 'linked'
+        linked.symlink_to(self.other, target_is_directory=True)
+        self.assertEqual(len(self.call('status')['workspaces']), 1)
+        self.assertEqual(len(self.call('status', 'all')['workspaces']), 2)
+        # Equal folder labels and source files never override different origins.
+        self.assertEqual((self.other / 'source.txt').read_bytes(), (self.repo / 'source.txt').read_bytes())
+        self.assertEqual(self.call('status')['workspaces'][0]['path'], str(self.repo))
+
+    def test_default_query_discovers_worktrees_without_remote_or_registration(self):
+        self.git(self.repo, 'remote', 'remove', 'origin')
+        worktree = self.base / 'independent-label'
+        self.git(self.repo, 'worktree', 'add', '-qb', 'peer-branch', str(worktree))
+        (self.root / 'workspaces.json').unlink()
+        before = self.tree()
+        result = self.call('status')
+        self.assertEqual(len(result['workspaces']), 2)
+        self.assertTrue(result['workspaces'][0]['current'])
+        self.assertFalse(result['workspaces'][1]['current'])
+        self.assertEqual(result['workspaces'][1]['match'], 'shared-git-directory')
+        self.assertEqual(result['workspaces'][1]['branch'], 'peer-branch')
+        self.assertEqual(self.tree(), before)
+
+    def test_default_query_recognizes_local_clone_and_handles_broken_neighbors(self):
+        clone = self.base / 'arbitrary-label'
+        self.git(self.base, 'clone', '-q', str(self.repo), str(clone))
+        broken = self.base / 'broken'
+        broken.mkdir()
+        (broken / '.git').write_text('gitdir: missing\n')
+        result = self.call('status')
+        row = next(w for w in result['workspaces'] if w['path'] == str(clone))
+        self.assertEqual(row['match'], 'local-clone-origin')
+        self.assertTrue(result['discovery']['unavailable'])
+        self.git(clone, 'remote', 'set-url', 'origin', 'ssh://git@example.invalid:443/team/project.git')
+        self.git(self.repo, 'remote', 'set-url', 'origin', 'https://example.invalid/team/project.git')
+        self.assertNotIn(str(clone), [w['path'] for w in self.call('status')['workspaces']])
 
 
 if __name__ == '__main__':

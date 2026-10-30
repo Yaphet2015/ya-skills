@@ -46,47 +46,9 @@ def path_segment(value):
     return quote(value, safe='')
 
 
-def project_identity(repo, project_name=None, project_file=None):
-    if project_name is not None:
-        path_segment(project_name)
-        return project_name, 'explicit --project-name'
-    selected = Path(project_file) if project_file else None
-    if selected and not selected.is_absolute():
-        selected = repo / selected
-    files = [selected.resolve()] if selected else [repo / name for name in
-            ('package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod')]
-    candidates = []
-    for path in files:
-        path.relative_to(repo)
-        if not path.is_file():
-            if project_file:
-                raise ValueError('Project manifest does not exist')
-            continue
-        name = None
-        if path.name == 'package.json':
-            name = read(path).get('name')
-        elif path.name in ('pyproject.toml', 'Cargo.toml'):
-            try:
-                import tomllib
-            except ImportError as error:
-                raise ValueError('TOML project names require Python 3.11+; alternatively supply --project-name') from error
-            data = tomllib.loads(path.read_text())
-            if path.name == 'pyproject.toml':
-                name = data.get('project', {}).get('name') or data.get('tool', {}).get('poetry', {}).get('name')
-            else:
-                name = data.get('package', {}).get('name')
-        elif path.name == 'go.mod':
-            match = re.search(r'^\s*module\s+("[^"\n]+"|[^\s/][^\s]*)', path.read_text(), re.MULTILINE)
-            if match:
-                name = match.group(1).strip('"')
-        if name is not None:
-            path_segment(name)
-            candidates.append((name, str(path)))
-    if not candidates:
-        raise ValueError('No declared project name; supply --project-name or --project-file')
-    if len({name for name, _ in candidates}) > 1:
-        raise ValueError('Ambiguous project names; supply --project-name or --project-file')
-    return candidates[0]
+def project_identity(repo):
+    # A display label is independent of language manifests and repository identity.
+    return Path(repo).name or 'repository', 'git root'
 
 
 def output_path(run, raw):
@@ -121,7 +83,7 @@ def create_run(args):
         return 2
     if not args.dependencies_checked:
         raise ValueError('Complete documented dependency and native-subagent capability checks before init')
-    project, source = project_identity(repo, args.project_name, args.project_file)
+    project, source = project_identity(repo)
     try:
         branch = git(repo, 'symbolic-ref', '--quiet', '--short', 'HEAD').decode().strip()
     except subprocess.CalledProcessError:
@@ -149,7 +111,7 @@ def create_run(args):
           'instruction_paths': instruction_paths, 'leader': args.leader, 'goal': args.goal,
           'baseline': baseline, 'preflight': check, 'protocol_version': 3,
           'helper': str(run / 'skill/scripts/pipeline.py')}
-    state['profile'] = 'cowork'
+    state['profile'] = 'bankai'
     write(run / 'state.json', state)
     return run
 
@@ -160,8 +122,9 @@ def git(repo, *args):
 
 def snapshot(repo):
     """Include staged, unstaged and untracked content, including dirty baseline."""
+    head = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--verify', 'HEAD'], capture_output=True).stdout.strip()
     status = git(repo, 'status', '--porcelain=v1', '-z')
-    digest = hashlib.sha256(git(repo, 'rev-parse', 'HEAD'))
+    digest = hashlib.sha256(head)
     digest.update(status)
     digest.update(git(repo, 'diff', '--cached', '--binary'))
     digest.update(git(repo, 'diff', '--binary'))
@@ -170,7 +133,7 @@ def snapshot(repo):
             path = Path(repo) / os.fsdecode(raw)
             digest.update(raw)
             digest.update(os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes())
-    return {'head': git(repo, 'rev-parse', 'HEAD').decode().strip(),
+    return {'head': head.decode(),
             'status': status.decode(errors='replace'), 'fingerprint': digest.hexdigest()}
 
 
@@ -595,7 +558,7 @@ def prepare(run, task_id, role, brief, retry=False, unit=None, after=(), parent_
                       'Do not edit product code, commit, rerun tests or overwrite prior receipts/evidence.\n')
         if recovery:
             brief += f'\nRestore all working context from {attempt / "recovery.json"} before proceeding.\n'
-        brief += (f'\nRead Cowork contract: {run / "skill/references/cowork.md"}\n'
+        brief += (f'\nRead execution contract: {run / "skill/references/execution.md"}\n'
                   f'Run: {run}\nAttempt: {attempt}\n'
                   'The current agent may execute a bounded task. Preserve user changes. '
                   'Check the workspace claim before edits, commands or delegation. '
@@ -745,11 +708,8 @@ def brief(run, attempt, offset=0, question_id=None):
 
 
 def main():
-    import cowork
-    if sys.argv[1:2] != ['cowork']:
-        print('Use the Bankai interface: pipeline.py cowork --help', file=sys.stderr)
-        return 2
-    return cowork.main(sys.argv[2:], sys.modules[__name__])
+    import workflow
+    return workflow.main(sys.argv[1:], sys.modules[__name__])
 
 
 if __name__ == '__main__':

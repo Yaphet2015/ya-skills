@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 test("Bankai recovery, ownership and local registration stay desktop-free", () => {
-  const result = Bun.spawnSync(["python3", "-B", "tests/cowork_test.py"], {
+  const result = Bun.spawnSync(["python3", "-B", "tests/bankai_workflow_test.py"], {
     cwd: resolve("."),
     env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
   });
@@ -25,11 +25,11 @@ test("Bankai installs independently and Stage reuses its runnable helper", async
     expect(stage.installed.map((skill) => skill.name)).toEqual(["bankai", "stage"]);
     expect(await Bun.file(join(root, ".agents/skills/ultra-produce/SKILL.md")).exists()).toBe(false);
     const helper = join(root, ".agents/skills/bankai/scripts/pipeline.py");
-    const help = Bun.spawnSync(["python3", "-B", helper, "cowork", "--help"]);
+    const help = Bun.spawnSync(["python3", "-B", helper, "--help"]);
     expect(help.exitCode).toBe(0);
     expect(help.stdout.toString()).toContain("Explicit Bankai execution");
     const runtime = `${root}-runtime`;
-    const status = Bun.spawnSync(["python3", "-B", helper, "cowork", "--repo", root, "--root", runtime, "status", "current"]);
+    const status = Bun.spawnSync(["python3", "-B", helper, "--repo", root, "--root", runtime, "status", "current"]);
     expect(status.exitCode).toBe(0);
     expect(JSON.parse(status.stdout.toString()).registration).toBe("not registered");
     expect(await Bun.file(join(runtime, "workspaces.json")).exists()).toBe(false);
