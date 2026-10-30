@@ -1,0 +1,6 @@
+interface:
+  display_name: "Bankai"
+  short_description: "Launch and restore the registered Cowork workflow"
+  default_prompt: "Use $bankai to implement this requirement and preserve recovery evidence."
+policy:
+  allow_implicit_invocation: false

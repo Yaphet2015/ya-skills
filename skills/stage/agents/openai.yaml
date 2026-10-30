@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stage"
+  short_description: "Inspect Cowork tasks, sessions and review evidence"
+  default_prompt: "Use $stage all to show the current task and four registered clones, with sourced session candidates and review links."
