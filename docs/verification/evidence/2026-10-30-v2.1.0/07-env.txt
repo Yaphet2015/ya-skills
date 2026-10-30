@@ -1,0 +1,26 @@
+bun test v1.4.0 (34cbb9a40)
+
+tests/computer-e2e-release.test.ts:
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > packaged executable has a valid code signature [32.33ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > release artifacts must exist when YK_RELEASE_TESTS=1 [0.07ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > install + run + history + report through the compiled yk [1621.50ms]
+(pass) packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH) > external TS relative imports work; hostile package.json does not stop the run [241.04ms]
+(pass) packaged zoom crops local evidence with the native runtime absent [743.89ms]
+
+tests/computer-session-release.test.ts:
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > release artifacts exist and include the generated skill api [0.05ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the packaged skill references match the generated api [0.07ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > help output lists the agentic actions and executes no project scripts [99.31ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > invalid exec requests fail cleanly without native load [100.04ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the internal exec worker completes pure JS + state + log against a test RPC peer [102.29ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > the compiled exec loop proves body readiness before TERM/KILL cleanup [2274.26ms]
+(pass) packaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH) > same exec request-id replays nothing through a re-invoked CLI [201.39ms]
+
+tests/computer-lane-release-packaging.test.ts:
+(pass) release lane: packaged live fake session > deduplicates a live request through a separate packaged driver process [321.69ms]
+(pass) release lane: packaged live fake session > a symlinked packaged executable self-spawns its driver worker [318.52ms]
+
+ 14 pass
+ 0 fail
+ 81 expect() calls
+Ran 14 tests across 3 files. [6.12s]

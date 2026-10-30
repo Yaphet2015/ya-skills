@@ -1,0 +1,1319 @@
+[0m[2m[35m$[0m [2m[1mbun test[0m
+[0m[1mbun test [0m[2mv1.4.0 (34cbb9a40)[0m
+[0m
+tests/computer-ax-form-runner.test.ts:
+(node:99125) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `bun --trace-warnings ...` to show where the warning was created)
+[0m[32m✓[0m [0mAX form acceptance runner guard[2m >[0m[1m default invocation never enables native work[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0mAX form acceptance runner guard[2m >[0m[1m native work requires an explicit isolated desktop label[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mAX form acceptance runner guard[2m >[0m[1m parses the explicit native flow without importing or starting a driver[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mAX form acceptance runner guard[2m >[0m[1m rejects unknown flags and unsafe timeout values before native work[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mAX form acceptance runner guard[2m >[0m[1m refuses an existing artifact directory without changing it[0m [0m[2m[1.85ms[0m[2m][0m
+[0m[32m✓[0m [0mAX form observation acceptance[2m >[0m[1m accepts the real equal-count incomplete AX projection[0m [0m[2m[0.72ms[0m[2m][0m
+[0m[32m✓[0m [0mAX form observation acceptance[2m >[0m[1m rejects degraded, explicitly truncated, and unequal-count views[0m [0m[2m[0.06ms[0m[2m][0m
+[0m
+tests/computer-e2e-cli.test.ts:
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m files, params, out-dir, timeout, require-version parse cleanly[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m defaults: out-dir .computer-e2e/runs, timeout 900000, no params[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m run without files is an input error[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m duplicate param keys are rejected[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m params need key=value and a non-empty key[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m unknown flags are rejected before anything runs[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m single-value flags given twice are rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m the budget must be a positive integer[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m missing values are input errors, not consumed positionals[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs run[2m >[0m[1m flags after -- are still flags; bare dash tokens are files (shell expanded globs arrive as paths)[0m
+[0m[32m✓[0m [0mparseE2EArgs history/report[2m >[0m[1m history defaults and --limit[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs history/report[2m >[0m[1m history rejects positionals and bad limits[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs history/report[2m >[0m[1m report takes exactly one run directory[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mparseE2EArgs history/report[2m >[0m[1m unknown actions are rejected[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mapi.d.ts generation[2m >[0m[1m regenerating produces exactly the committed reference (no drift, no workspace mutation)[0m [0m[2m[[1m11.64ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease pipelines[2m >[0m[1m gates run in the fixed order (asserted by position, not just presence)[0m [0m[2m[0.48ms[0m[2m][0m
+[0m
+tests/video-transcript.test.ts:
+[0m[32m✓[0m[0m[1m video-transcript script parses WebVTT captions and removes rolling overlap[0m [0m[2m[[1m50.04ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m video-transcript script writes Markdown output files[0m [0m[2m[[1m45.08ms[0m[2m][0m
+[0m
+tests/computer-target-lease.test.ts:
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m a live owner blocks a second acquirer (same-process simulates app-level lock)[0m [0m[2m[9.12ms[0m[2m][0m
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m session and one-shot lease users share the same app-level ownership[0m [0m[2m[9.72ms[0m[2m][0m
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m a semantically corrupt lease is blocked instead of overwritten[0m [0m[2m[2.81ms[0m[2m][0m
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m a dead owner's lease is reclaimed[0m [0m[2m[6.98ms[0m[2m][0m
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m an alive-but-identity-changed holder reports owner_identity_unknown instead of stealing[0m [0m[2m[6.29ms[0m[2m][0m
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m releasing someone else's lease is a no-op[0m [0m[2m[3.97ms[0m[2m][0m
+[0m[32m✓[0m [0mtarget lease (B3)[2m >[0m[1m two real processes cannot both hold the app lease[0m [0m[2m[[1m106.58ms[0m[2m][0m
+[0m
+tests/computer-runtime.test.ts:
+[0m[32m✓[0m [0mclickUnique (exactly-one delivery)[2m >[0m[1m ambiguity never delivers[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mclickUnique (exactly-one delivery)[2m >[0m[1m zero matches refuses with the description[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mclickUnique (exactly-one delivery)[2m >[0m[1m a match without an elementToken fails instead of clicking undefined[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mclickUnique (exactly-one delivery)[2m >[0m[1m two stale-token refusals stop after exactly two deliveries[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mclickUnique (exactly-one delivery)[2m >[0m[1m non-stale errors stop immediately without retry[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mclickUnique (exactly-one delivery)[2m >[0m[1m a stale refusal in prose (string message, errorCode field absent) is NOT stale[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0melement normalization and privacy[2m >[0m[1m numeric values become strings, nullish stays absent[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0melement normalization and privacy[2m >[0m[1m password field values are dropped from every output path[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mwaitForElements[2m >[0m[1m resolves once a fresh snapshot satisfies the predicate[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m [0mwaitForElements[2m >[0m[1m only degraded_snapshot is a transient miss; other errors throw immediately[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mwaitForElements[2m >[0m[1m degraded snapshots are retried until the deadline, then rethrown[0m [0m[2m[[1m29.93ms[0m[2m][0m
+[0m[32m✓[0m [0mwaitForElements[2m >[0m[1m default poll interval is 500ms[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mwaitForElements[2m >[0m[1m a 60s wait may succeed at t=40s (waitFor is not capped at one 30s op)[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mwaitForElements[2m >[0m[1m timeout uses the injected clock and reports the description[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0msession facade (fake backend)[2m >[0m[1m type/key/scroll ToolResult.isError becomes action_refused and reports not_delivered[0m [0m[2m[1.23ms[0m[2m][0m
+[0m[32m✓[0m [0msession facade (fake backend)[2m >[0m[1m successful actions report delivered and clean results pass through[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0msession facade (fake backend)[2m >[0m[1m click resolves exactly one match through the backend token[0m [0m[2m[0.16ms[0m[2m][0m
+[0m[32m✓[0m [0msession facade (fake backend)[2m >[0m[1m ambiguous click matches never reach the backend click[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0msession facade (fake backend)[2m >[0m[1m windows and snapshot delegate to the backend unchanged[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0msession facade (fake backend)[2m >[0m[1m selectWindow ambiguity stays an error through the shared layer[0m [0m[2m[0.08ms[0m[2m][0m
+[0m
+tests/computer-use-browser-cdp.test.ts:
+[0m[32m✓[0m [0mbrowser CDP helper[2m >[0m[1m lists bounded, projected targets without exposing unrelated fields[0m [0m[2m[1.75ms[0m[2m][0m
+[0m[32m✓[0m [0mbrowser CDP helper[2m >[0m[1m evaluates only the explicitly selected target and returns a compact result[0m [0m[2m[0.46ms[0m[2m][0m
+[0m[32m✓[0m [0mbrowser CDP helper[2m >[0m[1m does not select a target implicitly[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mbrowser CDP helper[2m >[0m[1m fails closed when the discovery body exceeds the output budget[0m [0m[2m[0.30ms[0m[2m][0m
+[0m[32m✓[0m [0mbrowser CDP helper[2m >[0m[1m times out and closes a WebSocket that never opens[0m [0m[2m[[1m21.09ms[0m[2m][0m
+[0m
+tests/computer-observation-store.test.ts:
+[0m[32m✓[0m [0mObservationStore[2m >[0m[1m save + cross-process get round-trips metadata[0m [0m[2m[1.14ms[0m[2m][0m
+[0m[32m✓[0m [0mObservationStore[2m >[0m[1m non-UUID ids and traversal attempts are rejected[0m [0m[2m[0.38ms[0m[2m][0m
+[0m[32m✓[0m [0mObservationStore[2m >[0m[1m invalidate marks only the target's observations dead[0m [0m[2m[1.31ms[0m[2m][0m
+[0m[32m✓[0m [0mObservationStore[2m >[0m[1m missing image file makes an observation unusable[0m [0m[2m[0.61ms[0m[2m][0m
+[0m[32m✓[0m [0mObservationStore[2m >[0m[1m corrupt metadata JSON fails loud instead of returning junk[0m [0m[2m[0.53ms[0m[2m][0m
+[0m[32m✓[0m [0mObservationStore[2m >[0m[1m metadata files are user-private (0600)[0m [0m[2m[0.44ms[0m[2m][0m
+[0m[32m✓[0m [0mframeMatchesObservation (cross-command freshness)[2m >[0m[1m identical geometry + identical PNG bytes match[0m [0m[2m[[1m10.83ms[0m[2m][0m
+[0m[32m✓[0m [0mframeMatchesObservation (cross-command freshness)[2m >[0m[1m window move/resize refuses old coordinates[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m [0mframeMatchesObservation (cross-command freshness)[2m >[0m[1m hash-only callers refuse re-encoded pixels without a fresh artifact[0m [0m[2m[0.40ms[0m[2m][0m
+[0m[32m✓[0m [0mframeMatchesObservation (cross-command freshness)[2m >[0m[1m malformed PNG bytes never satisfy the exact-hash path[0m [0m[2m[0.36ms[0m[2m][0m
+[0m
+tests/computer-use-out-dir-persistence.test.ts:
+[0m[32m✓[0m [0mcomputer-use one-shot observation artifacts[2m >[0m[1m act reads an observation saved by observe in the same --out-dir[0m [0m[2m[[1m35.78ms[0m[2m][0m
+[0m
+tests/computer-lane-runtime-freshness.test.ts:
+[0m[32m✓[0m [0mruntime lane same-epoch freshness[2m >[0m[1m a naturally observed observation can click after same-epoch fresh-frame validation[0m [0m[2m[[1m39.93ms[0m[2m][0m
+[0m
+tests/computer-runtime-ax-value.test.ts:
+[0m[32m✓[0m [0mstrict AX-only setValue[2m >[0m[1m sends only the token and value and requires a confirmed accessibility result[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m [0mstrict AX-only setValue[2m >[0m[1m rejects before native dispatch when the backend has no AX-only operation[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m [0mstrict AX-only setValue[2m >[0m[1m rejects a result without structured AX proof[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mstrict AX-only setValue[2m >[0m[1m poisons the session when the native result reports another route[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m [0mstrict AX-only setValue[2m >[0m[1m rejects an empty token before starting an action[0m [0m[2m[0.06ms[0m[2m][0m
+[0m
+tests/computer-input-isolation.test.ts:
+[0m[32m✓[0m [0minput-isolation fixture gate[2m >[0m[1m the read-only probe reports current fixtures separately from historical evidence[0m [0m[2m[[1m12.09ms[0m[2m][0m
+[0m
+tests/computer-integration-release-loop.test.ts:
+[0m[32m✓[0m [0mrelease integration loop proof helpers[2m >[0m[1m accepts only a body-level readiness frame with the reported child pid[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease integration loop proof helpers[2m >[0m[1m proves an owned TERM-ignoring descendant survives TERM before KILL escalation[0m [0m[2m[[1m448.13ms[0m[2m][0m
+[0m
+tests/computer-conditions.test.ts:
+[0m[32m✓[0m [0mevaluateCondition[2m >[0m[1m element_exists matches by exact label[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m [0mevaluateCondition[2m >[0m[1m element_value requires exactly one match and the exact value[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mevaluateCondition[2m >[0m[1m degraded or truncated AX never satisfies element conditions[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mevaluateCondition[2m >[0m[1m window_exists is true when any channel answered[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mevaluateCondition[2m >[0m[1m focused_element throws unsupported_condition — selected is not focus[0m [0m[2m[0.07ms[0m[2m][0m
+[0m
+tests/computer-lane-runtime-artifacts.test.ts:
+[0m[32m✓[0m [0mruntime lane screenshot privacy[2m >[0m[1m saveScreenshot enforces 0600 on the created artifact[0m [0m[2m[1.00ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane screenshot privacy[2m >[0m[1m existing permissive observation images are repaired before store use[0m [0m[2m[1.21ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane screenshot privacy[2m >[0m[1m copied screenshot paths are private even when the source is permissive[0m [0m[2m[[1m31.85ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane screenshot privacy[2m >[0m[1m resize repairs an existing permissive source and derived path[0m [0m[2m[1.22ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane screenshot privacy[2m >[0m[1m privacy validation fails loudly for a non-file path[0m [0m[2m[0.24ms[0m[2m][0m
+[0m
+tests/computer-integration-native-observation.test.ts:
+[0m[32m✓[0m [0mnative observation deadline/cancellation propagation[2m >[0m[1m per-call observe signal reaches the backend and aborts its wait[0m [0m[2m[0.54ms[0m[2m][0m
+[0m[32m✓[0m [0mnative observation deadline/cancellation propagation[2m >[0m[1m per-call absolute deadline reaches the backend and bounds observation[0m [0m[2m[[1m21.24ms[0m[2m][0m
+[0m
+tests/computer-use-native.test.ts:
+[0m[33m»[2m [0m[2mcompiled yk native (opt-in via YK_CU_NATIVE_TESTS=1)[2m >[0m[2m loads the SDK sidecar in-process from a hostile cwd and reads real apps[0m
+[0m
+tests/computer-observation.test.ts:
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m degraded AX does not degrade the image channel[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m elementsComplete !== true is never reported complete[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m missing screenshot data with includeScreenshot semantics is not usable[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m frameValid=false demotes the image to degraded[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m geometry is only present when the screenshot channel is usable[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m selector filtering preserves total/returned and reports incompleteness[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m zero selector matches does not mean the window is empty[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mprojectObservation (channel projection)[2m >[0m[1m truncated AX is reported as truncated with reason[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.observe (mode control)[2m >[0m[1m ax mode never requests a screenshot[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.observe (mode control)[2m >[0m[1m auto mode with usable AX does not request a screenshot[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.observe (mode control)[2m >[0m[1m auto mode with insufficient AX takes a second frame with the screenshot[0m [0m[2m[[1m30.11ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.observe (mode control)[2m >[0m[1m image mode ignores AX failures entirely[0m [0m[2m[[1m24.34ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.observe (mode control)[2m >[0m[1m permission errors still throw in every mode[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.observe (mode control)[2m >[0m[1m observations carry identity metadata and are persisted for later clicks[0m [0m[2m[[1m22.24ms[0m[2m][0m
+[0m
+tests/pbench-exports.test.ts:
+[0m[32m✓[0m[0m[1m pbench keeps its public package interface stable[0m [0m[2m[0.23ms[0m[2m][0m
+[0m
+tests/pbench-commands.test.ts:
+[0m[32m✓[0m[0m[1m commands delegate manual runs with normalized options[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m commands default reports to Markdown and preserve explicit JSON[0m [0m[2m[0.11ms[0m[2m][0m
+[0m
+tests/bankai.test.ts:
+[0m[32m✓[0m[0m[1m Bankai recovery, ownership and local registration stay desktop-free[0m [0m[2m[[0m[33m37165.69ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m Bankai installs independently and Stage reuses its runnable helper[0m [0m[2m[[1m119.90ms[0m[2m][0m
+[0m
+tests/computer-exec-terminal.test.ts:
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m drains a multi-block terminal frame after the worker exits[0m [0m[2m[[1m183.02ms[0m[2m][0m
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m does not treat an unterminated terminal tail as completion[0m [0m[2m[[1m165.60ms[0m[2m][0m
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m fails closed when the control spool shrinks before EOF[0m [0m[2m[[1m265.51ms[0m[2m][0m
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m terminal receipt closes admission for every queued independent RPC[0m [0m[2m[[1m168.62ms[0m[2m][0m
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m keeps a dispatched RPC result and rejects only later queued work[0m [0m[2m[[1m368.73ms[0m[2m][0m
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m keeps an unawaited observe terminal reply decodable[0m [0m[2m[[1m172.86ms[0m[2m][0m
+[0m[32m✓[0m [0mexec terminal reduction[2m >[0m[1m does not turn an observe failure into an invalid action receipt[0m [0m[2m[[1m177.79ms[0m[2m][0m
+[0m
+tests/pbench-adapters.test.ts:
+[0m[32m✓[0m[0m[1m Codex and Claude sources normalize agent-specific transcripts[0m [0m[2m[0.66ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m Codex and Claude runners honor launch inputs and normalize summaries[0m [0m[2m[[1m551.92ms[0m[2m][0m
+[0m
+tests/local-link.test.ts:
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-lPjeRh/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-lPjeRh/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-lPjeRh/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-lPjeRh/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Removed the local build and restored the previous yk link when still owned by this checkout.
+No local link or recorded build to clean.
+[0m[32m✓[0m[0m[1m local link runs from another cwd, preserves arguments/env, and restores Homebrew link[0m [0m[2m[[1m569.20ms[0m[2m][0m
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-2IWXmz/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-2IWXmz/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Removed the local build and restored the previous yk link when still owned by this checkout.
+[0m[32m✓[0m[0m[1m clean removes a new global link and leaves unrelated artifacts[0m [0m[2m[3.28ms[0m[2m][0m
+Removed the local build and restored the previous yk link when still owned by this checkout.
+[0m[32m✓[0m[0m[1m build failure leaves the previous link usable and partial artifacts cleanable[0m [0m[2m[2.69ms[0m[2m][0m
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-gpV5bg/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-gpV5bg/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Removed the local build and restored the previous yk link when still owned by this checkout.
+[0m[32m✓[0m[0m[1m regular files and newer global installations are never overwritten[0m [0m[2m[3.00ms[0m[2m][0m
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-Iv2YdA/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-Iv2YdA/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-Iv2YdA/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-Iv2YdA/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Removed the local build and restored the previous yk link when still owned by this checkout.
+[0m[32m✓[0m[0m[1m rebuild across versions cleans each generated archive[0m [0m[2m[3.31ms[0m[2m][0m
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-sxq6Sp/prefix/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-sxq6Sp/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Removed the local build and restored the previous yk link when still owned by this checkout.
+Linked /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-sxq6Sp/homebrew/bin/yk -> /var/folders/_6/69tcngy13_g1ljrj5s71r1dh0000gn/T/yk-local-link-sxq6Sp/checkout with 'quote'/dist/local/yk
+Run yk list to check the local catalog. Restore with npm run dev:clean.
+Removed the local build and restored the previous yk link when still owned by this checkout.
+[0m[32m✓[0m[0m[1m link updates the yk that wins PATH when npm's prefix is shadowed[0m [0m[2m[[1m337.19ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m explicit prefix overrides PATH and missing yk falls back to npm prefix[0m [0m[2m[1.62ms[0m[2m][0m
+[0m
+tests/computer-e2e-release.test.ts:
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m packaged executable has a valid code signature[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m release artifacts must exist when YK_RELEASE_TESTS=1[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m install + run + history + report through the compiled yk[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m external TS relative imports work; hostile package.json does not stop the run[0m
+[0m[33m»[2m[0m[2m packaged zoom crops local evidence with the native runtime absent[0m
+[0m
+tests/pbench-authoring.test.ts:
+[0m[32m✓[0m[0m[1m authoring captures through an injected registered session source[0m [0m[2m[[1m186.40ms[0m[2m][0m
+[0m
+tests/computer-integration-e2e-cancellation.test.ts:
+[0m[32m✓[0m [0mcomputer-e2e integration cancellation[2m >[0m[1m preserves an already-aborted caller signal without dispatch[0m [0m[2m[1.26ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e integration cancellation[2m >[0m[1m combines caller cancellation during the first action and blocks later dispatch in afterAll[0m [0m[2m[[1m353.87ms[0m[2m][0m
+[0m
+tests/computer-lane-protocol-schema.test.ts:
+[0m[32m✓[0m [0mprotocol lane deep schema validation[2m >[0m[1m validates every declared observation field and nested geometry[0m [0m[2m[1.22ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane deep schema validation[2m >[0m[1m restores only declared target ids and preserves arbitrary nested ids[0m [0m[2m[0.71ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane deep schema validation[2m >[0m[1m validates exec receipts, logs, finite counters, and observations[0m [0m[2m[2.97ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane deep schema validation[2m >[0m[1m decodes only a confirmed Accessibility set_value result[0m [0m[2m[0.34ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane deep schema validation[2m >[0m[1m validates batch receipt and optional final observation shapes[0m [0m[2m[0.69ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane request and control boundaries[2m >[0m[1m validates nested request actions without changing the operation contract[0m [0m[2m[1.05ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane request and control boundaries[2m >[0m[1m keeps SessionInfo ids as decimal strings and validates its nested wire shape[0m [0m[2m[0.37ms[0m[2m][0m
+[0m
+tests/catalog.test.ts:
+[0m[32m✓[0m[0m[1m loads valid skill manifests from a local catalog[0m [0m[2m[4.25ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m fails loudly when a skill manifest name does not match its directory[0m [0m[2m[1.55ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m resolves dependencies before requested skills[0m [0m[2m[2.07ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m fails loudly when dependencies contain a cycle[0m [0m[2m[2.22ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes pbench as a thin capture and replay router[0m [0m[2m[3.15ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog does not expose the internal pbench runner[0m [0m[2m[3.02ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the video-transcript skill[0m [0m[2m[2.38ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the design-grill skill[0m [0m[2m[1.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the eli10 skill[0m [0m[2m[1.83ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the validator skill[0m [0m[2m[1.58ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the a-share-data skill[0m [0m[2m[1.47ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the svg-icons skill without CLI functions[0m [0m[2m[1.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog skill descriptions stay short enough to scan and route[0m [0m[2m[1.83ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the show-pr skill as manual-only[0m [0m[2m[1.97ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m show-pr tools validate and build offline[0m [0m[2m[[1m74.41ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m show-pr tools fail loudly without explicit paths[0m [0m[2m[[1m77.81ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m show-pr report embeds evidence and renders mermaid from the example document[0m [0m[2m[[1m37.75ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m show-pr report omits the mermaid bundle when the document has no mermaid[0m [0m[2m[[1m25.71ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m show-pr validator rejects missing evidence files and unlisted design choices[0m [0m[2m[[1m171.59ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the ultra-simplify skill[0m [0m[2m[1.97ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog does not expose demo-only skills[0m [0m[2m[1.01ms[0m[2m][0m
+[0m[1m419 |[0m     [0m[35mnew[0m [0m[1mResponse[0m(process.stdout)[0m[3m[1m.text[0m(),
+[0m[1m420 |[0m     [0m[35mnew[0m [0m[1mResponse[0m(process.stderr)[0m[3m[1m.text[0m(),
+[0m[1m421 |[0m     process.exited
+[0m[1m422 |[0m   ])[0m[2m;[0m
+[0m[1m423 |[0m 
+[0m[1m424 |[0m   expect(stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                       [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:3713) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/catalog.test.ts[0m[2m:[0m[33m424[0m[2m:[33m18[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs[0m [0m[2m[[1m38.86ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the computer-use skill with its command functions[0m [0m[2m[1.73ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m root catalog exposes the computer-e2e skill, installable with all references[0m [0m[2m[3.75ms[0m[2m][0m
+[0m
+tests/computer-batch.test.ts:
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m the third step being invalid rejects the whole batch[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m default limit is 5 actions; explicit maxActions raises to the cap of 20[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[]} is rejected with %s[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"explode"}]} is rejected with %s[0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"type","text":""}]} is rejected with %s[0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"set_value","elementToken":"","value":"x"}]} is rejected with %s[0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"key","key":"Return","modifiers":[5]}]} is rejected with %s[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"scroll","spec":{"direction":"sideways","amount":1,"x":0,"y":0}}]} is rejected with %s[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"wait","condition":{"kind":"window_exists"},"timeoutMs":0}]} is rejected with %s[0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"click_point","point":{"observationId":"nope","x":1,"y":1}}]} is rejected with %s[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"click_point","point":{"observationId":"01234567-89ab-cdef-0123-456789abcdef","x":-1,"y":1}}]} is rejected with %s[0m
+[0m[32m✓[0m [0mvalidateBatch (full pre-validation, no driver side effects)[2m >[0m[1m invalid request {"actions":[{"kind":"key","key":"A"}],"timeoutMs":999999} is rejected with %s[0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m the plan's reference case: unknown delivery stops the batch, no replay[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m a known refusal fails the batch but keeps earlier receipts[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m set_value is a distinct AX-only batch action[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m two normal steps produce exactly ONE final observation[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m click's internal AX lookup is not counted as an LLM observation[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m a failed final observation keeps delivered receipts[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m cancellation during final observation interrupts without claiming completion[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m wait polls local AX until the condition is met, without LLM turns[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m wait timing out fails the batch with condition_timeout[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m focused_element before-conditions fail with unsupported_condition, nothing delivered[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m a satisfied before-condition lets the step run[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m the overall deadline interrupts before later steps[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m aborting the signal stops before the next step[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mrunBatch (serial execution with partial receipts)[2m >[0m[1m click_point steps flow through computer.clickPoint[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mbatch request typing through JSON (wire shape)[2m >[0m[1m a request parsed from JSON validates identically[0m [0m[2m[0.06ms[0m[2m][0m
+[0m
+tests/install.test.ts:
+[0m[32m✓[0m[0m[1m installs requested skills and dependencies into every detected target[0m [0m[2m[3.85ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m overwrites an already installed skill with the catalog version[0m [0m[2m[2.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m removes leftover files when overwriting an installed skill[0m [0m[2m[7.45ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m uninstalls requested skills from every existing target without removing dependencies[0m [0m[2m[6.01ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m fails loudly when uninstalling a skill that is not installed[0m [0m[2m[0.77ms[0m[2m][0m
+[0m
+tests/computer-integration-cli-boundaries.test.ts:
+[0m[32m✓[0m [0mpublic session CLI request envelopes[2m >[0m[1m session batch uses the real encoder/client and keeps CLI metadata outside operation[0m [0m[2m[2.78ms[0m[2m][0m
+[0m[32m✓[0m [0mpublic session CLI request envelopes[2m >[0m[1m session act routes through the strict batch operation envelope[0m [0m[2m[1.88ms[0m[2m][0m
+[0m[32m✓[0m [0mstandalone batch final observation terminal truth[2m >[0m[1m command_timeout during final observation is interrupted, not completed[0m [0m[2m[5.53ms[0m[2m][0m
+[0m[32m✓[0m [0mstandalone batch final observation terminal truth[2m >[0m[1m cancellation during final observation is interrupted with delivered receipts[0m [0m[2m[4.53ms[0m[2m][0m
+[0m[32m✓[0m [0mstandalone batch final observation terminal truth[2m >[0m[1m a successful final observation that crosses the deadline is still interrupted[0m [0m[2m[[1m146.06ms[0m[2m][0m
+[0m
+tests/computer-lane-core-lifecycle.test.ts:
+[0m[32m✓[0m [0mcore lifecycle lane: exec admission and receipts[2m >[0m[1m exec inner batch stops after its absolute deadline and retains not_run receipts[0m [0m[2m[[1m375.79ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: exec admission and receipts[2m >[0m[1m an unawaited inner batch cannot dispatch its later steps[0m [0m[2m[[1m170.04ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: exec admission and receipts[2m >[0m[1m aggregate overflow preserves unknown severity and the dispatched receipt[0m [0m[2m[[1m269.06ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: exec admission and receipts[2m >[0m[1m batch observations share the exec observation cap[0m [0m[2m[[1m432.22ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: exec admission and receipts[2m >[0m[1m mixed single and batch failures retain one run-level receipt per action[0m [0m[2m[[1m227.38ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: exec admission and receipts[2m >[0m[1m cancellation during final observation prevents state commit[0m [0m[2m[[1m973.12ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: hosted deadlines and durable state[2m >[0m[1m hosted batches keep one deadline across journal, actions, and final admission[0m [0m[2m[[1m331.85ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: hosted deadlines and durable state[2m >[0m[1m historical exec replies remain verifiable after the state head advances[0m [0m[2m[[1m450.96ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: hosted deadlines and durable state[2m >[0m[1m a crash after state rename is reconciled before the next admission[0m [0m[2m[[1m18.30ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: lease and host process boundaries[2m >[0m[1m a separate driver crash after the first known result preserves unknown and not_run receipts[0m [0m[2m[[1m489.66ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: lease and host process boundaries[2m >[0m[1m a failed cleanup group blocks reclamation after its dead leader and host[0m [0m[2m[5.59ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: lease and host process boundaries[2m >[0m[1m an unusable host closes its listener/path when explicitly finalized[0m [0m[2m[8.52ms[0m[2m][0m
+[0m[32m✓[0m [0mcore lifecycle lane: lease and host process boundaries[2m >[0m[1m standalone opener returns while its detached host remains usable[0m [0m[2m[[1m338.93ms[0m[2m][0m
+[0m
+tests/computer-integration-e2e-spool.test.ts:
+[0m[32m✓[0m [0mcomputer-e2e integration spool drain[2m >[0m[1m drains a newline-aligned burst larger than two chunks through the production reader[0m [0m[2m[3.94ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e integration spool drain[2m >[0m[1m drains a partial-frame boundary without false truncation or lost cleanup[0m [0m[2m[2.90ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e integration spool drain[2m >[0m[1m retains the worker-exit burst at a newline-aligned boundary[0m [0m[2m[[1m527.75ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e integration spool drain[2m >[0m[1m retains the worker-exit burst at a partial-frame-boundary boundary[0m [0m[2m[[1m510.93ms[0m[2m][0m
+[0m
+tests/computer-use-act.test.ts:
+[0m[32m✓[0m [0mwindow selection[2m >[0m[1m ambiguity cannot send an action to a different document[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mwindow selection[2m >[0m[1m no windows is an explicit error, not a silent success[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mwindow selection[2m >[0m[1m requested window id must exist[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mwindow selection[2m >[0m[1m a single window resolves without --window[0m
+[0m[32m✓[0m [0melement privacy[2m >[0m[1m password values are stripped from every output path[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mnormalizeText[2m >[0m[1m collapses whitespace for stable matching[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mact error envelopes[2m >[0m[1m a timeout on act reports actionOutcome unknown and forbids replay[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mact error envelopes[2m >[0m[1m a timeout on perceive stays a plain timeout, not an act-outcome error[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mact error envelopes[2m >[0m[1m non-timeout act errors pass through untouched[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0martifact output rules[2m >[0m[1m default cache dir is user-scoped, files private, relative --out-dir becomes absolute[0m [0m[2m[0.60ms[0m[2m][0m
+[0m
+tests/computer-exec-state.test.ts:
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m accepts plain JSON trees[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects %s state leaves[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects %s state leaves[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects %s state leaves[0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects %s state leaves[0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects %s state leaves[0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects %s state leaves[0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m allows repeated acyclic references while still rejecting cycles[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m rejects circular references instead of hanging[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m enforces the byte budget[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateJsonValue[2m >[0m[1m does not silently drop undefined fields (stringify would)[0m
+[0m[32m✓[0m [0mstate file commit/load[2m >[0m[1m versions advance; stale writers conflict[0m [0m[2m[1.02ms[0m[2m][0m
+[0m[32m✓[0m [0mstate file commit/load[2m >[0m[1m corrupt state files fail loud[0m [0m[2m[0.69ms[0m[2m][0m
+[0m[32m✓[0m [0msession ledger commit/load[2m >[0m[1m one immutable record owns the result and state, including historical versions[0m [0m[2m[2.94ms[0m[2m][0m
+[0m[32m✓[0m [0msession ledger commit/load[2m >[0m[1m only completed or final-observation-failed results may commit state[0m [0m[2m[1.28ms[0m[2m][0m
+[0m[32m✓[0m [0msession ledger commit/load[2m >[0m[1m ledger records derive snapshots after cache removal, while corrupt cache stays fatal[0m [0m[2m[1.50ms[0m[2m][0m
+[0m[32m✓[0m [0msession ledger commit/load[2m >[0m[1m legacy state is the migration base for the first ledger transaction[0m [0m[2m[1.65ms[0m[2m][0m
+[0m[32m✓[0m [0msession ledger commit/load[2m >[0m[1m an uncommitted candidate has no result or state and cannot be replayed[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0msession ledger commit/load[2m >[0m[1m a torn or corrupted transaction record fails closed[0m [0m[2m[1.32ms[0m[2m][0m
+[0m[32m✓[0m [0mstate through the host (C2)[2m >[0m[1m the plan's reference case: failed commits do not advance state[0m [0m[2m[[1m486.84ms[0m[2m][0m
+[0m[32m✓[0m [0mstate through the host (C2)[2m >[0m[1m repeated request ids do not re-run state increments[0m [0m[2m[[1m326.97ms[0m[2m][0m
+[0m[32m✓[0m [0mstate through the host (C2)[2m >[0m[1m non-JSON state from a script is refused, not committed[0m [0m[2m[[1m161.83ms[0m[2m][0m
+[0m
+tests/svg-icons-compiler.test.ts:
+[0m[32m✓[0m[0m[1m compileToSvg draws a 24-grid line with the family stroke[0m [0m[2m[1.79ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compileToSvg rejects a third ink[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compileToSvg splits two inks onto separate colored paths[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compileToSvg paints a used glyph with ink 2[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compileToSvg rejects points outside the safe area[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compiler source does not mention regen-icons[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m vendored library includes 225 drawings and compiles folder[0m [0m[2m[[1m17.42ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m cli --emit writes svg using the skill library directory[0m [0m[2m[[1m10.84ms[0m[2m][0m
+[0m
+tests/computer-lane-e2e-supervisor.test.ts:
+[0m[32m✓[0m [0mcomputer-e2e lane supervisor ownership[2m >[0m[1m missing owner is bounded and reported as uncertain[0m [0m[2m[[1m40.68ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e lane supervisor ownership[2m >[0m[1m corrupt owner is bounded and reported as uncertain[0m [0m[2m[[1m41.68ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e lane supervisor ownership[2m >[0m[1m a structurally invalid owner is also uncertain, not reclaimable[0m [0m[2m[[1m41.75ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e lane supervisor ownership[2m >[0m[1m abort stops lock acquisition without deleting a live owner's lock[0m [0m[2m[[1m26.14ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e lane incremental fd3 spool[2m >[0m[1m reads only the appended bounded chunk and preserves split UTF-8 frames[0m [0m[2m[0.72ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e lane incremental fd3 spool[2m >[0m[1m fails explicitly for a partial tail, truncation, and rotation[0m [0m[2m[1.14ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e lane incremental fd3 spool[2m >[0m[1m enforces the per-frame byte limit and malformed UTF-8 boundary[0m [0m[2m[[1m23.89ms[0m[2m][0m
+[0m
+tests/computer-request-ledger.test.ts:
+[0m[32m✓[0m[0m[1m a terminal write failure never caches success and a later write reuses the sequence[0m [0m[2m[0.20ms[0m[2m][0m
+[0m
+tests/pbench-replay.test.ts:
+[0m[32m✓[0m[0m[1m replay rejects unknown runners before creating run state[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m manual replay delegates case validation through its lifecycle boundary[0m [0m[2m[0.48ms[0m[2m][0m
+[0m
+tests/computer-worker-lifecycle.test.ts:
+[0m[32m✓[0m [0mshared worker lifecycle[2m >[0m[1m drains split UTF-8 and appended frames through the shared spool[0m [0m[2m[0.44ms[0m[2m][0m
+[0m[32m✓[0m [0mshared worker lifecycle[2m >[0m[1m fails closed when the spool is truncated or rotated[0m [0m[2m[0.63ms[0m[2m][0m
+[0m[32m✓[0m [0mshared worker lifecycle[2m >[0m[1m does not close a borrowed fd when truncation or rotation is detected[0m [0m[2m[1.05ms[0m[2m][0m
+[0m[32m✓[0m [0mshared worker lifecycle[2m >[0m[1m watchdog re-arms and clear prevents stale cleanup[0m [0m[2m[[1m110.53ms[0m[2m][0m
+[0m
+tests/computer-e2e-supervisor.test.ts:
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m a sync-hanging worker is hard-killed with its process group and never passes[0m [0m[2m[[1m107.08ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m an async-hanging case is interrupted, recorded, and the worker is reaped[0m [0m[2m[[1m535.30ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m passing and declared-skip cases give exit 2 with truthful counts and files[0m [0m[2m[[1m93.15ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m an all-passing external suite exits 0 and its sdk metadata stays null[0m [0m[2m[[1m226.36ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m stdout lies are not events: the fake run_finished line changes nothing[0m [0m[2m[[1m80.17ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m a load error still produces a run directory and a failed report[0m [0m[2m[[1m80.09ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m a failure stops later files from executing[0m [0m[2m[[1m226.85ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m a same-group grandchild dies with the killed worker[0m [0m[2m[[1m439.57ms[0m[2m][0m
+[0m[32m✓[0m [0msupervise (real child processes, no desktop)[2m >[0m[1m require-version mismatch is refused before any run directory exists[0m [0m[2m[0.79ms[0m[2m][0m
+[0m[32m✓[0m [0msignal-driven stops (B2)[2m >[0m[1m an aborted stopSignal SIGTERMs the RUNNING worker group; the summary is incomplete[0m [0m[2m[[1m771.94ms[0m[2m][0m
+[0m[32m✓[0m [0mcleanup failure honesty (B1)[2m >[0m[1m a session cleanup failure cannot reduce to passed/exit 0[0m [0m[2m[[1m230.65ms[0m[2m][0m
+[0m[32m✓[0m [0mzero-case honesty (N1)[2m >[0m[1m events with run_finished and no cases reduce to exit 2, never 0[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mterminal event honesty[2m >[0m[1m run_finished payload exitCode matches the final reduction for a passing run[0m [0m[2m[[1m228.37ms[0m[2m][0m
+[0m
+tests/ultra-cr-state.test.ts:
+[0m[32m✓[0m[0m[1m review checkpoints validate artifacts and recover from a lost reviewer report[0m [0m[2m[[1m248.95ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m batch validation preserves each finding and rejects missing or duplicate verdicts[0m [0m[2m[[1m244.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m final verdict needs independent blocker evidence and cannot clear unresolved findings[0m [0m[2m[[1m213.60ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m session identity and canonical paths prevent overwriting another snapshot or escaping the session[0m [0m[2m[[1m103.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m confirmed blockers and false alarms produce a consistent final decision from batch evidence[0m [0m[2m[[1m594.38ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m an explicitly empty comparison can finish without fabricating reviewer work[0m [0m[2m[[1m381.19ms[0m[2m][0m
+[0m
+tests/computer-screenshot-scale.test.ts:
+[0m[32m✓[0m [0mresizeScreenshot (injected runner)[2m >[0m[1m a failed transform never returns the original as if it were scaled[0m [0m[2m[0.79ms[0m[2m][0m
+[0m[32m✓[0m [0mresizeScreenshot (injected runner)[2m >[0m[1m invalid actual output dimensions are rejected[0m [0m[2m[0.65ms[0m[2m][0m
+[0m[32m✓[0m [0mresizeScreenshot (injected runner)[2m >[0m[1m invalid budget and PNG are rejected before any spawn[0m [0m[2m[0.39ms[0m[2m][0m
+[0m[32m✓[0m [0mresizeScreenshot (real sips, macOS only)[2m >[0m[1m derives a genuinely smaller same-format PNG[0m [0m[2m[[1m18.98ms[0m[2m][0m
+[0m
+tests/computer-request-journal.test.ts:
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m the first claim wins; the same id+hash replays nothing, a different hash conflicts[0m [0m[2m[4.93ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m two journal instances (like two processes) agree on ownership[0m [0m[2m[3.48ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m events append with strict sequences; a gap fails loud[0m [0m[2m[5.86ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m a started-without-finished record reads as running (crash view is the host's call)[0m [0m[2m[4.32ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m a truncated tail line fails loud, never silently succeeds[0m [0m[2m[4.25ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m invalid event types and payloads are rejected on append[0m [0m[2m[3.62ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m terminal observations with bigint window ids are serialized without losing the record[0m [0m[2m[5.68ms[0m[2m][0m
+[0m[32m✓[0m [0mRequestJournal[2m >[0m[1m reading an unknown request fails loud[0m [0m[2m[0.28ms[0m[2m][0m
+[0m[32m✓[0m [0mcanonicalRequestHash[2m >[0m[1m operation content decides the hash; transport identity does not[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mcanonicalRequestHash[2m >[0m[1m bigint and string windowIds hash identically[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m journal writer serializes a request and retries failed persistence without a sequence gap[0m [0m[2m[0.15ms[0m[2m][0m
+[0m
+tests/computer-session-transaction.test.ts:
+[0m[32m✓[0m[0m[1m an atomic exec commit survives a missing terminal journal projection without replay[0m [0m[2m[[1m329.96ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m a terminal journal failure cannot erase an atomic exec result in the live host[0m [0m[2m[[1m166.50ms[0m[2m][0m
+[0m
+tests/computer-use-api-generation.test.ts:
+[0m[32m✓[0m [0mcomputer-use api.d.ts generation (C4)[2m >[0m[1m regenerating produces exactly the committed reference[0m [0m[2m[[1m16.00ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-use api.d.ts generation (C4)[2m >[0m[1m the exec surface is present; wire internals are absent[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-use api.d.ts generation (C4)[2m >[0m[1m a typed exec-script fixture compiles against the api[0m [0m[2m[[1m1216.29ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-use api.d.ts generation (C4)[2m >[0m[1m the example script exists next to the reference[0m [0m[2m[0.73ms[0m[2m][0m
+[0m
+tests/targets.test.ts:
+[0m[32m✓[0m[0m[1m creates .agents/skills when a repo has no known skill target[0m [0m[2m[1.91ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m uses existing .claude/skills target[0m [0m[2m[0.44ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m uses existing .agents/skills target[0m [0m[2m[0.49ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m installs to both known targets when both exist[0m [0m[2m[0.60ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m detects existing uninstall targets without creating defaults[0m [0m[2m[0.22ms[0m[2m][0m
+[0m
+tests/computer-e2e-history.test.ts:
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m started-but-unfinished cases are interrupted; unstarted are not_run; no run_finished is incomplete[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m terminal failure is failed with exit 1[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m explicit skips pass the run with exit 2[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m primary errors and cleanupErrors are reported separately[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m history uses the shared result projection for cases, steps, errors, and artifacts[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m history keeps nested steps in start order[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m an open action without its finished event is an unknown outcome, never passed[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m artifact paths may not escape the run directory[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m metadata accumulates runtime, application, and worker pids[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mreduceEvents[2m >[0m[1m formatReport renders status, counts, and the incomplete warning[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mrun directory records[2m >[0m[1m two runs get independent directories with private permissions[0m [0m[2m[0.74ms[0m[2m][0m
+[0m[32m✓[0m [0mrun directory records[2m >[0m[1m an empty history directory is an empty list, not an error[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mrun directory records[2m >[0m[1m a truncated tail keeps earlier events and reports incomplete[0m [0m[2m[0.23ms[0m[2m][0m
+[0m[32m✓[0m [0mrun directory records[2m >[0m[1m a corrupt middle line refuses to report success[0m [0m[2m[0.20ms[0m[2m][0m
+[0m
+tests/computer-lane-runtime-admission.test.ts:
+[0m[32m✓[0m [0mruntime lane operation admission and close[2m >[0m[1m close drains a lease-waiting mutation and final guard prevents dispatch[0m [0m[2m[[1m11.24ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane operation admission and close[2m >[0m[1m close waits for driver setup, then cleans the late backend exactly once[0m [0m[2m[[1m11.38ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane operation admission and close[2m >[0m[1m public close remains repeatable after admission has drained[0m [0m[2m[0.17ms[0m[2m][0m
+[0m
+tests/computer-zoom.test.ts:
+[0m[32m✓[0m[0m[1m zoom CLI parses without a target and rejects invalid regions and credentials[0m [0m[2m[0.22ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m crop retains source detail and maps its effective region into parent coordinates[0m [0m[2m[[1m80.73ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m zoom rejects expired/invalid observations and out-of-bounds regions before a child[0m [0m[2m[[1m57.52ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m invalidated parent during crop is refused before publication and the crop is removed[0m [0m[2m[[1m54.02ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m expiry during crop is refused without extending the parent's capture time[0m [0m[2m[[1m51.87ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m zoom cancellation and deadline remain active through transforms[0m [0m[2m[[1m53.49ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m zoom CLI reads one-shot evidence without creating a native session[0m [0m[2m[[1m79.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m session zoom reads the session store with no live host, target lookup, or driver[0m [0m[2m[[1m79.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m edge and resized zooms map source coverage back to the parent[0m [0m[2m[[1m115.01ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m missing source and failed crops produce structured errors[0m [0m[2m[[1m74.99ms[0m[2m][0m
+[0m
+tests/computer-use-session-cli.test.ts:
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m the plan's reference failures[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m session subcommands parse strictly[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m session-owned artifact paths cannot silently ignore --out-dir[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m observe/batch/act accept --session without --pid[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m session ids must be UUIDs for status/cancel/close[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m session act forwards key modifiers and requests a reusable observation[0m [0m[2m[0.35ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest/session parsing (B4)[2m >[0m[1m session act preserves a failed step refusal when a valid observation is also present[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0msession command orchestration (desktop-free)[2m >[0m[1m session batch preserves file errors before contacting the host[0m [0m[2m[1.00ms[0m[2m][0m
+[0m[32m✓[0m [0msession command orchestration (desktop-free)[2m >[0m[1m session open resolves an omitted window through a read-only selector[0m [0m[2m[0.40ms[0m[2m][0m
+[0m[32m✓[0m [0msession command orchestration (desktop-free)[2m >[0m[1m unknown sessions fail with unknown_session, no host spawn[0m [0m[2m[0.50ms[0m[2m][0m
+[0m[32m✓[0m [0mself-spawned session host closed loop (real subprocess, fake driver)[2m >[0m[1m open -> observe -> batch -> status -> close reuses one driver[0m [0m[2m[[1m833.24ms[0m[2m][0m
+[0m
+tests/computer-lane-e2e-control.test.ts:
+[0m[32m✓[0m [0mcomputer-e2e control lane[2m >[0m[1m case timeout aborts the runtime batch before its later actions[0m [0m[2m[[1m279.13ms[0m[2m][0m
+[0m[32m✓[0m [0mcomputer-e2e control lane[2m >[0m[1m runSuite closes the real observation-store to point-click loop[0m [0m[2m[[1m38.79ms[0m[2m][0m
+[0m
+tests/computer-point-click.test.ts:
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m accepts a tiny unrelated pixel change through the real click path[0m [0m[2m[[1m60.28ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m accepts equivalent PNG encoding when decoded pixels are unchanged[0m [0m[2m[[1m69.60ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m refuses a changed click neighbourhood before native delivery[0m [0m[2m[[1m55.31ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m refuses a major global frame change before native delivery[0m [0m[2m[[1m56.88ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m refuses a title change even when the pixels are unchanged[0m [0m[2m[1.08ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m an expired observation never reaches the driver[0m [0m[2m[0.74ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m an observation that expires during fresh-frame validation never dispatches[0m [0m[2m[7.04ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m a valid observation maps through the geometry before delivery[0m [0m[2m[6.27ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m same-epoch window movement refuses the old frame before delivery[0m [0m[2m[1.03ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m out-of-image coordinates are refused before any driver call[0m [0m[2m[8.11ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m an unstructured Tool error is unknown and cannot be replayed[0m [0m[2m[6.89ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m a delivered clickPoint invalidates the observation for the next click[0m [0m[2m[6.48ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m a type mutation between observe and clickPoint refuses the old observation[0m [0m[2m[1.03ms[0m[2m][0m
+[0m[32m✓[0m [0mComputer.clickPoint (evidence-bound delivery)[2m >[0m[1m unknown observations and cross-target observations are refused[0m [0m[2m[0.71ms[0m[2m][0m
+[0m[32m✓[0m [0maction outcome classification (A4 refinement)[2m >[0m[1m a known ToolResult refusal is not_delivered; an unknown native exception is unknown[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0mobserved coordinates for background keyboard input[2m >[0m[1m type validates the image and sends one addressed native call[0m [0m[2m[8.21ms[0m[2m][0m
+[0m[32m✓[0m [0mobserved coordinates for background keyboard input[2m >[0m[1m key validates the image and sends one addressed native call[0m [0m[2m[6.43ms[0m[2m][0m
+[0m[32m✓[0m [0mobserved coordinates for background keyboard input[2m >[0m[1m expired image evidence refuses typing before native input[0m [0m[2m[0.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m downscaling preserves the strict 32 sent-pixel neighbourhood[0m [0m[2m[[1m171.30ms[0m[2m][0m
+[0m
+tests/computer-use-packaging.test.ts:
+[0m[33m»[2m [0m[2mpackage:release runtime assembly[2m >[0m[2m assembles the sidecar runtime with every required file and no symlinks[0m
+[0m[33m»[2m [0m[2mpackage:release runtime assembly[2m >[0m[2m compiled yk loads from a hostile package.json cwd without executing project scripts[0m
+[0m[32m✓[0m [0mpackage:release runtime assembly[2m >[0m[1m compiled yk build uses the pinned external + autoload + define flags[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m [0mpackage:release runtime assembly[2m >[0m[1m package:release script is the single packaging entrypoint both workflows call[0m [0m[2m[0.53ms[0m[2m][0m
+[0m
+tests/computer-session-release.test.ts:
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m release artifacts exist and include the generated skill api[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m the packaged skill references match the generated api[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m help output lists the agentic actions and executes no project scripts[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m invalid exec requests fail cleanly without native load[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m the internal exec worker completes pure JS + state + log against a test RPC peer[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m the compiled exec loop proves body readiness before TERM/KILL cleanup[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m same exec request-id replays nothing through a re-invoked CLI[0m
+[0m
+tests/computer-driver-results.test.ts:
+[0m[32m✓[0m [0mdriver action results reach callers[2m >[0m[1m a native unverified background result survives the batch receipt[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mdriver action results reach callers[2m >[0m[1m a native structured refusal stops the batch without sending the next action[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m the SDK adapter sends explicit background input to the exact field or point in one call[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m typed click enums retain their route, effect, refusal and escalation[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CLI parses input addressing and rejects incomplete or conflicting targets[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m one-shot CLI preserves driver metadata in both output formats and forwards the field[0m [0m[2m[0.30ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m script input and result cross the host dispatcher and protocol without being dropped[0m [0m[2m[0.35ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m session wire requests retain input addressing[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m refused is preserved even when the SDK wrapper also sets isError[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m AX setValue proof survives batch receipts[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m generic SDK error codes survive even without an ActionResult[0m [0m[2m[0.07ms[0m[2m][0m
+[0m
+tests/computer-lane-protocol-roundtrip.test.ts:
+[0m[32m✓[0m [0mprotocol lane wire round trips[2m >[0m[1m FrameReader preserves Chinese text when every UTF-8 byte is split[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mprotocol lane wire round trips[2m >[0m[1m the real client preserves arbitrary exec return ids while restoring observation targets[0m [0m[2m[2.17ms[0m[2m][0m
+[0m
+tests/computer-runtime-action-classification.test.ts:
+[0m[32m✓[0m [0mnative action error classification[2m >[0m[1m structured Tool timeout and unknown codes are unknown and poison the session[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m [0mnative action error classification[2m >[0m[1m a Tool class name without structured details is unknown and poisons the session[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mnative action error classification[2m >[0m[1m only explicit predispatch Tool codes remain not_delivered[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m [0mnative action error classification[2m >[0m[1m InvalidArguments remains a predispatch refusal[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mnative action error classification[2m >[0m[1m AbortError after the native action seam is unknown and poisons the session[0m [0m[2m[0.07ms[0m[2m][0m
+[0m
+tests/functions.test.ts:
+[0m[32m✓[0m[0m[1m dispatches an underlying function by domain and action[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m keeps a yk domain in its own package[0m
+[0m[32m✓[0m[0m[1m fails loudly for unknown underlying functions[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m keeps pbench authoring commands in their own function package[0m [0m[2m[0.03ms[0m[2m][0m
+[0m
+tests/computer-use-runtime.test.ts:
+[0m[1m69 |[0m     } [0m[35mfinally[0m { [0m[35mawait[0m worker[0m[3m[1m.close[0m()[0m[2m;[0m }
+[0m[1m70 |[0m     assert[0m[3m[1m.equal[0m(ended, [0m[33m2[0m)[0m[2m;[0m
+[0m[1m71 |[0m     assert[0m[3m[1m.equal[0m(stopped, [0m[33m2[0m)[0m[2m;[0m
+[0m[1m72 |[0m     assert[0m[3m[1m.equal[0m(destroyed, [0m[33m2[0m)[0m[2m;[0m
+[0m[1m73 |[0m   [0m[32m`], { stdout: "pipe", stderr: "pipe" });[0m
+[0m[1m74 |[0m   expect([0m[35mnew[0m [0m[1mTextDecoder[0m()[0m[3m[1m.decode[0m(probe.stderr))[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                                                      [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:4381) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/computer-use-runtime.test.ts[0m[2m:[0m[33m74[0m[2m:[33m50[0m[2m)[0m
+[0m[31m✗[0m[0m[1m real sessions and worker steps stay lazy and bypass an incompatible installed daemon[0m [0m[2m[[1m26.75ms[0m[2m][0m
+[0m[32m✓[0m [0mcompiled SDK location[2m >[0m[1m locates the SDK beside the real executable, not the cwd[0m [0m[2m[3.33ms[0m[2m][0m
+[0m[32m✓[0m [0mcompiled SDK location[2m >[0m[1m uses the symlink-resolved executable location[0m [0m[2m[4.60ms[0m[2m][0m
+[0m[32m✓[0m [0mcompiled SDK location[2m >[0m[1m rejects an executable path that resolves through a directory[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mplatform gate[2m >[0m[1m darwin arm64 is supported[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mplatform gate[2m >[0m[1m linux and x64 macs are rejected with a readable message[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mdoctor report (session-backed)[2m >[0m[1m ok when platform, sdk, same-process driver, and permissions all pass[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mdoctor report (session-backed)[2m >[0m[1m missing permissions keep doctor failing with a grant hint, never a dialog[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mdoctor report (session-backed)[2m >[0m[1m a foreign-pid driver is not same-process[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mdoctor report (session-backed)[2m >[0m[1m unsupported platform fails before any session is created[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mdoctor report (session-backed)[2m >[0m[1m missing runtime files point to reinstall, not to a dev checkout[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mdoctor report (session-backed)[2m >[0m[1m cleanup failures surface as hints without failing the report[0m [0m[2m[0.04ms[0m[2m][0m
+[0m
+tests/computer-use-review-fixes.test.ts:
+[0m[32m✓[0m [0mreview-fix regressions: host admission and cancellation[2m >[0m[1m two business frames in one socket chunk reserve only one hosted batch[0m [0m[2m[[1m74.45ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: host admission and cancellation[2m >[0m[1m a hosted batch durably acknowledges each action before the next dispatch[0m [0m[2m[8.48ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: host admission and cancellation[2m >[0m[1m cancelling a hosted multi-action batch stops undispatched actions[0m [0m[2m[[1m109.27ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: conservative lock recovery[2m >[0m[1m a stale reclamation lock fails closed instead of unlinking a lock read earlier[0m [0m[2m[5.33ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: journal recovery ownership[2m >[0m[1m a recovery-lock loser does not append a terminal event[0m [0m[2m[[1m227.87ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: runtime admission[2m >[0m[1m a lease wait that expires before dispatch does not call the backend[0m [0m[2m[[1m77.11ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: exec state, output, and delivery[2m >[0m[1m a caught driver-worker loss cannot commit state or report completion[0m [0m[2m[[1m179.62ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: exec state, output, and delivery[2m >[0m[1m a late unknown receipt reconciles an already-terminal unawaited result[0m [0m[2m[[1m163.36ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: exec state, output, and delivery[2m >[0m[1m state remains committed factually when the final observation times out[0m [0m[2m[[1m1668.90ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: exec state, output, and delivery[2m >[0m[1m twenty observations followed by a mutation fail instead of dropping fresh final evidence[0m [0m[2m[[1m366.21ms[0m[2m][0m
+[0m[32m✓[0m [0mreview-fix regressions: exec state, output, and delivery[2m >[0m[1m multiple individually valid observations cannot exceed the aggregate result budget[0m [0m[2m[[1m263.67ms[0m[2m][0m
+[0m
+tests/computer-supervisor-fd-ownership.test.ts:
+[0m[32m✓[0m[0m[1m supervisor leaves reused stdio descriptors owned by other files open[0m [0m[2m[[1m264.75ms[0m[2m][0m
+[0m
+tests/computer-lane-release-packaging.test.ts:
+[0m[33m»[2m [0m[2mrelease lane: packaged live fake session[2m >[0m[2m deduplicates a live request through a separate packaged driver process[0m
+[0m[33m»[2m [0m[2mrelease lane: packaged live fake session[2m >[0m[2m a symlinked packaged executable self-spawns its driver worker[0m
+[0m
+tests/computer-image-budget.test.ts:
+[0m[32m✓[0m[0m[1m auto with explicit image budgets uses one usable AX read and no derivation[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m small image reuses original with zero child processes[0m [0m[2m[2.99ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m budget bounds 2000x2000 and verifies actual output[0m [0m[2m[[1m181.67ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m budget bounds 2880x1800 and verifies actual output[0m [0m[2m[[1m226.29ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m budget bounds 1800x2880 and verifies actual output[0m [0m[2m[[1m211.71ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m budget bounds 900x900 and verifies actual output[0m [0m[2m[[1m28.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m dimension and pixel limits can be overridden independently[0m [0m[2m[[1m226.76ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m source geometry mismatch fails before an image child or publication[0m [0m[2m[1.48ms[0m[2m][0m
+[0m
+tests/computer-runtime-budget.test.ts:
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m load 40 + create 40 + work 40 exceeds a 100ms budget and poisons the session[0m [0m[2m[[1m122.95ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m a timed-out read blocks a second native operation until it settles[0m [0m[2m[[1m41.54ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m work that fits the REMAINING budget succeeds (no per-stage reset)[0m [0m[2m[[1m88.31ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m a late-resolving create cleans up its backend and never starts work[0m [0m[2m[[1m92.62ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m close retains a target lease while a timed-out native action is still pending[0m [0m[2m[[1m73.15ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m close is idempotent and ordered endSession -> shutdown -> destroy[0m [0m[2m[0.98ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m a hung endSession exceeds the cleanup budget, destroy still runs, close reports cleanup failure[0m [0m[2m[[1m51.34ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m operations on a closed session are refused without touching the backend[0m [0m[2m[0.71ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m an aborted signal refuses before any load[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m metadata is read once within the first operation and cached[0m [0m[2m[0.74ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m a session with no operations never creates a backend[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0msession budget (absolute deadline shared by load/create/work)[2m >[0m[1m permissions need the sdk but a metadata failure does not break the op[0m [0m[2m[0.57ms[0m[2m][0m
+[0m
+tests/homebrew-formula.test.ts:
+[0m[32m✓[0m[0m[1m drops explicit formula version because brew audit infers it from the GitHub release URL[0m [0m[2m[[1m51.86ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m release-please updates the tap with the formula script instead of rewriting version[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m formula fixture installs the runtime sidecar beside the yk binary[0m [0m[2m[0.38ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m updater rewrites only url/sha256/version-assert on the runtime-aware fixture[0m [0m[2m[[1m27.60ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m updater fails loudly on a formula without the runtime install shape[0m [0m[2m[[1m29.49ms[0m[2m][0m
+[0m
+tests/computer-execution-scope.test.ts:
+[0m[32m✓[0m[0m[1m child budgets cannot extend their parent and sibling cancellation stays local[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m deadline owner chooses timeout classification without pretending native work stopped[0m [0m[2m[1.21ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m disposal cancels watchdog and detaches caller cancellation[0m [0m[2m[[1m11.10ms[0m[2m][0m
+[0m
+tests/ultra-produce.test.ts:
+[0m[32m✓[0m[0m[1m ultra-produce native-agent file contracts stay desktop-free[0m [0m[2m[[0m[33m11904.33ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m ultra-produce installs executable helpers and referenced role contracts[0m [0m[2m[[1m11.42ms[0m[2m][0m
+[0m
+tests/pbench-capture.test.ts:
+[0m[32m✓[0m [0mpbench workspace handling[2m >[0m[1m initializes and links a local workspace without creating a git repository[0m [0m[2m[1.40ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench case validation[2m >[0m[1m rejects unsafe case-local paths before strict replay[0m [0m[2m[0.74ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench case validation[2m >[0m[1m rejects case-local paths that end in parent directory traversal[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m asks for confirmation with session and baseline details before capture[0m [0m[2m[[1m71.66ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m capture command pre-fills private docs from session evidence without TODO authoring placeholders[0m [0m[2m[[1m150.44ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m capture blocks strict validation only for the validator when correction history exists without failed verification evidence[0m [0m[2m[[1m142.00ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m capture command warns when extracted replay evidence is empty[0m [0m[2m[[1m129.77ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m generates a completion validator from a failed replayable verification command[0m [0m[2m[[1m295.63ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m generated completion validator preserves captured repo-relative verification cwd[0m [0m[2m[[1m348.70ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m unsafe verification cwd leaves validator unfinished and warns during capture[0m [0m[2m[[1m154.64ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m captures a Codex session, strict-validates the baseline failure, then finalizes the case[0m [0m[2m[[1m296.08ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m finalize rejects a bundle changed after strict validation[0m [0m[2m[[1m310.03ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m stores capture authoring transactions under the ya-skills home cache[0m [0m[2m[[1m129.03ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m extracts modern Codex payload messages, tool calls, and correction evidence[0m [0m[2m[[1m134.67ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m uses session cwd and git baseline when capture is run from another repository[0m [0m[2m[[1m230.33ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m finds a session by scanning Codex sessions when the index omits file paths[0m [0m[2m[[1m134.63ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m resolves a session by id from its filename without reading competing session files[0m [0m[2m[[1m129.25ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m captures a Claude Code session through the platform-agnostic source registry[0m [0m[2m[[1m131.01ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m extracts Codex errors and approval/sandbox context as private artifacts[0m [0m[2m[[1m130.56ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m detects Bun setup commands for Bun repositories[0m [0m[2m[[1m155.37ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m writes public replay files and references them from the case manifest[0m [0m[2m[[1m131.46ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m exports a public-only replay capsule without private evaluator files[0m [0m[2m[[1m134.16ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m rejects public replay export when public files reference private evaluator paths[0m [0m[2m[[1m135.03ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m rejects public replay export when public files reference absolute /private paths[0m [0m[2m[[1m131.37ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m strict validation fails before replay when required replay environment is missing[0m [0m[2m[[1m131.31ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m captures repo agent instructions and installed skill names into public replay context[0m [0m[2m[[1m155.10ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m keeps unproven tracked changes private until replay-start authoring resolves them[0m [0m[2m[[1m134.31ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m keeps unproven untracked files out of the public replay capsule[0m [0m[2m[[1m160.73ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m does not capture repository-external files through untracked symlinks[0m [0m[2m[[1m140.79ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m accepts baseline-only replay-start authoring[0m [0m[2m[[1m302.92ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m accepts explicitly curated replay-start files[0m [0m[2m[[1m297.24ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m rejects missing or unknown replay-start decisions[0m [0m[2m[[1m278.16ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m writes bounded public command observations and private failure draft[0m [0m[2m[[1m134.53ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m sanitizes private absolute paths from public command observations before replay[0m [0m[2m[[1m132.97ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m writes key observations for failed and verification commands without skill bootstrap noise[0m [0m[2m[[1m130.71ms[0m[2m][0m
+[0m
+tests/computer-integration-release-workflow.test.ts:
+[0m[32m✓[0m [0mrelease integration workflow coverage[2m >[0m[1m release.yml runs packaged lane coverage after package:release[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease integration workflow coverage[2m >[0m[1m release-please.yml runs packaged lane coverage after package:release[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease integration workflow coverage[2m >[0m[1m the local publish path owns the release: release.yml skips itself when the asset already exists[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease integration workflow coverage[2m >[0m[1m CI never overwrites published assets (first uploader wins, no clobber)[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease integration workflow coverage[2m >[0m[1m the tap hashes the asset that actually shipped, not this runner's rebuild[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mrelease integration workflow coverage[2m >[0m[1m the historical verification pointer delegates mutable current counts[0m [0m[2m[0.22ms[0m[2m][0m
+[0m
+tests/computer-integration-native-action-outcome.test.ts:
+[0m[32m✓[0m [0mnative action outcome across the production IPC boundary[2m >[0m[1m structured Tool unknown poisons the session and never dispatches queued actions[0m [0m[2m[[1m124.77ms[0m[2m][0m
+[0m[32m✓[0m [0mnative action outcome across the production IPC boundary[2m >[0m[1m a self-spawned unusable host stays queryable until explicit close[0m [0m[2m[[1m349.25ms[0m[2m][0m
+[0m
+tests/computer-foreground.test.ts:
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m background actions never activate or restore another app[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m explicit activation restores the actual previous app after success[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m an action failure is retained after restoring the previous app[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m a user switching to another app prevents restoration[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m already-frontmost target is left in place[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m failed activation never sends the action[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m missing foreground evidence refuses explicit activation before input[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m background observation failure does not prevent a background action[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m restore failure never converts delivered work into a retryable error[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m restoration waits for native cleanup after an uncertain action[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mforeground ownership around an action[2m >[0m[1m unsettled native work prevents restoration without masking the action[0m [0m[2m[0.05ms[0m[2m][0m
+[0m
+tests/computer-use.test.ts:
+[0m[32m✓[0m [0mcommand registration[2m >[0m[1m registers desktop operations and local zoom[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand registration[2m >[0m[1m descriptions are single-line for help tables[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m missing pid[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m unknown flag[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m non-numeric pid[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m non-integer pid[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m zero pid[0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m negative pid[0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m pid beyond safe integer range[0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m window id beyond safe integer range still parses as bigint[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m window id must be digits only[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m perceive needs no action[0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m act without an action is rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m act with two actions is rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m unknown action flag is rejected[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m scroll requires a known direction[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m scroll amount must be a positive integer[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m scroll coordinates are finite numbers, negatives allowed[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m click-text and click-contains are distinct predicates[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m click-contains with click-role is allowed[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m click-role without click-text/contains is rejected[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m type with empty text is rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m type text keeps spaces and newlines[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m type value that looks like a flag must use equals form[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m type value must not swallow a subsequent flag[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m set-value requires a token and preserves an empty value[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m set-value cannot be combined with activation[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m key with empty text is rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m key modifiers use the installed SDK vocabulary and reach the parsed request[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m compound key strings are rejected with the supported syntax[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m Backspace remains accepted as the driver's backward-delete key[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m act format defaults to legacy and accepts the observation envelope[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m boolean flags: shot and activate[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m audit foreground is a one-shot-only boolean control[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m apps accepts only --name filter[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m apps --name must be a non-empty value[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m doctor and apps take no positional args[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m unknown top-level action is rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m out-dir accepts a directory path[0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m out-dir rejects an empty value[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest rejects before any driver exists[2m >[0m[1m perceive without --window is unambiguous request for auto-select[0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m act delivered but post-observe failure reports actionDelivered and never re-types[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m refused actions surface action_refused without retry[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m an act timeout maps to command_timeout with unknown outcome and a no-replay nextStep[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m invalid input never creates a session[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m doctor rejects unknown flags through the same strict parser[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m windows envelope keeps bigint-safe window ids[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m perceive envelope carries pid, windowId, title, elements[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m act --set-value uses the AX-only Computer seam[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m act key forwards explicit modifiers through the one-shot computer seam[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m act --format observation returns the observe envelope[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0mcommand orchestration via injected session[2m >[0m[1m act observation failure retains delivered action outcome[0m [0m[2m[0.08ms[0m[2m][0m
+[0m
+tests/computer-session-host-regressions.test.ts:
+[0m[32m✓[0m [0msession host direct observe publication guards[2m >[0m[1m a late direct observe result is interrupted after cancellation[0m [0m[2m[9.00ms[0m[2m][0m
+[0m
+tests/permissions-install.test.ts:
+[0m[33m»[2m[0m[2m source, compiled, symlink, hostile cwd, and sanitized PATH install the catalog[0m
+[0m
+tests/computer-api-generation.test.ts:
+[0m[32m✓[0m [0mapi.d.ts generation (agentic surface)[2m >[0m[1m regenerating produces exactly the committed reference (no drift, no workspace mutation)[0m [0m[2m[[1m13.42ms[0m[2m][0m
+[0m[32m✓[0m [0mapi.d.ts generation (agentic surface)[2m >[0m[1m the agentic surface is present: observe, batch, point click, conditions[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mapi.d.ts generation (agentic surface)[2m >[0m[1m the generated declarations compile with skipLibCheck=false and are usable[0m [0m[2m[[1m875.73ms[0m[2m][0m
+[0m
+tests/computer-integration-state-codec.test.ts:
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m cancellation after durable intent abandons only that commit and keeps the host usable[0m [0m[2m[[1m324.84ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m an identical later commit belongs to its own request during recovery[0m [0m[2m[[1m485.32ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m an identical later no-op commit does not poison recovery[0m [0m[2m[[1m485.59ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m an uncertain commit without durable ownership remains blocked[0m [0m[2m[[1m11.75ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m JSON own __proto__ keys survive worker, commit, load, and the next exec[0m [0m[2m[[1m323.50ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m an intent with an unknown terminal outcome still blocks recovery without a commit proof[0m [0m[2m[[1m11.18ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m a real encoded exec reply preserves 130 nested arrays and advances state once[0m [0m[2m[[1m164.68ms[0m[2m][0m
+[0m[32m✓[0m [0mintegration state commit and JSON codec boundaries[2m >[0m[1m values beyond the shared depth bound fail before state commit with a decodable result[0m [0m[2m[[1m161.51ms[0m[2m][0m
+[0m
+tests/computer-lane-runtime-cli.test.ts:
+[0m[32m✓[0m [0mruntime lane session control recovery[2m >[0m[1m status and close recover a validated unusable session with a dead listener[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane session control recovery[2m >[0m[1m dead-listener fallback refuses malformed session identity[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane session control recovery[2m >[0m[1m a live host and dead-looking listener are not guessed closed[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane session control recovery[2m >[0m[1m public close is repeatable from recorded closed metadata[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane session CLI budget overrides[2m >[0m[1m batch overrides are forwarded through the real command routing to a peer[0m [0m[2m[0.52ms[0m[2m][0m
+[0m[32m✓[0m [0mruntime lane Node boundary[2m >[0m[1m Node invoking the internal worker selector gets unsupported_runtime before spawn[0m [0m[2m[[1m64.96ms[0m[2m][0m
+[0m
+tests/computer-resize-cleanup.test.ts:
+[0m[32m✓[0m [0mresize subprocess cleanup[2m >[0m[1m deadline kills a child that ignores SIGTERM and waits for exit[0m [0m[2m[[1m307.89ms[0m[2m][0m
+[0m[32m✓[0m [0mresize subprocess cleanup[2m >[0m[1m abort kills the child before resize rejects[0m [0m[2m[[1m123.30ms[0m[2m][0m
+[0m[32m✓[0m [0mresize subprocess cleanup[2m >[0m[1m session close waits for a timed-out derived screenshot to exit[0m [0m[2m[[1m307.50ms[0m[2m][0m
+[0m
+tests/computer-lane-release-benchmark.test.ts:
+[0m[1m27 |[0m       process.execPath,
+[0m[1m28 |[0m       [resolve([0m[32m"scripts/bench/computer-use.ts"[0m), [0m[32m"--samples"[0m, [0m[32m"3"[0m, [0m[32m"--warmup"[0m, [0m[32m"1"[0m],
+[0m[1m29 |[0m       { encoding: [0m[32m"utf8"[0m, stdio: [[0m[32m"ignore"[0m, [0m[32m"pipe"[0m, [0m[32m"pipe"[0m] }
+[0m[1m30 |[0m     )[0m[2m;[0m
+[0m[1m31 |[0m     expect(result.status)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m32 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                               [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:7011) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/computer-lane-release-benchmark.test.ts[0m[2m:[0m[33m32[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m [0mrelease lane: synthetic benchmark evidence[2m >[0m[1m measures equivalent four-action variants and reports unavailable native/model data[0m [0m[2m[[1m789.11ms[0m[2m][0m
+[0m
+tests/repro.test.ts:
+[0m[32m✓[0m[0m[1m repro inventory includes all layers, renames, deletions and unusual untracked paths[0m [0m[2m[[1m226.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m repro uses merge-base so target-only commits do not become feature changes[0m [0m[2m[[1m230.28ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m repro fails with no inventory when the comparison base is absent or invalid[0m [0m[2m[[1m173.21ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m repro installs its scanner and references into both supported skill targets[0m [0m[2m[[1m272.85ms[0m[2m][0m
+[0m
+tests/computer-exec-scope.test.ts:
+[0m[32m✓[0m[0m[1m cancellation during worker startup is observed before accepting script actions[0m [0m[2m[[1m52.66ms[0m[2m][0m
+[0m
+tests/computer-session-host.test.ts:
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m the plan's reference case: driver reuse across observes[0m [0m[2m[[1m12.92ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m idle timeout closes the session only when nothing is in flight[0m [0m[2m[[1m405.93ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m status does not extend the idle timer and never calls the driver[0m [0m[2m[[1m413.45ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m a running request answers concurrent requests with session_busy[0m [0m[2m[[1m337.67ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m batch replies decode BatchResult with per-step receipts[0m [0m[2m[[1m22.05ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m a failed or interrupted batch result never maps to a successful reply[0m [0m[2m[[1m23.00ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m generation mismatches are refused[0m [0m[2m[7.74ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m business payload text cannot be mistaken for a control command[0m [0m[2m[[1m164.47ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m exec with structurally invalid input fails loud before any script runs[0m [0m[2m[8.54ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m cancellation during final observation reports an interrupted batch[0m [0m[2m[7.59ms[0m[2m][0m
+[0m[32m✓[0m [0msession host (B2)[2m >[0m[1m close is idempotent and reports the final state[0m [0m[2m[2.78ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest dedup at the host (B3)[2m >[0m[1m state and request journals stay isolated under a shared production root[0m [0m[2m[[1m339.30ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest dedup at the host (B3)[2m >[0m[1m an interrupted batch with an unknown receipt becomes an unknown session reply[0m [0m[2m[7.38ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest dedup at the host (B3)[2m >[0m[1m cancel closes admission before the delayed native call settles[0m [0m[2m[[1m34.80ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest dedup at the host (B3)[2m >[0m[1m a delayed native call blocks admission until it settles or the session is unusable[0m [0m[2m[[1m46.75ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest dedup at the host (B3)[2m >[0m[1m the same request-id runs exactly once; different content conflicts[0m [0m[2m[[1m10.44ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest dedup at the host (B3)[2m >[0m[1m unknown-delivery failures close the session as unusable (no replay)[0m [0m[2m[[1m14.31ms[0m[2m][0m
+[0m
+tests/computer-exec-lifecycle.test.ts:
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m the plan's reference case: an infinite loop is reclaimed by the watchdog[0m [0m[2m[[1m113.11ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m timeout waits for a delayed native dispatch before admitting another exec[0m [0m[2m[[1m1847.36ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m an infinite async wait is also reclaimed[0m [0m[2m[[1m113.62ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m script-spawned children die with the worker's process group[0m [0m[2m[[1m492.15ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m a successfully returned script still reaps a surviving child[0m [0m[2m[[1m605.83ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m returning with an unawaited facade call refuses completion[0m [0m[2m[[1m163.01ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m a failed single facade action rejects and prevents later actions[0m [0m[2m[[1m162.32ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m late RPCs after the request finished are refused, never delivered[0m [0m[2m[[1m324.21ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m log overflow closes admission before a later input can be delivered[0m [0m[2m[[1m161.81ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m exceeding the action budget fails loud with receipts so far[0m [0m[2m[[1m162.39ms[0m[2m][0m
+[0m[32m✓[0m [0mexec lifecycle (C3)[2m >[0m[1m no stray exec worker processes survive the test run[0m [0m[2m[[1m180.04ms[0m[2m][0m
+[0m
+tests/pbench-runs.test.ts:
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m runs a finalized case with codex while keeping private evaluator paths away from the agent[0m [0m[2m[[1m787.91ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m runs a finalized case with the claude runner and records claude provenance[0m [0m[2m[[1m827.44ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m records run profile and normalized metrics/events for an automatic run[0m [0m[2m[[1m855.52ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m captures candidate untracked file contents and redacts required env values[0m [0m[2m[[1m1968.48ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m run --manual prepares the skill-mediated worktree[0m [0m[2m[[1m1303.18ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m installs the manual runner into the worktree's existing Claude skill target[0m [0m[2m[[1m753.29ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m installs and removes the manual runner across both existing skill targets[0m [0m[2m[[1m1025.72ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m preserves a skill target created by setup when removing the injected runner[0m [0m[2m[[1m1252.07ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m refuses to overwrite an existing runner skill[0m [0m[2m[[1m670.74ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m candidate artifacts exclude the injected runner skill[0m [0m[2m[[1m873.94ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m starts a skill-mediated run with public capsule, runner skill, and one-shot finish[0m [0m[2m[[1m826.42ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m finish consumes the attempt when validation infrastructure fails[0m [0m[2m[[1m600.68ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m rejects a second finish while the first attempt is marked finishing[0m [0m[2m[[1m556.63ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m treats an atomic finishing marker as a consumed attempt after a crash[0m [0m[2m[[1m582.36ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m allows only one concurrent finish to execute private validators[0m [0m[2m[[1m603.34ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m preserves profile and writes normalized metrics for a skill-mediated run[0m [0m[2m[[1m704.21ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m skill finish returns minimal signal with no run-dir pointer and redacts validator step output (P1.1)[0m [0m[2m[[1m692.79ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m codex run keeps full validator outcomes, returns a summary path, and records workspace-write isolation[0m [0m[2m[[1m1025.81ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m records harness-agnostic isolation, attempt, priorRunIds, and contaminated provenance (P1.2)[0m [0m[2m[[1m968.41ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m prior attempts exclude in-flight and legacy pre-feature runs[0m [0m[2m[[1m586.15ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m report surfaces isolation, attempt, and contaminated provenance[0m [0m[2m[[1m583.64ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m skill finish copies the access-audit log and flags sensitive reads (P1.3-lite)[0m [0m[2m[[1m744.17ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m skill finish writes no access-audit artifact when the agent kept no log[0m [0m[2m[[1m760.50ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m access audit flags the capture-skill source but not the runner skill it must read[0m [0m[2m[[1m742.01ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m installs the canonical internal runner skill[0m [0m[2m[[1m573.91ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m redacts setup-outcomes stdout/stderr in skill mode (review)[0m [0m[2m[[1m621.46ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m fails before agent execution when required replay env is missing[0m [0m[2m[[1m511.67ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m applies the public starting patch before a skill-mediated agent works[0m [0m[2m[[1m929.33ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m records agent failure without running private validators[0m [0m[2m[[1m1659.58ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m records setup failure before invoking the agent[0m [0m[2m[[1m1649.16ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m records validator failure and the agent diff[0m [0m[2m[[1m1154.77ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m redacts required environment values from persisted runner logs[0m [0m[2m[[1m1154.98ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m defaults reports to Markdown and preserves explicit JSON output[0m [0m[2m[1.48ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m audits case quality warnings and public private-path leaks without strict replay[0m [0m[2m[[1m151.06ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m audits every finalized case in a workspace[0m [0m[2m[[1m618.52ms[0m[2m][0m
+[0m[32m✓[0m [0mpbench capture and replay flow[2m >[0m[1m audits an empty workspace without a cases directory[0m [0m[2m[1.09ms[0m[2m][0m
+[0m
+tests/computer-lane-runtime-batch.test.ts:
+[0m[32m✓[0m [0mruntime lane standalone batch deadline[2m >[0m[1m one absolute budget stops later per-action dispatch and final observation[0m [0m[2m[[1m52.94ms[0m[2m][0m
+[0m
+tests/computer-use-batch-cli.test.ts:
+[0m[32m✓[0m [0mparseRequest (agentic additions)[2m >[0m[1m the plan's reference failures[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest (agentic additions)[2m >[0m[1m a visual click needs observation + both coordinates[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest (agentic additions)[2m >[0m[1m old --x/--y still belong to scroll only[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest (agentic additions)[2m >[0m[1m observe parses mode, max-dimension, and structured selector[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest (agentic additions)[2m >[0m[1m batch requires --file and --request-id together[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m a completed batch prints a schemaVersion-1 result[0m [0m[2m[5.06ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m --out-dir is passed to the batch session[0m [0m[2m[4.22ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m the same request-id + same content replays nothing[0m [0m[2m[4.28ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m the same request-id with different content is a conflict[0m [0m[2m[4.37ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m failed and interrupted batches exit non-zero with receipts attached[0m [0m[2m[3.98ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m an invalid batch file fails before any driver starts[0m [0m[2m[0.46ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m an unknown-delivery mid-run failure records unknown, never replays[0m [0m[2m[4.00ms[0m[2m][0m
+[0m[32m✓[0m [0mbatchCommand (journal-backed dedup, no replay)[2m >[0m[1m defaultRequestsDir lives in the user cache[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mobserveCommand (schemaVersion-1 envelope)[2m >[0m[1m prints target + observation with independent channels[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0mobserveCommand (schemaVersion-1 envelope)[2m >[0m[1m --out-dir is passed to the observation session[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mobserveCommand (schemaVersion-1 envelope)[2m >[0m[1m a missing window fails with the shared selector error[0m [0m[2m[0.08ms[0m[2m][0m
+[0m
+tests/computer-batch-sequence.test.ts:
+[0m[32m✓[0m[0m[1m journal latency can close admission before dispatch in every batch mode[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m a receipt persistence failure prevents later dispatch and is not recast as a driver error[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m unknown script delivery preserves global indices and never dispatches the tail[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m hosted batches keep missing-status driver failures distinct from interruption[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m step capability is selected before dispatch and never retried after an error[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m legacy driver capability uses a single batch adapter call[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m host never replays a step error as batch after delivery[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m host keeps an undefined step result unknown without a batch replay[0m [0m[2m[0.04ms[0m[2m][0m
+[0m
+tests/pbench-reporting.test.ts:
+[0m[32m✓[0m[0m[1m reporting returns an empty stable report[0m [0m[2m[0.23ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m reporting separates trusted cohorts and tolerates malformed artifacts[0m [0m[2m[2.61ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m reporting keeps legacy runs visible but unevaluated[0m [0m[2m[0.99ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m reporting renders comparable cohorts as Markdown[0m [0m[2m[0.74ms[0m[2m][0m
+[0m
+tests/computer-coordinates.test.ts:
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m the plan's reference case: input units are POINTS, not a blind x2[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m unscaled 2x Retina capture maps sent pixels to half-size points[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m non-integer scale factors keep precision without early rounding[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m non-zero inputBounds origin offsets the mapped point[0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m out-of-image and non-finite points are rejected: {"x":-1,"y":300}[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m out-of-image and non-finite points are rejected: {"x":500,"y":-0.5}[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m out-of-image and non-finite points are rejected: {"x":1440,"y":300}[0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m out-of-image and non-finite points are rejected: {"x":500,"y":900}[0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m out-of-image and non-finite points are rejected: {"x":null,"y":300}[0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m out-of-image and non-finite points are rejected: {"x":null,"y":300}[0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m invalid geometry is rejected: {"sourceWidth":0,"sourceHeight":800}[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m invalid geometry is rejected: {"sourceWidth":-10,"sourceHeight":800}[0m
+[0m[32m✓[0m [0mmapImagePoint (sent pixels -> window-local points)[2m >[0m[1m invalid geometry is rejected: {"sourceWidth":null,"sourceHeight":800}[0m
+[0m[32m✓[0m [0mmapImagePointToDriverPixels (window-local points -> driver pixels)[2m >[0m[1m unscaled capture is the identity on pixel coordinates[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mmapImagePointToDriverPixels (window-local points -> driver pixels)[2m >[0m[1m scaled sent image upscales back to source pixels[0m
+[0m[32m✓[0m [0mmapImagePointToDriverPixels (window-local points -> driver pixels)[2m >[0m[1m the far corner of the sent image maps inside the source frame or refuses[0m [0m[2m[0.01ms[0m[2m][0m
+[0m
+tests/ultra-cr.test.ts:
+[0m[32m✓[0m[0m[1m pipeline installation includes portable ultra-cr assets in both skill targets[0m [0m[2m[[1m22.36ms[0m[2m][0m
+[0m
+tests/computer-session-protocol.test.ts:
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m the plan's reference case round-trips[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m windowId arrives as a decimal string and becomes bigint exactly once[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m schema version mismatches fail with protocol_version[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m non-decimal windowIds are rejected, never coerced[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m unknown operations and missing identity are rejected[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m business reply decoding restores a complete observation and rejects an incomplete one[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m [0mrequest codec[2m >[0m[1m replies round-trip and reject bad versions[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mFrameReader[2m >[0m[1m partial frames buffer until the newline; multiple frames split apart[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mFrameReader[2m >[0m[1m a frame over the 1MiB cap aborts immediately (not after buffering)[0m [0m[2m[[1m12.05ms[0m[2m][0m
+[0m[32m✓[0m [0mFrameReader[2m >[0m[1m split UTF-8 bytes are decoded without replacement characters[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m [0mFrameReader[2m >[0m[1m several independently valid frames in one chunk do not share a size budget[0m [0m[2m[5.97ms[0m[2m][0m
+[0m[32m✓[0m [0mFrameReader[2m >[0m[1m a partial frame past the cap aborts before completion[0m [0m[2m[6.44ms[0m[2m][0m
+[0m[32m✓[0m [0msessionPaths[2m >[0m[1m the plan's traversal attempt is rejected[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0msessionPaths[2m >[0m[1m paths derive from the id; socket stays short and in the temp root[0m [0m[2m[0.39ms[0m[2m][0m
+[0m[32m✓[0m [0mclient/server roundtrip over a real socket[2m >[0m[1m one request, one reply; a slow second write is not sent on timeout[0m [0m[2m[[1m305.12ms[0m[2m][0m
+[0m
+tests/computer-use-exec-cli.test.ts:
+[0m[32m✓[0m [0mparseRequest exec (C4)[2m >[0m[1m the plan's reference failures[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest exec (C4)[2m >[0m[1m exec requires session + file + request-id together[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m [0mparseRequest exec (C4)[2m >[0m[1m exec never takes --pid (sessions own the target)[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mexecCommand (C4)[2m >[0m[1m a missing script file fails before any session work[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m [0mexecCommand (C4)[2m >[0m[1m an unknown session fails with unknown_session[0m [0m[2m[0.56ms[0m[2m][0m
+[0m
+tests/computer-e2e-suite.test.ts:
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m beforeAll failure runs afterAll once, marks cases not_run, records the phase[0m [0m[2m[0.58ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m a failed case stops the file; later cases are not_run; afterAll still runs once[0m [0m[2m[0.34ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m sync and async throws both fail the case[0m [0m[2m[0.30ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m declared skip and runtime skip both record reasons without running[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m ctx.skip without a reason is a failure, not a skip[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m an afterAll failure is recorded without masking the primary case error[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m a case exceeding its budget is interrupted and stops the file[0m [0m[2m[[1m31.41ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m steps emit begin/end pairs bound to the running case[0m [0m[2m[0.62ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m nested steps are reported in finish order[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m a failing step marks the step failed and the case failed[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m suite results are the projection of the events it emits[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m suite_collected is emitted before any hook event, with the full case list[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m context passthrough: params keep identity and the computer delegates to the injected one[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m [0mrunSuite (sequential, fail-stop)[2m >[0m[1m a timed-out case's zombie continuation is refused, not delivered[0m [0m[2m[[1m127.60ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m accepts the minimal shape[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m rejects wrong apiVersion[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m rejects empty suites[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m rejects duplicate case ids[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m rejects non-function run[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m rejects negative and NaN budgets[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateSuite[2m >[0m[1m rejects non-object values[0m
+[0m[32m✓[0m [0mexitCodeFor[2m >[0m[1m all passed is 0[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mexitCodeFor[2m >[0m[1m any skipped or not_run (no failures) is 2[0m
+[0m[32m✓[0m [0mexitCodeFor[2m >[0m[1m no cases at all is 2[0m
+[0m[32m✓[0m [0mexitCodeFor[2m >[0m[1m failures, interruptions, and errors are 1[0m
+[0m
+tests/cli.test.ts:
+[0m[1m40 |[0m 
+[0m[1m41 |[0m test([0m[32m"yk list discovers plan-jury in the root catalog"[0m, [0m[35masync[0m () => {
+[0m[1m42 |[0m   [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"list"[0m])[0m[2m;[0m
+[0m[1m43 |[0m 
+[0m[1m44 |[0m   expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m45 |[0m   expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                             [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14040) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m45[0m[2m:[33m25[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk list discovers plan-jury in the root catalog[0m [0m[2m[[1m44.97ms[0m[2m][0m
+[0m[1m61 |[0m     }
+[0m[1m62 |[0m 
+[0m[1m63 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"list"[0m], { YA_SKILLS_CATALOG_DIR: catalogDir })[0m[2m;[0m
+[0m[1m64 |[0m 
+[0m[1m65 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m66 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                               [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14041) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m66[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk list prints each skill on one aligned line so names stay scannable[0m [0m[2m[[1m37.36ms[0m[2m][0m
+[0m[1m73 |[0m test([0m[32m"yk exposes conventional help flags"[0m, [0m[35masync[0m () => {
+[0m[1m74 |[0m   [0m[35mfor[0m ([0m[35mconst[0m flag of [[0m[32m"-h"[0m, [0m[32m"--help"[0m]) {
+[0m[1m75 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([flag])[0m[2m;[0m
+[0m[1m76 |[0m 
+[0m[1m77 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m78 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                               [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14042) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m78[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk exposes conventional help flags[0m [0m[2m[[1m34.33ms[0m[2m][0m
+[0m[1m84 |[0m test([0m[32m"yk exposes conventional version flags"[0m, [0m[35masync[0m () => {
+[0m[1m85 |[0m   [0m[35mfor[0m ([0m[35mconst[0m flag of [[0m[32m"-v"[0m, [0m[32m"--version"[0m]) {
+[0m[1m86 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([flag])[0m[2m;[0m
+[0m[1m87 |[0m 
+[0m[1m88 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m89 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                               [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14043) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m89[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk exposes conventional version flags[0m [0m[2m[[1m32.49ms[0m[2m][0m
+ [0m[1m97 |[0m   [0m[35mtry[0m {
+ [0m[1m98 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"install"[0m, [0m[32m"-g"[0m, [0m[32m"coding-recon"[0m], { HOME: homeDir })[0m[2m;[0m
+ [0m[1m99 |[0m     [0m[35mconst[0m target = join(homeDir, [0m[32m".agents"[0m, [0m[32m"skills"[0m, [0m[32m"coding-recon"[0m)[0m[2m;[0m
+[0m[1m100 |[0m 
+[0m[1m101 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m102 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                                [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14044) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m102[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk install -g uses the user-level default target[0m [0m[2m[[1m45.40ms[0m[2m][0m
+[0m[1m115 |[0m     [0m[35mawait[0m Promise[0m[3m[1m.all[0m(targets[0m[3m[1m.map[0m((target) => mkdir(target, { recursive: [0m[33mtrue[0m })))[0m[2m;[0m
+[0m[1m116 |[0m 
+[0m[1m117 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"install"[0m, [0m[32m"coding-recon"[0m, [0m[32m"--global"[0m], { HOME: homeDir })[0m[2m;[0m
+[0m[1m118 |[0m 
+[0m[1m119 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m120 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                                [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14045) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m120[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk install --global uses every existing user-level target[0m [0m[2m[[1m45.27ms[0m[2m][0m
+[0m[1m139 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"uninstall"[0m, [0m[32m"-g"[0m, [0m[32m"coding-recon"[0m], { HOME: homeDir }, { cwd: projectDir })[0m[2m;[0m
+[0m[1m140 |[0m     [0m[35mconst[0m homeSkill = join(homeDir, [0m[32m".agents"[0m, [0m[32m"skills"[0m, [0m[32m"coding-recon"[0m)[0m[2m;[0m
+[0m[1m141 |[0m     [0m[35mconst[0m projectSkill = join(projectDir, [0m[32m".agents"[0m, [0m[32m"skills"[0m, [0m[32m"coding-recon"[0m)[0m[2m;[0m
+[0m[1m142 |[0m 
+[0m[1m143 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m144 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                                [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14048) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m144[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk uninstall -g removes a user-level skill without touching the current repository[0m [0m[2m[[1m456.08ms[0m[2m][0m
+[0m[1m162 |[0m     expect(installResult.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m163 |[0m 
+[0m[1m164 |[0m     [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"uninstall"[0m, [0m[32m"coding-recon"[0m, [0m[32m"--global"[0m], { HOME: homeDir }, { cwd: projectDir })[0m[2m;[0m
+[0m[1m165 |[0m 
+[0m[1m166 |[0m     expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m167 |[0m     expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                                [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14411) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m167[0m[2m:[33m27[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk uninstall --global removes from every existing user-level target[0m [0m[2m[[1m294.27ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m pbench documentation matches registered cross-agent workflows[0m [0m[2m[0.52ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m yk prints subcommand and function help without side effects[0m [0m[2m[[1m136.30ms[0m[2m][0m
+[0m[1m220 |[0m 
+[0m[1m221 |[0m test([0m[32m"yk -h lists every registered function domain"[0m, [0m[35masync[0m () => {
+[0m[1m222 |[0m   [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"-h"[0m])[0m[2m;[0m
+[0m[1m223 |[0m 
+[0m[1m224 |[0m   expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m225 |[0m   expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                              [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14579) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m225[0m[2m:[33m25[0m[2m)[0m
+[0m[31m✗[0m[0m[1m yk -h lists every registered function domain[0m [0m[2m[[1m36.52ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m yk <domain> <action> -h documents the real flags each command accepts[0m [0m[2m[[1m130.44ms[0m[2m][0m
+[0m[1m254 |[0m 
+[0m[1m255 |[0m test([0m[32m"commands without declared usage keep the generic [...args] fallback"[0m, [0m[35masync[0m () => {
+[0m[1m256 |[0m   [0m[35mconst[0m result = [0m[35mawait[0m runYk([[0m[32m"demo"[0m, [0m[32m"echo"[0m, [0m[32m"-h"[0m])[0m[2m;[0m
+[0m[1m257 |[0m 
+[0m[1m258 |[0m   expect(result.exitCode)[0m[3m[1m.toBe[0m([0m[33m0[0m)[0m[2m;[0m
+[0m[1m259 |[0m   expect(result.stderr)[0m[3m[1m.toBe[0m([0m[32m""[0m)[0m[2m;[0m
+                              [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+[32m- [0m[32m""[0m
+[31m+ [0m[31m"(node:14624) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[31m+ [0m[31m(Use `bun --trace-warnings ...` to show where the warning was created)[0m
+[31m+ [0m[31m"[0m
+
+[32m- Expected  - 1[0m
+[31m+ Received  + 3[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/phaethon/workspace/personal/ya-skills/[0m[36mtests/cli.test.ts[0m[2m:[0m[33m259[0m[2m:[33m25[0m[2m)[0m
+[0m[31m✗[0m[0m[1m commands without declared usage keep the generic [...args] fallback[0m [0m[2m[[1m33.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m picker options expose catalog names with deps visible in hints[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m confirm list expands selected skills with their dependencies in install order[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m yk install without arguments still fails cleanly when stdin is not interactive[0m [0m[2m[[1m36.06ms[0m[2m][0m
+[0m
+tests/computer-exec-worker.test.ts:
+[0m[32m✓[0m [0mexec through the session host (C1, real exec-worker subprocess)[2m >[0m[1m the plan's reference case: scripted actions + observe + state[0m [0m[2m[[1m215.11ms[0m[2m][0m
+[0m[32m✓[0m [0mexec through the session host (C1, real exec-worker subprocess)[2m >[0m[1m strict AX setValue returns the host-validated route proof[0m [0m[2m[[1m162.79ms[0m[2m][0m
+[0m[32m✓[0m [0mexec through the session host (C1, real exec-worker subprocess)[2m >[0m[1m state persists across exec calls only on clean completion[0m [0m[2m[[1m484.30ms[0m[2m][0m
+[0m[32m✓[0m [0mexec through the session host (C1, real exec-worker subprocess)[2m >[0m[1m static import syntax fails with a readable error, nothing delivered[0m [0m[2m[[1m161.26ms[0m[2m][0m
+[0m[32m✓[0m [0mexec through the session host (C1, real exec-worker subprocess)[2m >[0m[1m oversized code is rejected before any worker spawns[0m [0m[2m[[1m14.54ms[0m[2m][0m
+[0m[32m✓[0m [0mexec through the session host (C1, real exec-worker subprocess)[2m >[0m[1m unknown RPC methods from a hostile script are refused, no desktop effect[0m [0m[2m[[1m215.69ms[0m[2m][0m
+[0m[32m✓[0m [0mcreateScriptComputer (fixed wire surface)[2m >[0m[1m every facade method maps to exactly one fixed RPC name[0m [0m[2m[0.62ms[0m[2m][0m
+[0m
+tests/computer-foreground-cli.test.ts:
+[0m[32m✓[0m[0m[1m plain background act performs no foreground probes[0m [0m[2m[0.28ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m audited background act reports frontmost pids without activation[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m explicit activation restores prior app and returns a receipt[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m target ambiguity is resolved before any activation[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m refusal retains its outcome and foreground receipt after restoration[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m post-action observation failure preserves delivered status with foreground receipt[0m [0m[2m[0.31ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m explicit perceive restores the foreground too[0m [0m[2m[0.12ms[0m[2m][0m
+[0m
+tests/computer-integration-observation-budget.test.ts:
+[0m[32m✓[0m [0mobservation request budget finalization[2m >[0m[1m cancellation during store.save stays interrupted after save resolves[0m [0m[2m[[1m31.64ms[0m[2m][0m
+[0m[32m✓[0m [0mobservation request budget finalization[2m >[0m[1m deadline remains active while store.save is pending[0m [0m[2m[[1m100.35ms[0m[2m][0m
+[0m[32m✓[0m [0mderived screenshot request budget[2m >[0m[1m passes only the remaining deadline to each child process and fails after expiry[0m [0m[2m[[1m72.15ms[0m[2m][0m
+[0m[32m✓[0m [0mderived screenshot request budget[2m >[0m[1m cancellation during a child process remains an interruption signal[0m [0m[2m[[1m31.44ms[0m[2m][0m
+[0m[32m✓[0m [0mhost-style observation finalization[2m >[0m[1m real host and driver-worker IPC preserve interrupted final observation[0m [0m[2m[[1m242.78ms[0m[2m][0m
+[0m[32m✓[0m [0mhost-style observation finalization[2m >[0m[1m driver-worker factory forwards cancellation through production runtime finalization[0m [0m[2m[[1m24.03ms[0m[2m][0m
+[0m[32m✓[0m [0mhost-style observation finalization[2m >[0m[1m session cancellation interrupts derivation even with a live per-call signal[0m [0m[2m[0.64ms[0m[2m][0m
+[0m[32m✓[0m [0mhost-style observation finalization[2m >[0m[1m deadline expires during derivation before it can publish[0m [0m[2m[[1m103.22ms[0m[2m][0m
+[0m[32m✓[0m [0mhost-style observation finalization[2m >[0m[1m a delayed derivation is cancelled without becoming an artifact failure[0m [0m[2m[0.76ms[0m[2m][0m
+[0m
+tests/computer-use-probe-guard.test.ts:
+{"mode":"no-target","driverStarted":false}
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m no arguments is a valid no-target run that must not start the driver[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m --help is usage, never a driver start[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m a target requests the driver; without --allow-input it stays read-only[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m --allow-input authorizes input and accepts window-target click coordinates[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m click coordinates without --allow-input are rejected before any driver work[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m --allow-input without a target is rejected[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--window" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe arg guard (parseProbeArgs)[2m >[0m[1m "--pid" is invalid and never starts the driver[0m
+[0m[32m✓[0m [0mprobe report projection (privacy allowlist)[2m >[0m[1m driver errors retain their structured code without copying inner content[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe report projection (privacy allowlist)[2m >[0m[1m projects geometry, scale, pixel size, and frame validity only[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe report projection (privacy allowlist)[2m >[0m[1m never emits elements, labels, values, markdown, or image bytes[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe CLI desktop-free behavior[2m >[0m[1m running without a target exits 0 and reports driverStarted:false[0m [0m[2m[9.62ms[0m[2m][0m
+[0m[32m✓[0m [0mprobe CLI desktop-free behavior[2m >[0m[1m click coordinates without --allow-input exit non-zero with the guard reason[0m [0m[2m[6.93ms[0m[2m][0m
+[0m
+tests/computer-e2e-result-reducer.test.ts:
+[0m[32m✓[0m [0mcomputer-e2e result reducer[2m >[0m[1m keeps runtime and history projections distinct without duplicating event state[0m [0m[2m[0.12ms[0m[2m][0m
+
+[0m[2m18 tests skipped:[0m
+[0m[33m»[2m [0m[2mcompiled yk native (opt-in via YK_CU_NATIVE_TESTS=1)[2m >[0m[2m loads the SDK sidecar in-process from a hostile cwd and reads real apps[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m packaged executable has a valid code signature[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m release artifacts must exist when YK_RELEASE_TESTS=1[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m install + run + history + report through the compiled yk[0m
+[0m[33m»[2m [0m[2mpackaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m external TS relative imports work; hostile package.json does not stop the run[0m
+[0m[33m»[2m[0m[2m packaged zoom crops local evidence with the native runtime absent[0m
+[0m[33m»[2m [0m[2mpackage:release runtime assembly[2m >[0m[2m assembles the sidecar runtime with every required file and no symlinks[0m
+[0m[33m»[2m [0m[2mpackage:release runtime assembly[2m >[0m[2m compiled yk loads from a hostile package.json cwd without executing project scripts[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m release artifacts exist and include the generated skill api[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m the packaged skill references match the generated api[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m help output lists the agentic actions and executes no project scripts[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m invalid exec requests fail cleanly without native load[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m the internal exec worker completes pure JS + state + log against a test RPC peer[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m the compiled exec loop proves body readiness before TERM/KILL cleanup[0m
+[0m[33m»[2m [0m[2mpackaged computer-use agentic closed loop (no desktop, no node/npm/bun on PATH)[2m >[0m[2m same exec request-id replays nothing through a re-invoked CLI[0m
+[0m[33m»[2m [0m[2mrelease lane: packaged live fake session[2m >[0m[2m deduplicates a live request through a separate packaged driver process[0m
+[0m[33m»[2m [0m[2mrelease lane: packaged live fake session[2m >[0m[2m a symlinked packaged executable self-spawns its driver worker[0m
+[0m[33m»[2m[0m[2m source, compiled, symlink, hostile cwd, and sanitized PATH install the catalog[0m
+
+
+[0m[2m13 tests failed:[0m
+[0m[31m✗[0m[0m[1m yk list prefers YA_SKILLS_CATALOG_DIR for packaged installs[0m [0m[2m[[1m38.86ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m real sessions and worker steps stay lazy and bypass an incompatible installed daemon[0m [0m[2m[[1m26.75ms[0m[2m][0m
+[0m[31m✗[0m [0mrelease lane: synthetic benchmark evidence[2m >[0m[1m measures equivalent four-action variants and reports unavailable native/model data[0m [0m[2m[[1m789.11ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk list discovers plan-jury in the root catalog[0m [0m[2m[[1m44.97ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk list prints each skill on one aligned line so names stay scannable[0m [0m[2m[[1m37.36ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk exposes conventional help flags[0m [0m[2m[[1m34.33ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk exposes conventional version flags[0m [0m[2m[[1m32.49ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk install -g uses the user-level default target[0m [0m[2m[[1m45.40ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk install --global uses every existing user-level target[0m [0m[2m[[1m45.27ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk uninstall -g removes a user-level skill without touching the current repository[0m [0m[2m[[1m456.08ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk uninstall --global removes from every existing user-level target[0m [0m[2m[[1m294.27ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m yk -h lists every registered function domain[0m [0m[2m[[1m36.52ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m commands without declared usage keep the generic [...args] fallback[0m [0m[2m[[1m33.37ms[0m[2m][0m
+
+[0m[32m 782 pass[0m
+ [0m[33m18 skip[0m
+[0m[31m 13 fail[0m
+ 2909 expect() calls
+Ran 813 tests across 100 files. [0m[2m[[1m125.66s[0m[2m][0m
+[0m[31merror[0m[2m:[0m script [1m"test"[0m exited with code 1[0m

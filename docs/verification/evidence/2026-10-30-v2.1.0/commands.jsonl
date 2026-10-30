@@ -1,0 +1,16 @@
+{"command": ["git", "rev-parse", "HEAD"], "exit_code": 0, "output": "00-git.txt"}
+{"command": ["bun", "--version"], "exit_code": 0, "output": "01-bun.txt"}
+{"command": ["sw_vers"], "exit_code": 0, "output": "02-sw_vers.txt"}
+{"command": ["uname", "-sm"], "exit_code": 0, "output": "03-uname.txt"}
+{"command": ["bun", "run", "typecheck"], "exit_code": 0, "output": "04-bun.txt"}
+{"command": ["bun", "run", "test"], "exit_code": 1, "output": "05-bun.txt"}
+{"command": ["git", "rev-parse", "HEAD"], "exit_code": 0, "output": "00-git.txt"}
+{"command": ["bun", "--version"], "exit_code": 0, "output": "01-bun.txt"}
+{"command": ["sw_vers"], "exit_code": 0, "output": "02-sw_vers.txt"}
+{"command": ["uname", "-sm"], "exit_code": 0, "output": "03-uname.txt"}
+{"command": ["bun", "run", "typecheck"], "exit_code": 0, "output": "04-bun.txt"}
+{"command": ["bun", "run", "test"], "exit_code": 0, "output": "05-bun.txt"}
+{"command": ["bun", "run", "package:release", "--", "--version", "2.1.0"], "exit_code": 0, "output": "06-bun.txt"}
+{"command": ["env", "YK_RELEASE_TESTS=1", "bun", "test", "tests/computer-e2e-release.test.ts", "tests/computer-session-release.test.ts", "tests/computer-lane-release-packaging.test.ts"], "exit_code": 0, "output": "07-env.txt"}
+{"command": ["bun", "run", "build"], "exit_code": 0, "output": "08-bun.txt"}
+{"command": ["bun", "run", "smoke"], "exit_code": 0, "output": "09-bun.txt"}
