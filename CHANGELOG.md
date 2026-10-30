@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Yaphet2015/ya-skills/compare/v1.1.2...v1.2.0) (2026-10-30)
+
+
+### Features
+
+* **skills:** ship standalone Bankai and Stage in v1.2.0 ([39de9db](https://github.com/Yaphet2015/ya-skills/commit/39de9db938c785cc008e45a56ef73f6b29c4e5db))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
