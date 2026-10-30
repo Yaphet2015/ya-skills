@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/Yaphet2015/ya-skills/compare/v2.0.0...v2.1.0) (2026-10-30)
+
+
+### Features
+
+* **skills:** add UI parity workflow and release v2.1.0 ([91878da](https://github.com/Yaphet2015/ya-skills/commit/91878da0b91b5baabdeed0582bf69f3e15ceca69))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
