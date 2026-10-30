@@ -32,6 +32,9 @@
 - Smoke test: `bun run smoke`
 
 ## Homebrew Release Contract
+- Version preference: use patch for fixes and small adjustments; use minor for new capabilities or broader changes. Prefer patch/minor releases.
+- Select a major version only when the user explicitly requests it. Interface, helper-command, or state-layout changes do not authorize an automatic major bump; document compatibility and migration details instead.
+- Do not use major-triggering Conventional Commit markers (`!` or `BREAKING CHANGE`) unless the user explicitly requests a major release.
 - Published install path is `brew tap Yaphet2015/tap && brew install ya-skills`.
 - The tap repository is `Yaphet2015/homebrew-tap`.
 - The release workflow publishes macOS arm64 assets named `ya-skills-v<version>-macos-arm64.tar.gz` plus `.sha256`.

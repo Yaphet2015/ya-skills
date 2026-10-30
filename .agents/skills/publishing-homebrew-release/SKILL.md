@@ -6,7 +6,9 @@ description: Use when publishing ya-skills from main or master to Homebrew, upda
 # Publishing Homebrew Release
 
 Use the local package path for the current `main`. The defaults are a new
-semantic version, no tag or release overwrite, and no Release Please merge.
+patch or minor semantic version, no tag or release overwrite, and no Release
+Please merge. A major release requires the user's explicit request; do not infer
+it from interface or storage changes.
 Honor an explicit user choice after checking the exact tag, release, asset, or
 PR state. Record every exception and every omitted check; never describe an
 omitted check as passed.
@@ -15,11 +17,14 @@ omitted check as passed.
 
 1. Confirm macOS arm64, branch `main`, `HEAD == origin/main`, and a clean
    tracked tree. Do not `git reset --hard`.
-2. Read the latest GitHub Release tag and classify the changes. A fix advances
-   the patch (`0.25.2` → `0.25.3`); a backward-compatible feature advances the
-   minor (`0.25.2` → `0.26.0`); a breaking change advances the major. If the
-   user selects a version, use that valid semver after checking that the exact
-   tag, release, and intended asset state are understood. The default is to
+2. Read the latest GitHub Release tag and classify the changes. Prefer patch
+   for fixes and small adjustments; use minor for new capabilities or broader
+   changes. Select major only when the user explicitly requests it. Changes
+   to interfaces, helper commands or state layouts do not automatically select
+   major; document compatibility and migration details. Avoid major-triggering
+   Conventional Commit markers (`!` or `BREAKING CHANGE`) without that explicit
+   request. If the user selects a version, use that valid semver after checking
+   that the exact tag, release, and intended asset state are understood. The default is to
    stop on an existing target; an explicitly requested overwrite must name the
    exact target and be recorded. `package.json` must contain the release
    version, because the compiled `yk --version` comes from that field.

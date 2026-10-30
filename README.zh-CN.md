@@ -60,6 +60,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | --- | --- | --- |
 | **a-share-data** | 从公开数据源获取 A 股报价、K 线、财务指标、现金流和公告，并保留来源与缺失字段说明，避免编造数据。 | `yk install a-share-data` |
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
+| **ui-parity** | 对齐现有 UI，明确允许差异，分别验证旧版回归与改后界面的一致性，并提供实际渲染和交互证据。 | `yk install ui-parity` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
 | **pbench**（已弃用） | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
 | **produce** | 轻量流程：subagents 使用 brainstorming、grill-with-docs 规划 → 独立挑战 → 每部分实现后 simplify → 测试。规划代理与 Main 讨论技术选择，遵循 SOLID、DRY、KISS、YAGNI、SSOT；体验行为选择由 Main 咨询用户。需要宿主已安装这些 Skill。 | `yk install produce` |
