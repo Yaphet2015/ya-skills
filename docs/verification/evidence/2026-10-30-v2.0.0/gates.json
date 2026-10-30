@@ -1,0 +1,74 @@
+[
+  {
+    "gate": "typecheck",
+    "command": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 1.55
+  },
+  {
+    "gate": "default-tests",
+    "command": [
+      "bun",
+      "test"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 147.73
+  },
+  {
+    "gate": "package",
+    "command": [
+      "bun",
+      "run",
+      "package:release",
+      "--",
+      "--version",
+      "2.0.0"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 3.62
+  },
+  {
+    "gate": "packaged-tests",
+    "command": [
+      "bun",
+      "test",
+      "tests/computer-e2e-release.test.ts",
+      "tests/computer-session-release.test.ts",
+      "tests/computer-lane-release-packaging.test.ts"
+    ],
+    "environment": {
+      "YK_RELEASE_TESTS": "1"
+    },
+    "exit_code": 0,
+    "seconds": 6.07
+  },
+  {
+    "gate": "build",
+    "command": [
+      "bun",
+      "run",
+      "build"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 0.02
+  },
+  {
+    "gate": "smoke",
+    "command": [
+      "bun",
+      "run",
+      "smoke"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 0.54
+  }
+]
