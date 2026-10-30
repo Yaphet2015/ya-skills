@@ -1,0 +1,35 @@
+{
+  "assets": [
+    {
+      "apiUrl": "https://api.github.com/repos/Yaphet2015/ya-skills/releases/assets/691409862",
+      "contentType": "application/x-gtar",
+      "createdAt": "2026-10-30T08:09:46Z",
+      "digest": "sha256:2f86a4b68bc0b98c3102fb1e6dd3cb14b51aa0b4cca1275d24d6d23559daf5d2",
+      "downloadCount": 0,
+      "id": "RA_kwDOSzOvLs4pNhPG",
+      "label": "",
+      "name": "ya-skills-v1.2.0-macos-arm64.tar.gz",
+      "size": 48535145,
+      "state": "uploaded",
+      "updatedAt": "2026-10-30T08:09:57Z",
+      "url": "https://github.com/Yaphet2015/ya-skills/releases/download/v1.2.0/ya-skills-v1.2.0-macos-arm64.tar.gz"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/Yaphet2015/ya-skills/releases/assets/691409866",
+      "contentType": "application/octet-stream",
+      "createdAt": "2026-10-30T08:09:46Z",
+      "digest": "sha256:fcdafb4082187f829f6769df4931e8055606ed1f4a33a667e00ddcd89ea1c446",
+      "downloadCount": 0,
+      "id": "RA_kwDOSzOvLs4pNhPK",
+      "label": "",
+      "name": "ya-skills-v1.2.0-macos-arm64.tar.gz.sha256",
+      "size": 102,
+      "state": "uploaded",
+      "updatedAt": "2026-10-30T08:09:47Z",
+      "url": "https://github.com/Yaphet2015/ya-skills/releases/download/v1.2.0/ya-skills-v1.2.0-macos-arm64.tar.gz.sha256"
+    }
+  ],
+  "publishedAt": "2026-10-30T08:09:58Z",
+  "tagName": "v1.2.0",
+  "url": "https://github.com/Yaphet2015/ya-skills/releases/tag/v1.2.0"
+}

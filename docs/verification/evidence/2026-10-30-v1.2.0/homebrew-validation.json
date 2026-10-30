@@ -1,0 +1,8 @@
+{
+  "prefix": "/opt/homebrew/opt/ya-skills",
+  "version": "1.2.0",
+  "tap_commit": "ed267e70d98f355e52865913e80b05a26953b53d",
+  "signature": true,
+  "help": true,
+  "catalog": true
+}

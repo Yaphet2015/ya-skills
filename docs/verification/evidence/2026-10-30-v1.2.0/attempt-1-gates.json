@@ -1,0 +1,23 @@
+[
+  {
+    "gate": "typecheck",
+    "command": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 1.62
+  },
+  {
+    "gate": "default-tests",
+    "command": [
+      "bun",
+      "test"
+    ],
+    "environment": {},
+    "exit_code": 1,
+    "seconds": 150.2
+  }
+]

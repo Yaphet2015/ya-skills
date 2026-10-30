@@ -1,0 +1,13 @@
+[
+  {
+    "gate": "typecheck",
+    "command": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "environment": {},
+    "exit_code": 0,
+    "seconds": 4.69
+  }
+]

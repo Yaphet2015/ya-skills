@@ -1,0 +1,12 @@
+{
+  "root": "/Users/phaethon/.youkai/chats/afbb73cd-e7b5-4036-b079-ce687c7a5a3c/release-v1.2.0",
+  "source": "/Users/phaethon/.youkai/chats/afbb73cd-e7b5-4036-b079-ce687c7a5a3c/release-v1.2.0/source",
+  "commit": "39de9db938c785cc008e45a56ef73f6b29c4e5db",
+  "version": "1.2.0",
+  "repo": "/Users/phaethon/workspace/personal/ya-skills",
+  "archive": "/Users/phaethon/.youkai/chats/afbb73cd-e7b5-4036-b079-ce687c7a5a3c/release-v1.2.0/source/ya-skills-v1.2.0-macos-arm64.tar.gz",
+  "sha256": "2f86a4b68bc0b98c3102fb1e6dd3cb14b51aa0b4cca1275d24d6d23559daf5d2",
+  "bun": "1.4.0",
+  "macos": "27.0",
+  "architecture": "arm64"
+}

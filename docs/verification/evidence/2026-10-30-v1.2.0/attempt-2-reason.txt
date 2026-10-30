@@ -1,0 +1,1 @@
+Restarted with full local permissions: sandbox denied process identity checks and fake screenshot cache writes. Preserved interrupted run logs; no source changes or real desktop interaction.
