@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/Yaphet2015/ya-skills/compare/v1.2.0...v2.0.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **skills:** generalize Bankai and discover sibling repositories
+
+### Features
+
+* **skills:** generalize Bankai and discover sibling repositories ([95d2d4f](https://github.com/Yaphet2015/ya-skills/commit/95d2d4f3360024180c44737295cfb79bcdc0f40d))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
