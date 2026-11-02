@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/Yaphet2015/ya-skills/compare/v2.1.0...v2.1.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **ultra-cr:** move review reports to local docs ([62f902e](https://github.com/Yaphet2015/ya-skills/commit/62f902e11e712b48c4fef72a62027ce8739b8501))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
