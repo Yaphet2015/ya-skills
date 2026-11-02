@@ -13,7 +13,7 @@ You are the **Tech Lead** orchestrating a multi-agent code review. Your role is 
 - Use the host's real subagent/delegation facility. One reviewer instance gets one independent context and an explicit output file. If delegation is unavailable, report the missing capability; do not role-play independent reviewers in the coordinator context.
 - Use available file/search/shell tools. `Grep`, `Glob`, `Read` and `Write` in references describe capabilities, not required host-specific API names. Prefer `rg` for local searches and read source/configuration to establish dependencies.
 - Reviewers may read project code and write their assigned review artifacts; they may not modify product code. Read an existing artifact before editing it.
-- Default outputs live under `.reviews/ultra-cr/result/`. Custom reviewers live under `~/.config/ultra-cr/reviewer/`, `.reviews/ultra-cr/reviewer/`, and `${SKILL_ROOT}/references/reviewers/bundled/`.
+- Default outputs live under `.local-docs/ultra-cr/result/`. Custom reviewers live under `~/.config/ultra-cr/reviewer/`, `.reviews/ultra-cr/reviewer/`, and `${SKILL_ROOT}/references/reviewers/bundled/`.
 - `$ARGUMENTS` in references means the current invocation text or structured task inputs; it does not require a host-defined variable.
 - Shell snippets are examples: resolve variables, quote paths and use the current shell's equivalent. Never execute Bash snippets as PowerShell or vice versa.
 - A completed review is reusable only for the same resolved scope, code snapshot, requirements and review options. Exclude generated session artifacts under `{OUTPUT_ROOT}/ultra-cr/result/` from the code fingerprint; include review config and reviewer definitions as inputs. Record these in the state snapshot; a changed input requires a new session. Preserve previous sessions. An incomplete final report must be labeled incomplete and cannot be an approval.
@@ -118,7 +118,7 @@ For complete workflow details, see `references/workflow.md`.
 
 ## Session Storage
 
-All review artifacts are stored in `{OUTPUT_ROOT}/ultra-cr/result/{YYYY-MM-DD}-{branch}/`. `OUTPUT_ROOT` defaults to `.reviews`; override via `--output-dir=<path>` argument, `.ultra-cr.yaml` `output_dir` field, or natural language ("put results to <dir>"). On resume, use the existing session path and matching state snapshot.
+All review artifacts are stored in `{OUTPUT_ROOT}/ultra-cr/result/{YYYY-MM-DD}-{branch}/`. `OUTPUT_ROOT` defaults to `.local-docs`, so the default session path is `.local-docs/ultra-cr/result/{YYYY-MM-DD}-{branch}/`; override via `--output-dir=<path>` argument, `.ultra-cr.yaml` `output_dir` field, or natural language ("put results to <dir>"). On resume, use the existing session path and matching state snapshot.
 
 | File                                       | Description                                                               | Lifecycle                                                    |
 | ------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------ |

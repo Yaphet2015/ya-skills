@@ -276,7 +276,7 @@ context: |
 
 # base: origin/main   # Optional target ref for branch scopes; --base=REF overrides it.
 
-output_dir: .reviews   # Review result output root directory. Default .reviews. User-specified dir becomes {output_dir}/ultra-cr/result/{date}-{branch}/
+output_dir: .local-docs   # Review result output root directory. Default .local-docs. User-specified dir becomes {output_dir}/ultra-cr/result/{date}-{branch}/
 
 team:
   principal: 2
@@ -305,7 +305,7 @@ verification:
 /ultra-cr --team=principal:2,security:1 --base=origin/main --quick --output-dir=./reports
 ```
 
-**Resolution order**: `$ARGUMENTS` > `.ultra-cr.yaml` > natural-language detection > defaults. This applies to `team`, `scope`, `base`, and `output_dir` alike. For branch scopes, `base` selects the target ref; the actual diff starts at its merge-base with the reviewed ref. See workflow.md Phase 1 Step 1c for target detection and failure handling. For `output_dir`: `--output-dir` argument > `.ultra-cr.yaml` `output_dir` field > natural-language "put results to <dir>" detection > default `.reviews`.
+**Resolution order**: `$ARGUMENTS` > `.ultra-cr.yaml` > natural-language detection > defaults. This applies to `team`, `scope`, `base`, and `output_dir` alike. For branch scopes, `base` selects the target ref; the actual diff starts at its merge-base with the reviewed ref. See workflow.md Phase 1 Step 1c for target detection and failure handling. For `output_dir`: `--output-dir` argument > `.ultra-cr.yaml` `output_dir` field > natural-language "put results to <dir>" detection > default `.local-docs`.
 
 The legacy `discourse` configuration is ignored, including `discourse.enabled: true`. Reviews proceed from aggregation and focused verification directly to synthesis. `--quick` retains its existing effect on Phase 5.5 verification.
 
