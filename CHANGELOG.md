@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.2](https://github.com/Yaphet2015/ya-skills/compare/v2.1.1...v2.1.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* **computer-use:** clarify shared desktop input and session recovery ([143e664](https://github.com/Yaphet2015/ya-skills/commit/143e66403a12f64ed3fad7b0fb2629d9073491f3))
+* **computer-use:** upgrade Cua Driver to 0.38.0 and release v2.1.2 ([e0a48f6](https://github.com/Yaphet2015/ya-skills/commit/e0a48f6f2896f310e1b808311c9888822a076cf1))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
