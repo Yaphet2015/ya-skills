@@ -42,9 +42,14 @@ for the next decision, not proof that the business operation succeeded.
 - Use `observe --mode ax` for a DOM-like native accessibility question.
 - Use `observe --mode both` only when AX cannot answer and a visual frame is
   needed. Pass the same `--out-dir` to `observe` and coordinate `act`.
-- Open a persistent session when multiple calls need the same driver, fresh
-  AX tokens, or script state. Independently, use `batch` or `exec` to combine
-  already-decided steps and local waits. Keep observations as judgment boundaries.
+- Open one persistent session when multiple calls need the same driver,
+  AX tokens, or script state. Keep it across the native subflow; switching
+  between session and one-shot calls discards reusable driver/token state.
+- Reuse an action's returned observation if it answers the next question.
+  Use `batch` or `exec` for already-decided actions and condition waits;
+  inspect again only for a new decision, stale evidence, or uncertain effect.
+- Keep default image limits. Zoom a captured region before increasing the
+  full-frame budget; image flags do not expand or repair an AX tree.
 - Use `--key KEY --modifiers MOD[,MOD]` for shortcuts. For example:
   `--key I --modifiers cmd,option`. Do not pass `Cmd+Alt+I` as one key.
 - `--format observation|legacy` applies to one-shot and session `act` output;
@@ -53,8 +58,12 @@ for the next decision, not proof that the business operation succeeded.
   search an arbitrary message for the word `error`.
 
 When a batch reports `unknown`, observe before any further input and never
-replay the same request id. When an action reports `delivered`, do not repeat
-it: inspect the returned observation and verify the effect.
+replay the same request id. If the session is unusable or closed, confirm prior
+operations have settled and cleanup has released the target, then open a fresh
+session for observation. Do not automatically replay the uncertain action.
+
+When an action reports `delivered`, do not repeat it: inspect the returned
+observation and verify the effect.
 
 ## Native file chooser targets
 
@@ -90,11 +99,13 @@ For native fields, `--type TEXT --element-token TOKEN` and
 from the same persistent session. A precondition observation supersedes old AX
 tokens; finish any precondition checks before choosing the input token.
 
-For Chromium/Electron fields that need renderer focus, inspect an image and use
+Use CDP for Chromium/Electron fields reachable in the page. For fields outside
+that route, addressed point input is available as
 `--type TEXT --input-x PX --input-y PY --observation UUID` (also supported by
-`--key`). The runtime validates the image evidence and maps its coordinates; the
-driver focuses and types/presses in one background call. Open a closed control
-first, then observe and address its actual input field.
+`--key`). The runtime validates image evidence and maps its coordinates; the
+driver focuses and types/presses in one call. This is synthetic input and
+must follow the entrypoint's shared desktop rule even if labelled background.
+Open a closed control first, then observe and address its actual input field.
 
 Batch type/key actions accept `input: {elementToken: TOKEN}` or
 `input: {point: {observationId: UUID, x, y}}`. Exec scripts use
@@ -231,11 +242,15 @@ requires the target to still be frontmost; another frontmost app or failed
 cleanup prevents restoration. `--audit-foreground` records before/after ownership
 without activation. Session actions remain background-only.
 
-Do not add AppleScript activation, an Otty restore, or a blind foreground
-retry around a refused action. If foreground activation or restoration has an
-issue, report the receipt together with the action outcome. An action that was
-already delivered must remain delivered even if its follow-up observation or
-foreground restoration fails.
+Apply the [shared desktop input rule](../SKILL.md#shared-desktop-input) before
+choosing foreground delivery. When foreground interaction is part of the
+chosen workflow, prefer `--activate` over a separate activation script: its
+receipt records ownership and attempted restoration. Foreground restoration
+does not make concurrent user input safe. Do not use AppleScript activation
+to bypass a refused route or failed restoration. Observe the state and keep
+an already delivered action delivered even if its follow-up observation or
+foreground restoration fails. Use `--audit-foreground` for a read-only
+ownership check when diagnosis needs it.
 
 ## Visual delegation
 
@@ -252,8 +267,8 @@ Keep the observation id and capture time in the parent/runtime state. The worker
 
 Use `context: "fresh"` for pi-subagents or `fork_turns: "none"` for a Codex
 fork. Pass a short task state rather than the development history. Ask for a
-compact answer. The parent requests `--activate` when needed; CLI/runtime owns
-capture/restore. The runtime worker owns image matching and final evidence
-validation. Batch or execute deterministic actions in the parent/runtime after
+compact answer. The parent applies the foreground ownership rules before any
+`--activate` request; CLI/runtime owns capture/restore. The runtime worker owns
+image matching and final evidence validation. Batch or execute deterministic actions in the parent/runtime after
 the coordinate answer; the visual worker does not retry, foreground the app,
 or run AppleScript.

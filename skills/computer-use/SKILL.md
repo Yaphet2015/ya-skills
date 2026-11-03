@@ -1,6 +1,6 @@
 ---
 name: computer-use
-description: Route web pages through browser DOM/CDP first, then drive native macOS UI when a visible desktop app is required.
+description: Inspect browser and Electron UI through DOM/CDP first; use native macOS AX for dialogs and controls outside the page while respecting shared desktop input.
 ---
 
 # Computer-use
@@ -8,6 +8,21 @@ description: Route web pages through browser DOM/CDP first, then drive native ma
 Use this skill when a task needs a browser page or a visible macOS app. Keep
 the decision loop short: inspect the current state, do a deterministic action
 or small batch, then use the returned state to choose the next action.
+
+## Shared desktop input
+
+When the user is working on the same desktop, keep their focus, pointer, and
+keyboard available. A separate app profile does not isolate desktop input;
+a `background` delivery label is not proof of non-interference. Prefer CDP
+and direct AX actions over synthetic keys or pointer events.
+
+Do not escalate to foreground activation, global input, or AppleScript
+`frontmost=true` to rescue a failing background test while the user is using
+the desktop. Continue independent CDP/AX checks and record the affected
+subcheck as blocked. Run input-dependent cases on an available isolated
+login desktop or test machine, or within a foreground workflow the user has
+already chosen. Do not create a new environment or interrupt the user merely
+to keep a test running.
 
 ## Route browser pages first
 
@@ -21,7 +36,9 @@ For Chromium, Electron, or another page with a DevTools endpoint:
 3. Evaluate a small, serializable DOM summary on that explicit target. Read
    `document.title`, URL, visible text, roles, labels, form controls, and
    state that answers the question. Keep the expression and output bounded.
-4. Stop using screenshots once the DOM or CDP result answers the question.
+4. Keep page navigation, forms, clicks, and assertions on CDP. Opening one
+   native dialog does not move the rest of the journey to native input.
+5. Stop using screenshots once the DOM or CDP result answers the question.
 
 Do not select the active tab by position, switch tabs automatically, launch a
 browser, bring it to the front, or restart a profile. A target id from a
@@ -76,22 +93,34 @@ coordinates back to the parent image before acting. Images default to at most
 stale, degraded, ambiguous, or expired observation is a reason to observe
 again, not to guess or activate the window.
 
-`--activate` is an explicit foreground request. Use it only when the user
-asked for foreground behavior or the native operation requires it. Use
-`--audit-foreground` to record frontmost ownership without activation when a
-diagnostic needs evidence. Read the foreground receipt before reporting the
-result.
-
-Native input can still affect the user's mouse or keyboard even when delivery
-is labelled background. Use an independent desktop for mutating native tests
-when uninterrupted user input matters. Do not use AppleScript to bypass the
-CLI or force a foreground retry.
+For `--activate` and foreground ownership, follow the shared desktop rule
+above and the [native reference](references/native-orchestration.md#foreground-ownership).
 
 Do not repeat an action with uncertain delivery. A `delivered` action means
 input was sent; continue with observation. An `unknown` action means delivery
 cannot be proved; observe first and choose a new request id or another route.
 Follow the user's authorization for mutating work; do not add a new approval
 step to an operation the user already requested.
+
+## Keep execution bounded
+
+Reuse the current persistent native session and the observation returned by
+an action while valid; do not open another session or run another full
+observation for the same known state. Batch already-decided actions and
+condition waits locally, stopping when a new judgment or uncertain result
+requires inspection. Prefer focused DOM/AX summaries; retain default image
+limits and zoom a small region before requesting a larger image. Image size
+flags do not increase AX tree completeness.
+
+If the session is unusable or closed, confirm prior operations have settled
+and cleanup has released the target before opening a fresh session to observe
+current state. Never automatically replay an action with unknown delivery.
+
+After correcting a target or input route, a repeated failure with the same
+state and error is a stopping point for that route. Another attempt needs
+new evidence, not another session, screenshot, or foreground toggle. Record
+the error and continue independent cases. Keep command duration separate
+from between-call reasoning time when investigating slowness.
 
 ## Setup and limits
 

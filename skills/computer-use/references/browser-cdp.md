@@ -70,8 +70,17 @@ the path explicit and verify the page state afterward. The small helper in
 this skill does not implement arbitrary CDP commands.
 
 Use a native file dialog only when the user is testing the native chooser or
-the browser exposes no usable file-input/CDP path. A visible chooser is not a
-reason to switch the entire page flow to screenshots or AppleScript.
+the browser exposes no usable file-input/CDP path. Electron's native
+`dialog.showOpenDialog` is not a DOM file input; `DOM.setFileInputFiles`
+cannot populate it. Do not inject application state or call internal IPC as a
+substitute for UI proof. If a test uses a dialog-result fixture, label that
+coverage separately from a real native chooser journey.
+
+A visible chooser is not a reason to switch the entire page flow to
+screenshots or AppleScript. Handle only the native segment through AX under
+the entrypoint's shared desktop input rule, then return to the same CDP page.
+If that segment is blocked, continue independent page checks without
+claiming the chooser-dependent cases passed.
 
 ## Failure and fallback
 
