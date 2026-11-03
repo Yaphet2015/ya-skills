@@ -48,7 +48,7 @@ The agent-facing usage guide lives in the skill itself
 
 - macOS arm64, macOS 13+ (driver requirement). Other platforms fail fast
   with `unsupported_platform`; no other `yk` command is affected.
-- The Cua Driver SDK (0.35.4) runs inside the `yk` Bun runtime for one-shot
+- The Cua Driver SDK (0.38.0) runs inside the `yk` Bun runtime for one-shot
   commands. The adapter explicitly sets `embedded: true` to keep the driver
   in-process and bypass installed daemons. Persistent sessions manage one private
   driver worker themselves; users install no Node runtime, daemon, or extra
