@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.3](https://github.com/Yaphet2015/ya-skills/compare/v2.1.2...v2.1.3) (2026-11-04)
+
+
+### Bug Fixes
+
+* **coding-recon:** preserve scope when simplifying proposals ([74ab9b1](https://github.com/Yaphet2015/ya-skills/commit/74ab9b1b1478e843a06110b0f26cd804db5a07e5))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
