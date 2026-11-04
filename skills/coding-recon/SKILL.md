@@ -21,6 +21,8 @@ Skip Recon when the exact location and edit are known, the change is fully local
 
 State one decision-changing question. Do not start with a list of files to read.
 
+When simplifying an existing proposal, identify the exact object and stage being removed or replaced; preserve established requirements outside that change. After reading the available evidence, put one focused intent question in `Open uncertainty` only if two plausible readings would change user-visible behavior. Otherwise proceed without another confirmation.
+
 ### 2. Choose the cheapest discriminating observation
 
 | Question | Start with |
