@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/Yaphet2015/ya-skills/compare/v2.1.3...v2.2.0) (2026-11-05)
+
+
+### Features
+
+* **show-me:** unify interactive architecture and PR reports ([17f31f4](https://github.com/Yaphet2015/ya-skills/commit/17f31f41dcf70215935fe3dec00272321c3b0b36))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
