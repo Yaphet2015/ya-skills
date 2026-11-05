@@ -171,26 +171,61 @@ test("root catalog skill descriptions stay short enough to scan and route", asyn
   }
 });
 
-test("root catalog exposes the show-pr skill as manual-only", async () => {
+async function validateAndBuildReport(skillDir: string, graphFile: string, outputFile: string) {
+  for (const [script, args] of [
+    ["validate.cjs", [graphFile]],
+    ["build-report.cjs", [graphFile, outputFile]]
+  ] as const) {
+    const proc = Bun.spawn(["node", join(skillDir, "tools", script), ...args], {
+      stdout: "pipe", stderr: "pipe"
+    });
+    const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+    expect(stderr).toBe("");
+    expect(code).toBe(0);
+  }
+}
+
+test("show-pr installs the shared show-me renderer as a dependency", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const showPr = catalog.byName.get("show-pr");
-
-  expect(showPr?.description).toMatch(/^Use only when the user explicitly invokes/);
-  expect(showPr?.description).toMatch(/never triggers implicitly/);
+  expect(catalog.byName.get("show-me")?.functions).toEqual([]);
+  expect(showPr?.dependsOn).toEqual(["show-me"]);
   expect(showPr?.functions).toEqual([]);
-
   const skill = await readFile(resolve("skills", "show-pr", "SKILL.md"), "utf8");
   expect(skill).toContain("disable-model-invocation: true");
-  expect(skill).toContain("Invocation Gate");
-  expect(skill).toContain("package.json");
-  expect(skill).toContain("report-<n>.html");
-  expect(skill).not.toContain("$(git branch");
-  expect(skill).not.toContain(".logoscode");
-  expect(skill).not.toContain("pr-lens");
+
+  const projectDir = join(catalogDir, "consumer");
+  const result = await installSkills({ catalog, projectDir, skillNames: ["show-pr"] });
+  expect(result.installed.map((entry) => entry.name)).toEqual(["show-me", "show-pr"]);
+  const target = result.targets[0]!;
+  const example = join(target, "show-me", "references", "example.graph.json");
+  const output = join(catalogDir, "report.html");
+  await validateAndBuildReport(join(target, "show-pr"), example, output);
+  expect(await readFile(output, "utf8")).toContain("data:image/png;base64,");
 });
 
-test("show-pr tools validate and build offline", async () => {
-  const skillDir = resolve("skills", "show-pr");
+test("show-me supports an architecture without commits, statistics or a guided tour", async () => {
+  const skillDir = resolve("skills", "show-me");
+  const docFile = join(catalogDir, "architecture.json");
+  const outFile = join(catalogDir, "report.html");
+  await Bun.write(docFile, JSON.stringify({
+    schemaVersion: "0.2.0", kind: "graph", title: "请求怎样到达服务", summary: "用户发送请求，服务处理请求。",
+    lenses: ["architecture"],
+    lanes: [{ id: "client", label: "客户端" }, { id: "server", label: "服务端" }],
+    nodes: [
+      { id: "page", label: "页面", kind: "ui", delta: "unchanged", lane: "client" },
+      { id: "api", label: "服务", kind: "service", delta: "unchanged", lane: "server" }
+    ],
+    edges: [{ id: "request", from: "page", to: "api", kind: "http", delta: "unchanged", label: "发送请求" }]
+  }));
+  await validateAndBuildReport(skillDir, docFile, outFile);
+  const html = await readFile(outFile, "utf8");
+  expect(html).toContain("请求怎样到达服务");
+  expect(html).not.toContain("mermaid.initialize");
+});
+
+test("show-me tools validate and build offline", async () => {
+  const skillDir = resolve("skills", "show-me");
   const example = join(skillDir, "references", "example.graph.json");
 
   const validate = Bun.spawn(["node", join(skillDir, "tools", "validate.cjs"), example], {
@@ -224,7 +259,7 @@ test("show-pr tools validate and build offline", async () => {
 });
 
 async function buildExampleClone(mutate?: (doc: Record<string, unknown>) => void) {
-  const skillDir = resolve("skills", "show-pr");
+  const skillDir = resolve("skills", "show-me");
   const example = join(skillDir, "references", "example.graph.json");
   const doc = JSON.parse(await readFile(example, "utf8"));
   if (mutate) mutate(doc);
@@ -252,8 +287,8 @@ async function buildExampleClone(mutate?: (doc: Record<string, unknown>) => void
   return { outDir, outFile, docFile, html, buildErr, buildCode };
 }
 
-test("show-pr tools fail loudly without explicit paths", async () => {
-  const skillDir = resolve("skills", "show-pr");
+test("show-me tools fail loudly without explicit paths", async () => {
+  const skillDir = resolve("skills", "show-me");
   const run = async (script: string, ...args: string[]) => {
     const proc = Bun.spawn(["node", join(skillDir, "tools", script), ...args], {
       stdout: "pipe",
@@ -284,7 +319,7 @@ test("show-pr tools fail loudly without explicit paths", async () => {
   expect(buildGraphOnly.err).toContain("usage");
 });
 
-test("show-pr report embeds evidence and renders mermaid from the example document", async () => {
+test("show-me report embeds evidence and renders mermaid from the example document", async () => {
   const { html, buildErr, buildCode, outDir } = await buildExampleClone();
 
   expect(buildErr).toBe("");
@@ -299,7 +334,7 @@ test("show-pr report embeds evidence and renders mermaid from the example docume
   await rm(outDir, { recursive: true, force: true });
 });
 
-test("show-pr report omits the mermaid bundle when the document has no mermaid", async () => {
+test("show-me report omits the mermaid bundle when the document has no mermaid", async () => {
   const { html, buildCode, outDir } = await buildExampleClone((doc) => {
     doc.mermaid = [];
   });
@@ -310,8 +345,8 @@ test("show-pr report omits the mermaid bundle when the document has no mermaid",
   await rm(outDir, { recursive: true, force: true });
 });
 
-test("show-pr validator rejects missing evidence files and unlisted design choices", async () => {
-  const skillDir = resolve("skills", "show-pr");
+test("show-me validator rejects missing evidence files and unlisted design choices", async () => {
+  const skillDir = resolve("skills", "show-me");
   const example = JSON.parse(await readFile(join(skillDir, "references", "example.graph.json"), "utf8"));
   const outDir = await mkdtemp(join(tmpdir(), "yk-show-pr-bad-"));
   const docFile = join(outDir, "doc.json");

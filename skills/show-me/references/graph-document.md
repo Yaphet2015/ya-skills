@@ -4,7 +4,7 @@ This page is the whole shape, and what a schema cannot tell you besides: which p
 
 `tools/validate.cjs`, shipped with this skill, enforces the same rules offline, including the parser-level rules a JSON Schema cannot express.
 
-Every schema here is **strict**: an unknown key is a rejection, not a warning. A field with a default may be left out.
+The validator checks enums, limits and references. Fields with defaults may be left out; the validator and renderer use the same defaults. Keep documents to the fields described here.
 
 ## The document
 
@@ -34,7 +34,9 @@ Every schema here is **strict**: an unknown key is a rejection, not a warning. A
 
 The five evidence sections — `mermaid`, `repro` (测试覆盖), `evidence`, `testSteps` (建议手动测试), `design` (设计决策， rendered last) — are all optional; a section absent from the document simply does not render. The tables below give each one's rules.
 
-`provenance` is where the document came from: the repository, the base and head commit shas (lowercase hex, 7-40 characters), optionally the pull request and the generator. When you produce a document through the CLI these are filled in from the repository, so do not invent them.
+`provenance` is optional for an architecture explanation. For a change report, record the real repository and base/head commit shas (lowercase hex, 7-40 characters), optionally the pull request and generator. If either commit is supplied, both are required and must differ. Collect metadata from the actual repository; the report tools do not discover it. Never invent it.
+
+`edges`, `flows`, `views`, node `files` and node `badges` default to empty arrays. `stats` defaults to an empty object and `stats.chips` to an empty array. Empty or omitted `views` create one architecture overview. `walkthrough` is optional. Keep `schemaVersion`, `kind`, `title`, `summary`, `lenses`, `lanes` and `nodes` explicit.
 
 ## Ids
 
@@ -308,7 +310,7 @@ Optional in the format, but write one for anything that is not trivial: more tha
 
 A walkthrough is a short guided tour of the diagrams. It has two to twelve steps. Each step shows one diagram, points at one part of it, and says a few words about it.
 
-Every step is one change, never a description of the diagram: the heading names the thing and what happened to it, built from change words such as added, removed, replaced, now, moved and split, and the body is one line on what that means for behaviour, with the numbers when they matter. The headline change is step one. Write it all in the report tone on the skill page (STE100 in Chinese, ADHD, expand every name). The skill page has the rule in full, with a BAD/GOOD of the same facts.
+For a change report, every step explains one change: the heading names the thing and what happened to it, built from change words such as added, removed, replaced, now, moved and split, and the body is one line on what that means for behaviour, with the numbers when they matter. The headline change is step one. Write it all in the report tone on the skill page (STE100 in Chinese, ADHD, expand every name). The skill page has the rule in full, with a BAD/GOOD of the same facts.
 
 Each step has:
 
@@ -322,7 +324,7 @@ The validator checks:
 - Every id you name exists in the document. A flow step you name must belong to the flow the stage shows, because flow step ids are only unique inside their own flow.
 - `messages` needs a stage that shows a flow. Leave it out when the stage is an architecture view.
 - Step ids are unique within the walkthrough. Two steps minimum, twelve maximum.
-- A stored map never carries a walkthrough. A map describes the system; a walkthrough tells the story of one change.
+- An architecture walkthrough explains one relationship or execution step at a time; it does not need a code change.
 
 ## Layout
 
@@ -347,9 +349,9 @@ Labels 120 characters, summaries 2000, chip values 32. They are display fields: 
 ## Then validate
 
 ```bash
-node <skill-dir>/tools/validate.cjs .show-pr/graph.zh.json
+node <skill-dir>/tools/validate.cjs <output-dir>/graph.json
 ```
 
-`<skill-dir>` is where this skill is installed (`.agents/skills/show-pr` or `.claude/skills/show-pr`).
+`<skill-dir>` is the actual installed `show-me` directory. Resolve `<output-dir>` with the [output rules](html-reports.md#verify-and-deliver).
 
 Every problem is reported at once, with a path into the document. Fix them all and run it again until it is clean.
