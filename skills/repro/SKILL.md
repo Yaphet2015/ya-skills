@@ -41,6 +41,18 @@ Group by distinct behavior and user surface, not one case per file. Trace shared
 
 Every changed file must map to a case, a blocker, or an explicit reason it needs no manual check. Documentation and tests often need no manual check, but inspect whether they change shipped instructions, fixtures, or acceptance expectations. Preserve a coverage table even for large changes.
 
+### Check for missing behavior
+
+File coverage is only an inventory. Before writing cases, read [references/behavior-coverage.md](references/behavior-coverage.md) and build a short behavior-risk ledger from the hunks and callers:
+
+- For deleted/replaced branches and fallbacks, name the old behavior, its reachable condition, and where it is now handled. If no replacement is established, retain that condition as a regression case or an explicit gap.
+- Select relevant states, update orders, and capacity modes from the changed logic. Cover the combinations that can change the outcome; do not generate a Cartesian product. Map each selected risk to a case, a blocker, or an evidenced exclusion.
+- Keep distinct entrypoints distinct when they use different handlers, data, or recovery paths. A passing similarly named control cannot cover another path.
+
+Give each case its required trigger and an observable check that proves the trigger occurred. Reusing an existing fixture is valid only for the conditions it actually reaches. If a substitute bypasses a required state or event order, keep the original case blocked and record the narrower check separately.
+
+Check the oracle: could this case pass while the changed behavior is broken? Equality between views needs an independent presence/content assertion. Repeated work needs request/read counts or transferred bytes under controlled updates, not only final output or a size-limit check. Use sourced bounds, or report measurements with a proposed criterion pending confirmation.
+
 ### Correct expectation and previous behavior are separate claims
 
 Choose expected behavior from the user's requirement or acceptance criteria first, then a relevant confirmed review finding. Existing contracts/tests and implementation can inform a proposed expectation, but cannot prove product intent. Label an expectation derived only from code as **proposed, needs confirmation**. If sources conflict, expose the conflict instead of choosing whichever matches the implementation.
@@ -57,7 +69,7 @@ Record actual baseline observations separately with observer/source, build SHA, 
 
 ## Write and deliver
 
-Use the template. Lead with up to three highest-value cases, an environment card, and blockers. Prioritize the changed primary path, failure/recovery behavior where relevant, and a specific adjacent behavior that must remain stable. Explain that adjacent case's relationship to the change.
+Use the template. Lead with up to three highest-value cases, an environment card, and blockers. Prioritize the changed primary path, failure/recovery behavior where relevant, and a specific adjacent behavior that must remain stable. Explain that adjacent case's relationship to the change. Case priority is the manual execution order; use plain ordering labels and reasons. Include incident severity such as P0/P1 only when attributed to a supplied finding or an established repository scale.
 
 Keep each sheet to at most ten detailed cases. For broader changes, split into linked sheets by surface and keep a complete coverage index; do not discard the remaining cases. Each case needs a decisive observable outcome and reset instructions for stateful steps. An unknown entrypoint or unavailable fixture makes the case blocked; it does not justify a plausible-sounding sequence.
 
@@ -65,4 +77,6 @@ Use the artifact location already established by the task/repository. Use `.flee
 
 In `baseline` mode, record HEAD, dirty layers and relevant contents/diffs: HEAD alone cannot identify an uncommitted baseline. Describe the manual observation needed and link the note when later generating the sheet. In `again` mode, read the previous sheet and any user results first. Keep IDs for the same behavior; append IDs for new behavior and record removed cases with reasons. Do not infer failure from unchecked boxes. With no reported results, say results are unknown and prioritize cases affected by the new diff. Preserve attributed past results as history; the current build's checks remain `☐ 待验` or `☐ 阻塞`.
 
-Before delivery, check that all files are accounted for, all cases identify the correct clone/build, all expectations have sources, all before-change claims have evidence tags, and every mock has a restore path. Return the report link, the first three cases, and material blockers in a short message. Never claim human acceptance is complete.
+Before delivery, re-read the hunks and callers independently of the case list: look for a removed behavior, state transition, capacity mode, or entrypoint that the list still misses. Checking evidence for existing rows alone is insufficient. Check that all files and selected risks are accounted for, all cases identify the correct clone/build, all expectations have sources, all before-change claims have evidence tags, and every mock has a restore path.
+
+State evidence limits separately: file inventory accounted for, behavior conditions covered or still open, and exact paths actually executed by an attributed observer. Assertion counts are not counts of independent paths. Preserve disputed findings and product-intent questions as unresolved; a basic recovery check cannot settle an unspecified trigger chain. Return the report link, the first three cases, and material blockers in a short message. Never claim human acceptance is complete.
