@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.2](https://github.com/Yaphet2015/ya-skills/compare/v2.2.1...v2.2.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **repro:** strengthen behavior coverage and release 2.2.2 ([ac2dc2c](https://github.com/Yaphet2015/ya-skills/commit/ac2dc2caa4421fda3984dd8ebb9694f9b8a3a947))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
