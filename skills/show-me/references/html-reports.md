@@ -4,6 +4,29 @@ Use this guidance when the task calls for a report or a focused visual artifact
 that benefits from HTML. Make the first screen understandable by scanning, then
 let the reader explore evidence at their own pace.
 
+## HTML styling
+
+Default to [shadcn/ui](https://ui.shadcn.com/) for the visual design of HTML
+reports, including the shell and controls around bundled architecture diagrams.
+An explicit user style, supplied template or existing product's visual language
+takes precedence.
+
+- Consult the relevant official component examples and
+  [theming guidance](https://ui.shadcn.com/docs/theming) when choosing styles.
+  Use restrained surfaces, clear typography, subtle borders, consistent spacing
+  and corner radii. Follow patterns such as Button, Badge, Tabs, Table and
+  Accordion where they serve the content.
+- Use semantic CSS variables for background/foreground, card, primary, muted,
+  accent, border, ring and radius. Keep text/surface pairs legible and provide
+  visible keyboard focus. Reserve status colors for meaningful findings.
+- For standalone HTML, translate the relevant component styles into ordinary
+  embedded CSS and semantic HTML. Embed any compiled utility styles and required
+  assets. The delivered file must work offline without React, a Tailwind CDN,
+  remote fonts or runtime package loading.
+- When using the bundled renderer, preserve its graph behavior and apply the
+  same styling to the generated HTML shell and controls. Keep report-specific
+  diagram and change colors where they convey meaning.
+
 ## Structure and emphasis
 
 - Lead with a one-sentence conclusion and a small set of highlighted findings.

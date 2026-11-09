@@ -47,6 +47,15 @@ states, and boundaries that change the reader's understanding. Match the product
 visual language when explaining its UI. Do not invent metrics or add decorative
 diagrams to facts a short list already explains.
 
+## HTML styling default
+
+Use [shadcn/ui](https://ui.shadcn.com/) as the default visual reference for HTML
+reports. Follow its component patterns and semantic theme tokens; implement the
+styles as embedded CSS so the report stays self-contained and works offline.
+Explicit user styles, templates and an existing product's visual language take
+precedence. Read [HTML report guidance](references/html-reports.md#html-styling)
+for styling details. Apply the same default when styling bundled renderer output.
+
 ## Interactive architecture reports
 
 For an architecture or change report, lead with the layered module-and-connection
