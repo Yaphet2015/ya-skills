@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/Yaphet2015/ya-skills/compare/v2.2.0...v2.2.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **show-me:** default HTML styling to shadcn/ui ([e146c99](https://github.com/Yaphet2015/ya-skills/commit/e146c9916a292ec5bc38a194af7e416363827630))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
