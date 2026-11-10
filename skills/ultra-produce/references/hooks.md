@@ -29,7 +29,7 @@ context JSON 必须有 stage、attempt（正整数）、plan_version、git_range
 
 `state.reports/verify-r<attempt>/report.html`
 
-本工作流明确指定 show-pr 及统一报告目录，覆盖其默认路径和基线约定。执行 validator 与 renderer，产物自包含、离线可读。生成所用 JSON、中间文件及原始证据放当前 Hook attempt/artifacts；报告包含展示所需的内容或内嵌资产，不能依赖 logs 才能离线打开。
+本工作流明确指定 show-pr 及统一报告目录，覆盖其默认路径和基线约定。由 show-me 收集变更与验证证据，再通过 archify 生成 HTML 并执行其 finalize 检查。生成所用草稿、图形规格、中间文件及原始证据放当前 Hook attempt/artifacts；报告自包含、离线可读，不能依赖 logs 才能离线打开。按 show-me 的宿主交付规则请求预览，并检查实际容量上限。
 
 成功、失败、中断或缺少环境均报告真实状态。已有证据保留实际命令、结果和来源；不要为了报告重跑未变化的测试。未运行或未捕获的结果不能写成已验证。报告生成不得修改产品代码。重试只补失败部分，不重放实现、提交或测试副作用。
 

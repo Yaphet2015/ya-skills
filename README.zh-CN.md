@@ -73,12 +73,20 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **eli10** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli10` |
 | **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
 | **validator**（已弃用） | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
+| **show-me** | 用简短 Markdown、草图和证据解释问题与代码改动。需要 HTML 时，从宿主技能清单找到独立安装的 archify。保留未提交改动、测试证据、报告归档和预览交付。Youkai HTML 预览上限为 30 MiB。 | `yk install show-me` |
+| **show-pr** | 显式调用的 PR 报告入口，自动安装 show-me，使用实际 Git 范围与验证证据；HTML 需要独立安装 archify。旧 graph.json 工具会提示迁移方式。 | `yk install show-pr` |
 | **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |
 | **ultra-simplify** | 自主执行全库大简化冲刺：总 LOC 至少降 40%、拆巨型文件、统一重复助手函数、削平 if 嵌套链，完成后交付 PR。 | `yk install ultra-simplify` |
 
 > `pbench-runner` 是内部资产，会由 `yk pbench run --manual`（或兼容的 `start` 命令）自动安装，无需从目录手动安装。
 
 随时用 `yk list` 浏览完整目录。
+
+旧 show-me HTML 生成器、图形格式、示例和资产已保存在
+[archive/show-me-html](archive/show-me-html/README.md)，归档不进入技能安装目录和发布目录。
+archify 需要独立安装与升级，`yk install show-me` 不管理它。
+新 HTML 报告由它生成，默认归档路径仍为
+`~/.ya-skills/show-me/reports/<project>/<branch>/<timestamp>/report.html`。
 
 ## 📑 目录
 

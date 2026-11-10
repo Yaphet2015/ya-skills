@@ -3,7 +3,7 @@
   "kind": "graph",
   "generatedAt": "2026-08-19T18:24:00.000Z",
   "title": "批量发送广播：从逐封调用 Postmark 到每批 500 封",
-  "summary": "广播发送以前是每个收件人打一次 Postmark。现在每 500 封打一次。不许再发的邮箱名单先一次性拉全，再开始发任何一批。拼请求体的代码放到两边都能用的同一份库里。",
+  "summary": "广播改为每批最多 500 封发送；每路广播先读取一次禁发名单，再发送任何一批。",
   "lenses": [
     "architecture",
     "data-flow"
@@ -599,14 +599,32 @@
   "views": [
     {
       "id": "overview",
-      "title": "架构 — 影响范围",
+      "title": "关键变化",
       "lens": "architecture",
-      "summary": "这次改动碰到的全部内容。三条泳道都有。",
       "scope": {
-        "kind": "all"
+        "kind": "selection",
+        "nodes": [
+          "send-broadcast-bulk",
+          "get-suppressed-emails",
+          "postmark"
+        ],
+        "edges": [
+          "bulk-to-suppressions",
+          "bulk-to-postmark"
+        ]
       },
       "defaultOpen": true,
       "children": [
+        {
+          "id": "full-topology",
+          "title": "完整影响范围",
+          "lens": "architecture",
+          "summary": "按需查看全部节点和连接。",
+          "scope": {
+            "kind": "all"
+          },
+          "children": []
+        },
         {
           "id": "new-batch-path",
           "title": "新的批量路径",
@@ -691,10 +709,11 @@
           "lanes": [],
           "nodes": [
             "send-broadcast-bulk",
-            "build-bulk-payload",
             "postmark"
           ],
-          "edges": [],
+          "edges": [
+            "bulk-to-postmark"
+          ],
           "messages": []
         }
       },
@@ -723,7 +742,7 @@
         "body": "旧的逐人发信函数删掉了。新函数 sendBroadcastBulk 按整批做完同样的事。",
         "stage": {
           "kind": "view",
-          "view": "overview"
+          "view": "retired-path"
         },
         "focus": {
           "kind": "selection",
@@ -773,7 +792,7 @@
         "body": "2,000 人的广播以前要打 2,000 次 Postmark。现在打 4 次。",
         "stage": {
           "kind": "view",
-          "view": "overview"
+          "view": "full-topology"
         },
         "focus": {
           "kind": "all"

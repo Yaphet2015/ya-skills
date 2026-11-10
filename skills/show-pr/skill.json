@@ -1,5 +1,5 @@
 {
   "name": "show-pr",
-  "description": "Explicit-only compatibility entrypoint for show-me's offline Chinese PR reports and interactive architecture diagrams.",
+  "description": "Explicit-only PR report entrypoint using show-me for change evidence and archify for HTML generation.",
   "dependsOn": ["show-me"]
 }

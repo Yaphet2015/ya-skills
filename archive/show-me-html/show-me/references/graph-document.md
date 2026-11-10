@@ -32,6 +32,9 @@ The validator checks enums, limits and references. Fields with defaults may be l
 
 `lenses` declares what the document carries enough detail to draw: `architecture`, `data-flow`, or both. A document carrying flows must declare `data-flow`.
 
+All supporting sections start collapsed. Their content is preserved in the document,
+not deleted or clipped. Keep a material limitation in the opening summary as well.
+
 The five evidence sections — `mermaid`, `repro` (测试覆盖), `evidence`, `testSteps` (建议手动测试), `design` (设计决策， rendered last) — are all optional; a section absent from the document simply does not render. The tables below give each one's rules.
 
 `provenance` is optional for an architecture explanation. For a change report, record the real repository and base/head commit shas (lowercase hex, 7-40 characters), optionally the pull request and generator. If either commit is supplied, both are required and must differ. Collect metadata from the actual repository; the report tools do not discover it. Never invent it.
@@ -100,6 +103,9 @@ Up to 512.
 
 `kind` is one of `call http rpc event queue data dependency render other`. `emphasis` is `normal` (default), `hero` or `muted`. More than one or two heroes and the emphasis stops meaning anything. `from` and `to` must be node ids you declared. This is the single most common failure.
 
+Legacy `animated` hints remain accepted. The renderer uses brief focus transitions
+rather than continuous edge motion, and honours reduced motion.
+
 ## Flows
 
 Up to 16, for the data-flow lens.
@@ -134,7 +140,7 @@ Up to 8 chips, `tone` one of `neutral added modified removed hero`. Per-delta el
 
 ## Mermaid diagrams
 
-Up to 8, for what lanes and flows cannot express: state machines, ER models, class diagrams, journey maps. The report renders them in its own Mermaid 图 tab, offline, from the bundle vendored with the skill — nothing loads from the network.
+Up to 8, for what lanes and flows cannot express: state machines, ER models, class diagrams, journey maps. The report places them in a collapsed supplementary section. Scripts render them offline from the vendored bundle. Keep their summary useful when scripts are blocked; the essential diagram must use the built-in graph or static SVG. Nothing loads from the network.
 
 ```json
 { "title": "广播状态机", "summary": "…", "code": "stateDiagram-v2\n    [*] --> queued: 入队" }
@@ -146,7 +152,7 @@ Up to 8, for what lanes and flows cannot express: state machines, ER models, cla
 
 ## Test coverage (repro)
 
-Up to 12. Enumerate the test cases the branch's changes involve, one card per case group: the command that reproduces it, the real test result, and whether automation covers it.
+Up to 12 relevant case groups. Summarize the checks that support the conclusion, their commands and observed results, and whether automation covers them. Put an exhaustive requested coverage matrix in supporting records rather than repeating it in the reading report.
 
 ```json
 { "title": "提交与 ACK 语义", "command": "jest src/renderer/quick/__tests__/useQuickSubmit.test.ts", "result": "自动化覆盖：12 项通过" }
@@ -170,7 +176,7 @@ Up to 12 screenshots or screen recordings, embedded into the report at build tim
 
 - `kind` is `image` (png jpg jpeg gif webp) or `video` (mp4 webm mov); the extension must match the kind.
 - `path` is relative to the document, POSIX, no `..`; the validator checks the file exists, ≤8 MB each and ≤16 MB total.
-- Capture before claiming done: the evidence section exists so “已验证” has a picture behind it.
+- Use screenshots when the observed UI state matters. Automated checks do not need decorative screenshots. Keep oversized original assets as separate supporting artifacts instead of filling the reading report.
 
 ## Suggested manual tests (testSteps)
 
@@ -184,7 +190,7 @@ Up to 12, ordered: how a reviewer verifies the change themselves, on this branch
 
 ## Design decisions
 
-Up to 16 decision points: every place the change faced a real choice.
+Up to 16 decision points. Include choices that explain the conclusion or materially affect behaviour; group related choices. A complete decision history belongs in supporting records when requested.
 
 ```json
 {

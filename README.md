@@ -74,13 +74,20 @@ yk pbench capture --source codex --yes   # run a domain command
 | **validator** (deprecated) | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
 | **computer-use** | Route browser pages through DOM/CDP with an explicit target before using native macOS UI; when native UI is required, use background-first AX perception and evidence-bound actions with short batches and clear delivery receipts. macOS arm64 only. | `yk install computer-use` |
 | **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
-| **show-me** | Explain topics and code changes visually. HTML reports use [shadcn/ui](https://ui.shadcn.com/) styling by default, with embedded CSS for offline use; explicit styles and templates take precedence. Architecture reports lead with an interactive layered module map, connected views and guided focus. Optional sequence views, test results and evidence share one offline HTML file. Reports default to `~/.ya-skills/show-me/reports/<project>/<branch>/<timestamp>/report.html`; explicit output paths take precedence. | `yk install show-me` |
-| **show-pr** | Explicit-only compatibility entrypoint for PR reports. Installs and uses `show-me`, including its renderer and default output directory. Existing `show-pr/tools` commands still work. | `yk install show-pr` |
+| **show-me** | Explain topics and code changes with concise Markdown, sketches and evidence. HTML reports use an independently installed Archify skill located through the host skill list. Preserves working-tree evidence, report archives and host preview delivery. Youkai HTML preview supports 30 MiB. | `yk install show-me` |
+| **show-pr** | Explicit-only PR report entrypoint. Installs show-me and uses the actual Git range and verification evidence; HTML requires separately installed Archify. Legacy graph.json tools report the migration. | `yk install show-pr` |
 | **svg-icons** | Generate family-consistent 24-grid SVG icons from a JSON drawing language (max two inks, composed marks like folder-plus-pencil). Invoke with `/svg-icons`. | `yk install svg-icons` |
 | **ultra-cr** | Assign independent reviewers by risk, verify related findings in batches, and publish confirmed defects. A bundled Python 3.9+ helper manages artifact paths and resumable progress. Branch reviews compare against the target merge-base (`--base=REF` overrides the target). Works with the host agent’s delegation tools. | `yk install ultra-cr` |
 | **ultra-simplify** | Run an autonomous whole-codebase simplification sprint: LOC down 40%+ overall, god files split, helpers unified, if-chains flattened — then deliver PRs. | `yk install ultra-simplify` |
 
 > `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
+
+The former show-me HTML generator, schema, examples and assets are preserved in
+[archive/show-me-html](archive/show-me-html/README.md). New HTML reports use independently installed Archify;
+the archive is excluded from installed skills and release catalogs. Archify is
+installed and upgraded separately; `yk install show-me` does not manage it. Reports still
+archive under `~/.ya-skills/show-me/reports/<project>/<branch>/<timestamp>/report.html`.
+
 
 Browse the full catalog at any time with `yk list`.
 
