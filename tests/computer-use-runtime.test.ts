@@ -63,7 +63,7 @@ test("real sessions and worker steps stay lazy and bypass an incompatible instal
       assert.equal(result.receipt.index, 3);
       assert.equal(result.receipt.status, "delivered");
       assert.deepEqual(inputs, [{ name: "type_text", body: {
-        target: { kind: "window", pid: 42, window_id: 7 }, text: "fixture", delivery_mode: "background"
+        target: { kind: "window", pid: 42, window_id: 7 }, text: "fixture", delivery_mode: "background", post_action_wait: "none"
       } }]);
       assert.equal(creates, 2);
     } finally { await worker.close(); }

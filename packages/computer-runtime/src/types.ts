@@ -21,6 +21,10 @@ export interface AppRef {
 export interface AxElement {
   role?: string;
   label?: string;
+  title?: string;
+  description?: string;
+  placeholder?: string;
+  subrole?: string;
   value?: string;
   elementToken?: string;
   frame?: { x: number; y: number; w: number; h: number };
@@ -95,6 +99,12 @@ export type InputAddress = { elementToken: string; point?: never } | { point: Po
 /** Coordinates have already passed observation validation and scaling. */
 export type NativeInputAddress = { elementToken: string; point?: never } | { point: Point; elementToken?: never };
 
+/** Native reporting policy for locally orchestrated steps, not delivery or
+ * application readiness. Omission preserves the driver's normal wait. */
+export interface NativeActionOptions {
+  postActionWait?: "none";
+}
+
 // Generic ToolResult and typed ActionResult share this lazy, structural seam.
 export interface ToolResultLike {
   isError?: boolean;
@@ -102,6 +112,7 @@ export interface ToolResultLike {
   text?: string;
   structuredJson?: string;
   rawJson?: string;
+  images?: Array<{ mimeType?: string; dataBase64?: string }>;
   action?: unknown;
   route?: string | number;
   effect?: string | number;
@@ -156,6 +167,7 @@ export interface Selector {
   text: string;
   match: "exact" | "contains";
   role?: string;
+  subrole?: string;
 }
 
 export interface ObserveOptions {
@@ -262,13 +274,13 @@ export interface Backend {
     options: { accessibility: boolean; screenshot: boolean; maxDimension?: number },
     callOptions?: ObserveCallOptions
   ): Promise<NativeObservationLike>;
-  clickToken(target: Target, token: string): Promise<ToolResultLike>;
-  clickPoint(target: Target, point: Point): Promise<ToolResultLike>;
+  clickToken(target: Target, token: string, options?: NativeActionOptions): Promise<ToolResultLike>;
+  clickPoint(target: Target, point: Point, options?: NativeActionOptions): Promise<ToolResultLike>;
   /** Optional so test or older backends fail closed before native dispatch. */
-  setValue?(target: Target, elementToken: string, value: string): Promise<ToolResultLike>;
-  type(target: Target, text: string, input?: NativeInputAddress): Promise<ToolResultLike>;
-  key(target: Target, key: string, modifiers?: string[], input?: NativeInputAddress): Promise<ToolResultLike>;
-  scroll(target: Target, options: ScrollSpec): Promise<ToolResultLike>;
+  setValue?(target: Target, elementToken: string, value: string, options?: NativeActionOptions): Promise<ToolResultLike>;
+  type(target: Target, text: string, input?: NativeInputAddress, options?: NativeActionOptions): Promise<ToolResultLike>;
+  key(target: Target, key: string, modifiers?: string[], input?: NativeInputAddress, options?: NativeActionOptions): Promise<ToolResultLike>;
+  scroll(target: Target, spec: ScrollSpec, options?: NativeActionOptions): Promise<ToolResultLike>;
   metadata(): Promise<{ driverVersion?: string; pid?: number }>;
   permissions(): Promise<{ accessibility: boolean; screenRecording: boolean }>;
   endSession(): Promise<void>;

@@ -152,11 +152,12 @@ function parseSessionTarget(value: unknown, context: ValidationContext, where: s
 
 function parseSelector(value: unknown, context: ValidationContext, where: string): Selector {
   const raw = requireRecord(value, context, where);
-  assertKnownKeys(raw, ["text", "match", "role"], context, where);
+  assertKnownKeys(raw, ["text", "match", "role", "subrole"], context, where);
   const text = requiredString(raw, "text", context, where, { nonEmpty: true, maxBytes: 10_000 });
   const match = enumValue(raw.match, ["exact", "contains"] as const, context, `${where}.match`);
   const role = optionalString(raw, "role", context, where, { nonEmpty: true, maxBytes: 10_000 });
-  return role === undefined ? { text, match } : { text, match, role };
+  const subrole = optionalString(raw, "subrole", context, where, { nonEmpty: true, maxBytes: 10_000 });
+  return { text, match, ...(role !== undefined ? { role } : {}), ...(subrole !== undefined ? { subrole } : {}) };
 }
 
 function parseObserveOptions(value: unknown, context: ValidationContext, where: string): ObserveOptions {
@@ -494,7 +495,13 @@ function parseAxElement(value: unknown, context: ValidationContext, where: strin
   const frame = raw.frame === undefined ? undefined : parseAxFrame(raw.frame, context, `${where}.frame`);
   const enabled = optionalBoolean(raw, "enabled", context, where);
   const selected = optionalBoolean(raw, "selected", context, where);
+  const identity: Pick<AxElement, "title" | "description" | "placeholder" | "subrole"> = {};
+  for (const key of ["title", "description", "placeholder", "subrole"] as const) {
+    const value = optionalString(raw, key, context, where, { maxBytes: MAX_FIELD_BYTES });
+    if (value !== undefined) identity[key] = value;
+  }
   const parsed: AxElement = {
+    ...identity,
     ...(role !== undefined ? { role } : {}),
     ...(label !== undefined ? { label } : {}),
     ...(textValue !== undefined ? { value: textValue } : {}),
@@ -503,7 +510,7 @@ function parseAxElement(value: unknown, context: ValidationContext, where: strin
     ...(enabled !== undefined ? { enabled } : {}),
     ...(selected !== undefined ? { selected } : {})
   };
-  return copyUnknownFields(raw, parsed, ["role", "label", "value", "elementToken", "frame", "enabled", "selected"]);
+  return copyUnknownFields(raw, parsed, ["role", "label", "title", "description", "placeholder", "subrole", "value", "elementToken", "frame", "enabled", "selected"]);
 }
 
 function parseAxChannel(value: unknown, context: ValidationContext, where: string): AxChannel {

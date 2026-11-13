@@ -14,9 +14,10 @@ export class UnsupportedConditionError extends Error {
 }
 
 function axUsableForConditions(observation: Observation): boolean {
-  // A partial (incomplete) or filtered tree can never PROVE an existence or
-  // value condition: only a complete, usable AX view may satisfy one.
-  return observation.ax.status === "usable" && observation.ax.complete === true;
+  // These are positive checks of currently observed controls. The driver's
+  // actionable-node projection can supply them without exhaustive coverage.
+  // A genuinely degraded/truncated read still cannot gate later input.
+  return observation.ax.status === "usable";
 }
 
 /** Evaluate a condition against one observation. Throws

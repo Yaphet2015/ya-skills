@@ -46,8 +46,9 @@ for the next decision, not proof that the business operation succeeded.
   AX tokens, or script state. Keep it across the native subflow; switching
   between session and one-shot calls discards reusable driver/token state.
 - Reuse an action's returned observation if it answers the next question.
-  Use `batch` or `exec` for already-decided actions and condition waits;
-  inspect again only for a new decision, stale evidence, or uncertain effect.
+  Prefer `exec` for multi-step flows, including fresh token lookup, condition
+  waits, assertions, and deterministic branches. Keep those checks local;
+  inspect again at the model level only when interpretation is needed.
 - Keep default image limits. Zoom a captured region before increasing the
   full-frame budget; image flags do not expand or repair an AX tree.
 - Use `--key KEY --modifiers MOD[,MOD]` for shortcuts. For example:
@@ -64,6 +65,22 @@ session for observation. Do not automatically replay the uncertain action.
 
 When an action reports `delivered`, do not repeat it: inspect the returned
 observation and verify the effect.
+
+## AX projection and search identity
+
+`ax.status: "usable"` with `complete: false` can be the driver's normal
+actionable-node projection. A positive, unambiguous match can satisfy a
+local existence/value condition; a missing match cannot prove absence.
+Genuinely truncated or degraded reads still need a better observation.
+
+AX elements retain `title`, `description`, `placeholder`, and `subrole`.
+Use those fields to distinguish an actual search control from a field whose
+current value happens to look like search text. A batch/exec selector may
+combine text, role, and subrole, for example:
+
+```js
+{ text: "Search notes", match: "exact", role: "AXTextField", subrole: "AXSearchField" }
+```
 
 ## Native file chooser targets
 
@@ -121,7 +138,48 @@ next action under the user's existing authorization. Never retry automatically.
 A `synthetic_events` route can be targeted background delivery; that route alone
 is not evidence that the user's cursor or focus changed.
 
-## Batch and exec
+## Prefer exec for multi-step flows
+
+After the initial observation establishes the target and intended controls,
+write one bounded async-function body for the next coherent segment. Reuse
+the current session, or open one if none exists:
+
+```sh
+yk computer-use session open --pid PID --window WINDOW
+yk computer-use exec --session SESSION --file .agents/skills/computer-use/examples/search.js --request-id search-flow-1
+```
+
+The [search example](../examples/search.js) resolves a fresh field token, sets
+its value, submits, waits for results, and returns a summary in one exec.
+Use it as a template after adapting selectors, input, and the success
+condition to the observed app. Do not split those steps into separate model
+turns. Ordinary JavaScript can check exact match counts, fail on missing or
+disabled controls, or choose a branch from a known AX value. These checks
+belong inside the script. Await each action before the next one and let
+refused, failed, or unknown actions stop the flow; do not catch them to
+continue input or replay it.
+
+Use `computer.wait(condition, timeoutMs)` for bounded structured polling.
+Batch and exec steps already request `post_action_wait: "none"` from Cua
+Driver 0.47.24: they skip the window-change report wait while the driver's
+background watch and focus protection continue. Explicit condition waits
+remain necessary for asynchronous application changes.
+Observe locally only when needed for a fresh token, an expected-state check,
+or final verification. Return a compact JSON summary and keep logs small;
+the exec receipt also carries action receipts and observations. In the host
+code-mode wrapper, emit `result.value` and relevant status/receipts; include
+the needed observation or image path when handing a decision to the model.
+Do not print the whole exec envelope after every successful segment. If the next
+step needs a new image to be interpreted or an unexpected state to be
+understood, return that evidence and end the segment before more input.
+
+The generated script surface is [`references/api.d.ts`](api.d.ts). Check
+`status` and `stateCommitted` separately: a failed final observation can
+still leave script state committed. Script failure does not undo delivered
+UI actions. An unknown delivery interrupts the session; observe and decide
+instead of re-running the request id.
+
+## Batch for a fixed action list
 
 Put only already-decided serial actions in a batch. A batch is bound to one
 window, stops at the first failed or unknown receipt, and marks later actions
@@ -139,22 +197,8 @@ must never be replayed. Example:
 ```
 
 ```sh
-yk computer-use batch --pid PID --window WINDOW --file steps.json --request-id refresh-1
+yk computer-use batch --session SESSION --file steps.json --request-id refresh-1
 ```
-
-For loops, local waits, or a small bounded branch, open one session and run
-one trusted local async-function body:
-
-```sh
-yk computer-use session open --pid PID --window WINDOW
-yk computer-use exec --session SESSION --file .agents/skills/computer-use/examples/search.js --request-id search-flow-1
-```
-
-The generated script surface is
-[`references/api.d.ts`](api.d.ts), and the complete flow example is
-[`examples/search.js`](../examples/search.js). Exec state commits only after a
-clean completion. An unknown delivery interrupts the session; observe and
-decide instead of re-running the request id.
 
 ## Visual evidence and values
 

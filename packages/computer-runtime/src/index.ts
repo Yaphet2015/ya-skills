@@ -7,6 +7,7 @@ export type {
   ActionResult,
   InputAddress,
   NativeInputAddress,
+  NativeActionOptions,
   AxValueResult,
   AxChannel,
   AxElement,

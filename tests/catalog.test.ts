@@ -240,7 +240,6 @@ test("root catalog exposes the computer-use skill with its command functions", a
   expect(skill).toContain("yk computer-use apps");
   expect(skill).toContain("yk computer-use windows --pid");
   expect(skill).toContain("yk computer-use perceive --pid");
-  expect(skill).toContain("yk computer-use act --pid");
   expect(skill).toContain("yk computer-use doctor");
   expect(skill).not.toContain("cowork-e2e");
   expect(skill).not.toContain("cowork_app");

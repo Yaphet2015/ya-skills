@@ -7,6 +7,7 @@ import type {
   ActionResult,
   InputAddress,
   NativeInputAddress,
+  NativeActionOptions,
   Point,
   AxElement,
   AxValueResult,
@@ -27,7 +28,7 @@ import type {
   ToolResultLike
 } from "./types.js";
 import { clickUnique, waitForElements } from "./actions.js";
-import { normalizeElements, projectObservation } from "./observe.js";
+import { projectObservation } from "./observe.js";
 import { persistObservationImage } from "./artifacts.js";
 import { DEFAULT_MAX_DIMENSION, DEFAULT_MAX_PIXELS, validateImageBudget } from "./screenshot.js";
 import { readPngDimensions } from "./image-evidence.js";
@@ -160,10 +161,10 @@ class SessionImpl implements ComputerSession {
       setValue: (target: Target, elementToken: string, value: string) =>
         this.setValue(target, elementToken, value),
       type: (target: Target, text: string, input?: InputAddress) =>
-        this.inputAction("type", target, input, (b, address) => b.type(target, text, address)),
+        this.inputAction("type", target, input, (b, address, options) => b.type(target, text, address, options)),
       key: (target: Target, key: string, modifiers?: string[], input?: InputAddress) =>
-        this.inputAction("key", target, input, (b, address) => b.key(target, key, modifiers, address)),
-      scroll: (target: Target, spec: ScrollSpec) => this.action("scroll", target, (b) => b.scroll(target, spec)),
+        this.inputAction("key", target, input, (b, address, options) => b.key(target, key, modifiers, address, options)),
+      scroll: (target: Target, spec: ScrollSpec) => this.action("scroll", target, (b, options) => b.scroll(target, spec, options)),
       waitFor: (target: Target, predicate, description: string, opts?: { timeoutMs?: number; intervalMs?: number }) =>
         this.waitFor(target, predicate, description, opts)
     };
@@ -442,7 +443,8 @@ class SessionImpl implements ComputerSession {
     if (opts?.selector !== undefined &&
       (typeof opts.selector.text !== "string" || opts.selector.text.length === 0 ||
         (opts.selector.match !== "exact" && opts.selector.match !== "contains") ||
-        (opts.selector.role !== undefined && (typeof opts.selector.role !== "string" || opts.selector.role.length === 0)))) {
+        (opts.selector.role !== undefined && (typeof opts.selector.role !== "string" || opts.selector.role.length === 0)) ||
+        (opts.selector.subrole !== undefined && (typeof opts.selector.subrole !== "string" || opts.selector.subrole.length === 0)))) {
       throw new ComputerError("invalid_request", "observation selector is invalid");
     }
 
@@ -475,18 +477,16 @@ class SessionImpl implements ComputerSession {
       } else {
         // auto: AX first; only take a screenshot when AX is insufficient. The
         // second frame (with its own metadata) becomes the latest observation.
-        // Insufficient means incomplete, degraded/truncated, OR an empty tree:
-        // a complete-but-empty AX view cannot suppress the visual fallback.
+        // Use the same channel projection as callers. A usable actionable
+        // projection needs no image even though complete remains false.
         const axOnly = await this.readObservation(
           target,
           { accessibility: true, screenshot: false },
           nativeCallOptions
         );
-        const axUsable =
-          axOnly.elementsComplete === true &&
-          axOnly.degraded !== true &&
-          axOnly.truncated !== true &&
-          normalizeElements(axOnly.elements).length > 0;
+        const axUsable = projectObservation(axOnly, { mode: "ax" }, {
+          accessibility: true, screenshot: false
+        }).ax.status === "usable";
         if (axUsable) {
           requested = { accessibility: true, screenshot: false };
           raw = axOnly;
@@ -621,14 +621,14 @@ class SessionImpl implements ComputerSession {
   // ---- clickPoint: evidence-bound visual click (A4) -----------------------
 
   private clickPoint(target: Target, point: PointClick): Promise<ActionResult | void> {
-    return this.pointAction("click_point", target, point, (backend, mapped) => backend.clickPoint(target, mapped));
+    return this.pointAction("click_point", target, point, (backend, mapped, options) => backend.clickPoint(target, mapped, options));
   }
 
   private async inputAction(
     kind: "type" | "key",
     target: Target,
     input: InputAddress | undefined,
-    dispatch: (backend: Backend, input?: NativeInputAddress) => Promise<ToolResultLike>
+    dispatch: (backend: Backend, input?: NativeInputAddress, options?: NativeActionOptions) => Promise<ToolResultLike>
   ): Promise<ActionResult | void> {
     if (input !== undefined) {
       try {
@@ -637,17 +637,17 @@ class SessionImpl implements ComputerSession {
         throw new ComputerError("invalid_request", error instanceof Error ? error.message : "invalid input address", "not_delivered");
       }
       if (input.point !== undefined) {
-        return this.pointAction(kind, target, input.point, (backend, point) => dispatch(backend, { point }));
+        return this.pointAction(kind, target, input.point, (backend, point, options) => dispatch(backend, { point }, options));
       }
     }
-    return this.action(kind, target, (backend) => dispatch(backend, input));
+    return this.action(kind, target, (backend, options) => dispatch(backend, input, options));
   }
 
   private async pointAction(
     kind: "click_point" | "type" | "key",
     target: Target,
     point: PointClick,
-    dispatch: (backend: Backend, point: Point) => Promise<ToolResultLike>
+    dispatch: (backend: Backend, point: Point, options?: NativeActionOptions) => Promise<ToolResultLike>
   ): Promise<ActionResult | void> {
     const store = this.options.observationStore;
     if (!store) {
@@ -722,7 +722,7 @@ class SessionImpl implements ComputerSession {
     return this.action(
       kind,
       target,
-      (b) => dispatch(b, driverPoint),
+      (b, options) => dispatch(b, driverPoint, options),
       {
         beforeDispatch: () => {
           if (this.revision !== expectedRevisionAtDispatch) {
@@ -759,7 +759,7 @@ class SessionImpl implements ComputerSession {
       {
         snapshot: async () =>
           (await this.read("click lookup", (b) => b.snapshot(target, false))).elements,
-        click: (token) => this.action("click", target, (b) => b.clickToken(target, token))
+        click: (token) => this.action("click", target, (b, options) => b.clickToken(target, token, options))
       },
       predicate,
       description
@@ -816,13 +816,13 @@ class SessionImpl implements ComputerSession {
   private action(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
-    fn: (backend: Backend) => Promise<void | ToolResultLike>,
+    fn: (backend: Backend, options?: NativeActionOptions) => Promise<void | ToolResultLike>,
     options?: { beforeDispatch?: () => void }
   ): Promise<ActionResult | void>;
   private action<T>(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
-    fn: (backend: Backend) => Promise<void | ToolResultLike>,
+    fn: (backend: Backend, options?: NativeActionOptions) => Promise<void | ToolResultLike>,
     options: {
       validate: (result: void | ToolResultLike) => T;
       beforeDispatch?: () => void;
@@ -831,7 +831,7 @@ class SessionImpl implements ComputerSession {
   private async action<T>(
     kind: "click" | "click_point" | "set_value" | "type" | "key" | "scroll",
     target: Target,
-    fn: (backend: Backend) => Promise<void | ToolResultLike>,
+    fn: (backend: Backend, options?: NativeActionOptions) => Promise<void | ToolResultLike>,
     options: {
       validate?: (result: void | ToolResultLike) => T;
       beforeDispatch?: () => void;
@@ -904,7 +904,12 @@ class SessionImpl implements ComputerSession {
       try {
         this.assertDispatchAllowed(deadlineAt, "not_delivered");
         options.beforeDispatch?.();
-        const result = await withDeadline(kind, this.trackNative(fn(backend)), Math.max(deadlineAt - Date.now(), 1));
+        // Batches and hosted exec steps own their waits and final observation.
+        // Skip only the driver's window-change report wait; its background
+        // watch/focus protection and our delivery/cleanup tracking stay live.
+        const nativeOptions: NativeActionOptions | undefined = this.batchDeadlineAt === null
+          ? undefined : { postActionWait: "none" };
+        const result = await withDeadline(kind, this.trackNative(fn(backend, nativeOptions)), Math.max(deadlineAt - Date.now(), 1));
         const driverResult = parseActionResult(result);
         if (driverResult?.effect === "refused") {
           throw new ComputerError(driverResult.error?.code ?? "action_refused", "driver refused the action", "not_delivered", driverResult);
@@ -978,7 +983,7 @@ class SessionImpl implements ComputerSession {
     if (Buffer.byteLength(value, "utf8") > MAX_AX_VALUE_BYTES) {
       throw new ComputerError("invalid_request", `setValue value exceeds ${MAX_AX_VALUE_BYTES} UTF-8 bytes`, "not_delivered");
     }
-    return this.action<AxValueResult>("set_value", target, async (backend) => {
+    return this.action<AxValueResult>("set_value", target, async (backend, options) => {
       if (typeof backend.setValue !== "function") {
         throw new ComputerError(
           "ax_only_unsupported",
@@ -986,7 +991,7 @@ class SessionImpl implements ComputerSession {
           "not_delivered"
         );
       }
-      return backend.setValue(target, elementToken, value);
+      return backend.setValue(target, elementToken, value, options);
     }, { validate: parseAxValueResult });
   }
 

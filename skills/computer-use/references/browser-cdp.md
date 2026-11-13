@@ -47,6 +47,27 @@ browser tool or its CDP command surface for actions that need DOM node ids,
 events, or file transfer. It is intentionally not a browser automation
 framework.
 
+## Run a segment in code mode
+
+After binding the target and inspecting its controls, use the browser tool's
+code-mode surface, or orchestrate its supported calls in one host code-mode
+invocation. Keep a sequence such as fill fields, submit, wait for an expected
+DOM condition, and read the result in that invocation. Use sequential awaits
+for actions and bounded waits for page state; do not return to the model just
+to decide whether a known selector exists or a button is enabled.
+
+Query DOM state again inside the code when navigation or rendering replaces
+nodes. Continue only when the expected state matches; return a compact DOM
+summary when it does not. A missing or ambiguous control, a new visual
+question, or a timed-out mutation ends the segment before dependent input.
+Preserve the explicit target binding through the flow.
+
+With the bundled helper, use a bounded async `Runtime.evaluate` expression
+for checks within the current document, or import `evaluateTarget` into a
+local script for sequential calls. Return serializable results. A navigation
+can destroy the evaluation context: use the browser/CDP tool for that flow
+or end the segment and re-observe the bound target before further actions.
+
 ## What to inspect
 
 Ask the page for the smallest state that answers the question:

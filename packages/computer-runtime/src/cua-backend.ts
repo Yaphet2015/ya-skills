@@ -7,6 +7,7 @@ import type {
   AppRef,
   Backend,
   NativeInputAddress,
+  NativeActionOptions,
   NativeObservationLike,
   ObserveCallOptions,
   Point,
@@ -20,16 +21,8 @@ import type { ComputerSession, SessionOptions } from "./session.js";
 import { ComputerError, createSessionWithBackend } from "./session.js";
 import { isSupportedPlatform, loadSdk } from "./sdk.js";
 import { normalizeElements, sanitizeElements } from "./observe.js";
-
-// The SDK's WindowStateOutput with the session-injected metadata re-attached.
-// Type import only — this alias never enters the generated public api list.
-import type { WindowStateOutput } from "@trycua/cua-driver";
-export type NativeObservation = WindowStateOutput & {
-  observationId: string;
-  capturedAt: number;
-  epoch: string;
-  revision: number;
-};
+import { decodeWindowState } from "./cua-window-state.js";
+import { isKnownDriverRefusal, parseActionResult } from "./driver-result.js";
 
 type Sdk = typeof import("@trycua/cua-driver");
 
@@ -38,18 +31,8 @@ type Sdk = typeof import("@trycua/cua-driver");
 interface DriverLike {
   listApps(input: never): Promise<{ apps?: Array<Record<string, unknown>> }>;
   listWindows(input: never): Promise<{ windows?: Array<{ pid: number; windowId: bigint; title: string }> }>;
-  getWindowState(
-    input: never,
-    callOptions?: ObserveCallOptions
-  ): Promise<{
-    degraded?: boolean;
-    truncated?: boolean;
-    windowTitle?: string;
-    elements?: Array<Record<string, unknown>>;
-    images?: Array<{ dataBase64?: string }>;
-  }>;
   /** Full tool contract, including input addressing absent from typed inputs. */
-  callTool(name: string, argumentsJson: string): Promise<ToolResultLike>;
+  callTool(name: string, argumentsJson: string, callOptions?: { signal: AbortSignal }): Promise<ToolResultLike>;
   click(input: never): Promise<ToolResultLike | void>;
   metadata(): Promise<{ driverVersion?: string; pid?: number }>;
   endSession(input: never): Promise<unknown>;
@@ -100,24 +83,64 @@ function inputFields(input?: NativeInputAddress): Record<string, unknown> {
 
 /** JSON integers must preserve all 64 window-id bits. Only the validated
  * numeric identity is emitted as a literal; all user data uses JSON.stringify. */
-function callWindowTool(
-  driver: Pick<DriverLike, "callTool">,
-  name: string,
-  target: Target,
-  fields: Record<string, unknown>
-): Promise<ToolResultLike> {
+function windowIdentity(target: Target): string {
   if (!Number.isSafeInteger(target.pid) || target.pid <= 0 || typeof target.windowId !== "bigint" || target.windowId < 0n) {
     throw new ComputerError("invalid_request", "invalid native window target", "not_delivered");
   }
-  const body = JSON.stringify({ ...fields, delivery_mode: "background" });
-  const identity = `"target":{"kind":"window","pid":${target.pid},"window_id":${target.windowId}}`;
-  return driver.callTool(name, `{${identity},${body.slice(1)}`);
+  return `"pid":${target.pid},"window_id":${target.windowId}`;
 }
 
-export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
+function actionFields(options?: NativeActionOptions): Record<string, unknown> {
+  return options?.postActionWait === "none" ? { post_action_wait: "none" } : {};
+}
+
+async function callWindowTool(
+  driver: Pick<DriverLike, "callTool">,
+  name: string,
+  target: Target,
+  fields: Record<string, unknown>,
+  options?: NativeActionOptions
+): Promise<ToolResultLike> {
+  const body = JSON.stringify({ ...fields, delivery_mode: "background", ...actionFields(options) });
+  const identity = `"target":{"kind":"window",${windowIdentity(target)}}`;
+  const result = await driver.callTool(name, `{${identity},${body.slice(1)}`);
+  // Typed click raises DriverError.Tool on failure. Its generic fast route
+  // must keep the same conservative delivery verdict if action metadata is
+  // missing: an arbitrary tool error does not prove input was never sent.
+  if (name === "click" && result.isError && parseActionResult(result) === undefined &&
+      !isKnownDriverRefusal({ tag: "Tool", inner: { errorCode: result.errorCode } })) {
+    throw new ComputerError("action_failed", "native click failed without delivery metadata", "unknown");
+  }
+  return result;
+}
+
+export function makeBackend(sdk: Sdk, driver: DriverLike, prepareAccessibility = wakeAxOnce): Backend {
   const woken = new Set<number>();
   const windowTarget = (target: Target) =>
     new sdk.ActionTarget.Window({ pid: target.pid, windowId: target.windowId });
+
+  const readWindow = async (
+    target: Target,
+    accessibility: boolean,
+    screenshot: boolean,
+    maxDimension?: number,
+    callOptions?: ObserveCallOptions
+  ) => {
+    prepareAccessibility(target.pid, woken, callOptions);
+    const fields = JSON.stringify({
+      include_accessibility_tree: accessibility,
+      include_screenshot: screenshot,
+      // Preserve the typed SDK's full AX scope, including menu descendants.
+      full_output: true,
+      screenshot_format: "png",
+      ...(maxDimension !== undefined ? { max_dimension: maxDimension } : {})
+    });
+    const result = await driver.callTool(
+      "get_window_state", `{${windowIdentity(target)},${fields.slice(1)}`,
+      callOptions?.signal === undefined ? undefined : { signal: callOptions.signal }
+    );
+    return decodeWindowState(result, target);
+  };
 
   return {
     async apps(): Promise<AppRef[]> {
@@ -132,7 +155,7 @@ export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
     },
 
     async windows(pid: number, onScreenOnly = false): Promise<WindowRef[]> {
-      wakeAxOnce(pid, woken);
+      prepareAccessibility(pid, woken);
       const res = await driver.listWindows(sdk.ListWindowsInput.new({ pid, onScreenOnly }) as never);
       return (res.windows ?? [])
         .filter((w) => w.pid === pid)
@@ -140,15 +163,7 @@ export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
     },
 
     async snapshot(target: Target, screenshot: boolean): Promise<Snapshot> {
-      wakeAxOnce(target.pid, woken);
-      const state = await driver.getWindowState(
-        sdk.GetWindowStateInput.new({
-          pid: target.pid,
-          windowId: target.windowId,
-          includeAccessibilityTree: true,
-          includeScreenshot: screenshot
-        }) as never
-      );
+      const state = await readWindow(target, true, screenshot);
       if (state.degraded || state.truncated) {
         throw new ComputerError(
           "degraded_snapshot",
@@ -179,23 +194,7 @@ export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
           "observe requires at least one channel (accessibility or screenshot)"
         );
       }
-      wakeAxOnce(target.pid, woken, callOptions);
-      // @ubjs/core 0.31.0 dereferences asyncOpts.signal whenever the second
-      // argument is present. A deadline is enforced by the session wrapper;
-      // pass an SDK async-options object only when there is an actual signal.
-      const driverCallOptions = callOptions?.signal === undefined
-        ? undefined
-        : { signal: callOptions.signal };
-      const state = (await driver.getWindowState(
-        sdk.GetWindowStateInput.new({
-          pid: target.pid,
-          windowId: target.windowId,
-          includeAccessibilityTree: options.accessibility,
-          includeScreenshot: options.screenshot,
-          ...(options.maxDimension !== undefined ? { maxDimension: options.maxDimension } : {})
-        }) as never,
-        driverCallOptions
-      )) as NativeObservation;
+      const state = await readWindow(target, options.accessibility, options.screenshot, options.maxDimension, callOptions);
       if (callOptions?.signal?.aborted) {
         throw new ComputerError("aborted", "the observation was aborted");
       }
@@ -208,7 +207,10 @@ export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
     // Window-local PIXEL coordinates (screenshot space, top-left origin) —
     // the unit verified by the A1 probe. The session layer maps/validates
     // observation coordinates into this space before calling.
-    async clickPoint(target: Target, point: Point): Promise<ToolResultLike> {
+    async clickPoint(target: Target, point: Point, options?: NativeActionOptions): Promise<ToolResultLike> {
+      if (options?.postActionWait === "none") {
+        return callWindowTool(driver, "click", target, { x: point.x, y: point.y, button: "left", count: 1 }, options);
+      }
       const result = await driver.click(
         sdk.ClickInput.new({
           target: windowTarget(target),
@@ -221,7 +223,10 @@ export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
       return (result ?? { isError: false }) as ToolResultLike;
     },
 
-    async clickToken(target: Target, token: string): Promise<ToolResultLike> {
+    async clickToken(target: Target, token: string, options?: NativeActionOptions): Promise<ToolResultLike> {
+      if (options?.postActionWait === "none") {
+        return callWindowTool(driver, "click", target, { element_token: token, button: "left", count: 1 }, options);
+      }
       const result = await driver.click(
         sdk.ClickInput.new({
           target: windowTarget(target),
@@ -236,29 +241,29 @@ export function makeBackend(sdk: Sdk, driver: DriverLike): Backend {
 
     // `set_value` writes the token's AXValue directly. This adapter never
     // calls typeText or any event-injection primitive for this operation.
-    async setValue(target: Target, elementToken: string, value: string): Promise<ToolResultLike> {
+    async setValue(target: Target, elementToken: string, value: string, options?: NativeActionOptions): Promise<ToolResultLike> {
       return driver.callTool(
         "set_value",
-        JSON.stringify({ pid: target.pid, element_token: elementToken, value })
+        JSON.stringify({ pid: target.pid, element_token: elementToken, value, ...actionFields(options) })
       );
     },
 
-    async type(target: Target, text: string, input?: NativeInputAddress): Promise<ToolResultLike> {
-      return callWindowTool(driver, "type_text", target, { text, ...inputFields(input) });
+    async type(target: Target, text: string, input?: NativeInputAddress, options?: NativeActionOptions): Promise<ToolResultLike> {
+      return callWindowTool(driver, "type_text", target, { text, ...inputFields(input) }, options);
     },
 
-    async key(target: Target, key: string, modifiers?: string[], input?: NativeInputAddress): Promise<ToolResultLike> {
+    async key(target: Target, key: string, modifiers?: string[], input?: NativeInputAddress, options?: NativeActionOptions): Promise<ToolResultLike> {
       return callWindowTool(driver, "press_key", target, {
         key,
         ...(modifiers ? { modifiers } : {}),
         ...inputFields(input)
-      });
+      }, options);
     },
 
-    async scroll(target: Target, spec: ScrollSpec): Promise<ToolResultLike> {
+    async scroll(target: Target, spec: ScrollSpec, options?: NativeActionOptions): Promise<ToolResultLike> {
       return callWindowTool(driver, "scroll", target, {
         x: spec.x, y: spec.y, direction: spec.direction, amount: spec.amount
-      });
+      }, options);
     },
 
     async metadata() {

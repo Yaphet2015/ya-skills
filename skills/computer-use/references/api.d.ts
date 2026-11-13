@@ -18,6 +18,7 @@ export interface Selector {
   text: string;
   match: "exact" | "contains";
   role?: string;
+  subrole?: string;
 }
 export type Condition =
   | { kind: "element_exists"; selector: Selector }
@@ -81,6 +82,10 @@ export interface ImageChannel {
 export interface AxElement {
   role?: string;
   label?: string;
+  title?: string;
+  description?: string;
+  placeholder?: string;
+  subrole?: string;
   value?: string;
   elementToken?: string;
   frame?: { x: number; y: number; w: number; h: number };

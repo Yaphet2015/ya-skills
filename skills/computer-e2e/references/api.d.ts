@@ -21,6 +21,10 @@ export interface AppRef {
 export interface AxElement {
   role?: string;
   label?: string;
+  title?: string;
+  description?: string;
+  placeholder?: string;
+  subrole?: string;
   value?: string;
   elementToken?: string;
   frame?: { x: number; y: number; w: number; h: number };
@@ -114,6 +118,7 @@ export interface Selector {
   text: string;
   match: "exact" | "contains";
   role?: string;
+  subrole?: string;
 }
 export interface ObserveOptions {
   mode?: ObservationMode;

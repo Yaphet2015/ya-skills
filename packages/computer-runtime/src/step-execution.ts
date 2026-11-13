@@ -91,7 +91,8 @@ export async function executeStep(
         const result = await computer.click(
           target,
           (element) => selectorMatches(selector, element),
-          selector.match + " \"" + selector.text + "\"" + (selector.role ? " role=" + selector.role : "")
+          selector.match + " \"" + selector.text + "\"" + (selector.role ? " role=" + selector.role : "") +
+            (selector.subrole ? " subrole=" + selector.subrole : "")
         );
         return makeResult(index, action, "completed", "delivered", undefined, result);
       }

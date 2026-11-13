@@ -45,6 +45,11 @@ panel.hidesOnDeactivate = false
 // AX actions still address its controls by token.
 panel.ignoresMouseEvents = true
 
+let searchField = NSSearchField(frame: NSRect(x: 180, y: 365, width: 380, height: 28))
+searchField.placeholderString = "Search notes"
+searchField.setAccessibilityLabel("Search")
+searchField.setAccessibilityIdentifier("ax-form-search")
+
 let nameField = NSTextField(frame: NSRect(x: 180, y: 325, width: 380, height: 32))
 nameField.isEditable = true
 nameField.isSelectable = true
@@ -98,6 +103,7 @@ func publish() {
         "schemaVersion": 1,
         "pid": ProcessInfo.processInfo.processIdentifier,
         "windowId": panel.windowNumber,
+        "searchQuery": searchField.stringValue,
         "initialFrontmostPid": initialFrontmostPid,
         "frontmostPid": NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1,
         "initialMouseX": initialMouseLocation.x,
@@ -158,6 +164,7 @@ submitButton.setAccessibilityLabel("Submit AX form")
 submitButton.isEnabled = true
 
 panel.contentView?.addSubview(nameLabel)
+panel.contentView?.addSubview(searchField)
 panel.contentView?.addSubview(emailLabel)
 panel.contentView?.addSubview(messageLabel)
 panel.contentView?.addSubview(nameField)

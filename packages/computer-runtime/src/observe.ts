@@ -10,6 +10,7 @@ import type {
   NativeObservationLike,
   ObserveOptions,
   Observation,
+  Selector,
   Target,
   WindowRef
 } from "./types.js";
@@ -49,21 +50,27 @@ export function normalizeElements(raw: unknown): AxElement[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const e = item as Record<string, unknown>;
+    const elementToken = e.elementToken ?? e.element_token;
     out.push({
       role: typeof e.role === "string" ? e.role : undefined,
       label: typeof e.label === "string" ? e.label : undefined,
+      title: typeof e.title === "string" ? e.title : undefined,
+      description: typeof e.description === "string" ? e.description : undefined,
+      placeholder: typeof e.placeholder === "string" ? e.placeholder : undefined,
+      subrole: typeof e.subrole === "string" ? e.subrole : undefined,
       value:
         typeof e.value === "string"
           ? e.value
           : e.value == null
             ? undefined
             : String(e.value),
-      elementToken: typeof e.elementToken === "string" ? e.elementToken : undefined,
+      elementToken: typeof elementToken === "string" ? elementToken : undefined,
       frame:
         typeof e.frame === "object" && e.frame !== null
           ? (e.frame as { x: number; y: number; w: number; h: number })
           : undefined,
-      enabled: typeof e.enabled === "boolean" ? e.enabled : undefined
+      enabled: typeof e.enabled === "boolean" ? e.enabled : undefined,
+      selected: typeof e.selected === "boolean" ? e.selected : undefined
     });
   }
   return out;
@@ -74,7 +81,8 @@ export function sanitizeElements(elements: AxElement[]): AxElement[] {
   const SECRET_ROLE = /password|secure/i;
   const SECRET_LABEL = /密码|passphrase|password|secret/i;
   return elements.map((e) => {
-    if (SECRET_ROLE.test(e.role ?? "") || SECRET_LABEL.test(e.label ?? "")) {
+    if (SECRET_ROLE.test(e.role ?? "") || SECRET_ROLE.test(e.subrole ?? "") ||
+        [e.label, e.title, e.description, e.placeholder].some(text => SECRET_LABEL.test(text ?? ""))) {
       return { ...e, value: undefined };
     }
     return e;
@@ -93,6 +101,7 @@ function projectAx(raw: NativeObservationLike): AxChannel {
   const total = raw.totalElementCount === undefined ? undefined : Number(raw.totalElementCount);
   const returned = raw.returnedElementCount === undefined ? undefined : Number(raw.returnedElementCount);
   const complete = raw.elementsComplete === true && raw.degraded !== true && raw.truncated !== true;
+  const actionableProjection = raw.elementsComplete === false && total !== undefined && returned !== undefined && total === returned;
   let status: ChannelStatus;
   let reason: string | undefined;
   if (raw.degraded === true) {
@@ -101,11 +110,10 @@ function projectAx(raw: NativeObservationLike): AxChannel {
   } else if (raw.truncated === true) {
     status = "truncated";
     reason = raw.truncationReason;
-  } else if (raw.elementsComplete !== true) {
-    // Native evidence (verification doc §“native evidence reports truncation
-    // with elementsComplete=false and no truncated flag”): an incomplete tree
-    // is NEVER usable — partial trees cannot prove existence/value
-    // conditions, so incompleteness keeps its own truncated status.
+  } else if (raw.elementsComplete !== true && !actionableProjection) {
+    // Missing completeness metadata is unknown. An explicit false with no
+    // degraded/truncated flag and equal indexed counts is the driver's
+    // actionable-node projection: positive evidence, never exhaustive coverage.
     status = "truncated";
     reason = raw.truncationReason ?? "elements_incomplete";
   } else {
@@ -177,13 +185,14 @@ function projectImage(raw: NativeObservationLike): ImageChannel {
   };
 }
 
-function selectorMatches(selector: { text: string; match: "exact" | "contains"; role?: string }, e: AxElement): boolean {
+function selectorMatches(selector: Selector, e: AxElement): boolean {
   if (selector.role !== undefined && e.role !== selector.role) return false;
+  if (selector.subrole !== undefined && e.subrole !== selector.subrole) return false;
   const wanted = normalizeTextForSelector(selector.text);
-  const label = e.label == null ? null : normalizeTextForSelector(e.label);
-  const value = e.value == null || e.value === "" ? null : normalizeTextForSelector(e.value);
-  if (selector.match === "exact") return label === wanted || value === wanted;
-  return (label !== null && label.includes(wanted)) || (value !== null && value.includes(wanted));
+  const texts = [e.label, e.title, e.description, e.placeholder, e.value]
+    .filter((value): value is string => typeof value === "string" && value !== "")
+    .map(normalizeTextForSelector);
+  return texts.some(text => selector.match === "exact" ? text === wanted : text.includes(wanted));
 }
 
 function normalizeTextForSelector(value: string): string {

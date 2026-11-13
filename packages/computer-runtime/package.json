@@ -8,11 +8,11 @@
     "./src/*": "./src/*"
   },
   "dependencies": {
-    "@trycua/cua-driver": "0.38.0",
+    "@trycua/cua-driver": "0.47.24",
     "pngjs": "^7.0.0"
   },
   "optionalDependencies": {
-    "@trycua/cua-driver-darwin-arm64": "0.38.0"
+    "@trycua/cua-driver-darwin-arm64": "0.47.24"
   },
   "devDependencies": {
     "@types/pngjs": "^6.0.4"

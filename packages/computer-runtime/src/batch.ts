@@ -48,7 +48,11 @@ function validateSelector(value: unknown, where: string): Selector {
   if (role !== undefined && (typeof role !== "string" || role.length === 0)) {
     fail(`${where}.role must be a non-empty string`);
   }
-  return { text, match, ...(role !== undefined ? { role } : {}) };
+  const subrole = value.subrole;
+  if (subrole !== undefined && (typeof subrole !== "string" || subrole.length === 0)) {
+    fail(`${where}.subrole must be a non-empty string`);
+  }
+  return { text, match, ...(role !== undefined ? { role } : {}), ...(subrole !== undefined ? { subrole } : {}) };
 }
 
 function validateCondition(value: unknown, where: string): Condition {

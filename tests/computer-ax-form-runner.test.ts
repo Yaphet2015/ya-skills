@@ -121,8 +121,7 @@ describe("AX form observation acceptance", () => {
     const observation = realPartialObservation();
 
     expect(observation.ax).toMatchObject({
-      status: "truncated",
-      reason: "elements_incomplete",
+      status: "usable",
       total: 6,
       returned: 6,
       complete: false

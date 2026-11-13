@@ -48,7 +48,7 @@ The agent-facing usage guide lives in the skill itself
 
 - macOS arm64, macOS 13+ (driver requirement). Other platforms fail fast
   with `unsupported_platform`; no other `yk` command is affected.
-- The Cua Driver SDK (0.38.0) runs inside the `yk` Bun runtime for one-shot
+- The Cua Driver SDK (0.47.24) runs inside the `yk` Bun runtime for one-shot
   commands. The adapter explicitly sets `embedded: true` to keep the driver
   in-process and bypass installed daemons. Persistent sessions manage one private
   driver worker themselves; users install no Node runtime, daemon, or extra
@@ -123,6 +123,28 @@ Nothing is written into the skill install
 directory, the yk install prefix, or your project.
 
 ## Output contract
+
+Batch actions and persistent `exec` steps use the macOS driver's
+`post_action_wait: "none"`. The driver returns after input delivery without
+waiting up to 300 ms for its window-change report; its background watch and
+focus protection continue. Use explicit `computer.wait` conditions and the
+final observation to verify readiness. A delivered receipt still does not
+prove the application operation succeeded. Direct single actions retain the
+driver's normal report wait.
+
+Native observations retain `title`, `description`, `placeholder`, `subrole`,
+and `selected` on AX elements. Batch/exec selectors can specify `subrole`
+(for example `AXSearchField`) alongside `role`; text matching checks labels,
+titles, descriptions, placeholders, and values. Exactly one observed match
+is required for clicks and element conditions.
+
+An AX projection with `elementsComplete:false`, equal indexed total/returned
+counts, and no degraded/truncated flag is usable positive evidence. Its
+`complete` flag remains false: it cannot establish that a control is absent.
+`auto` avoids an extra screenshot for this view, and element existence/value
+conditions can use a positive match. Missing metadata, unequal counts, real
+truncation, degradation, and observed duplicate matches do not satisfy these
+conditions. Screenshots used as coordinate evidence remain PNG.
 
 - Success: one JSON document on stdout (`apps`, `windows`,
   `{pid, windowId, title, elements, screenshot?}` for perceive/act,

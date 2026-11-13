@@ -72,7 +72,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **ultra-produce** (deprecated) | Coordinate native Planner, Builder and Verifier subagents through planning, independent challenges, implementation, review and testing. Main handles all spawning; full results and fresh-session recovery use local files. Keeps stage hooks, scoped task cards, corrections, evidence acceptance and local commits. Internal artifacts live in `~/.ya-skills/ultra-produce/logs/<run-id>`; Plans and reports in `reports/<declared-project>/<branch>/<run-id>`. Requires native subagent support and the named workflow skills. | `yk install ultra-produce` |
 | **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
 | **validator** (deprecated) | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
-| **computer-use** | Route browser pages through DOM/CDP with an explicit target before using native macOS UI; when native UI is required, use background-first AX perception and evidence-bound actions with short batches and clear delivery receipts. macOS arm64 only. | `yk install computer-use` |
+| **computer-use** | Route browser pages through DOM/CDP with an explicit target; prefer code mode for multi-step flows and persistent-session exec for native macOS AX actions, with evidence-bound input and clear delivery receipts. macOS arm64 only. | `yk install computer-use` |
 | **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
 | **show-me** | Explain topics and code changes with concise Markdown, sketches and evidence. HTML reports use an independently installed Archify skill located through the host skill list. Preserves working-tree evidence, report archives and host preview delivery. Youkai HTML preview supports 30 MiB. | `yk install show-me` |
 | **show-pr** | Explicit-only PR report entrypoint. Installs show-me and uses the actual Git range and verification evidence; HTML requires separately installed Archify. Legacy graph.json tools report the migration. | `yk install show-pr` |
@@ -97,8 +97,8 @@ For computer-use coordinate actions, pass the same `--out-dir` to `observe` and
 `act`. Native failures with uncertain delivery return `unknown` and stop further
 input in that session. For controls with a writable AXValue, use
 `act --set-value VALUE --element-token TOKEN`; this path never falls back to
-keyboard events and accepts only a confirmed Accessibility result. With Cua Driver
-0.35.4, `--type` and `--key` also accept `--element-token TOKEN` or
+keyboard events and accepts only a confirmed Accessibility result.
+`--type` and `--key` also accept `--element-token TOKEN` or
 `--input-x PX --input-y PY --observation UUID` for direct background targeting.
 The latter focuses and types/presses in one driver call. `act.actionResult` and
 batch/exec receipt `result` retain the driver's route, effect, delivery mode, and
@@ -108,6 +108,16 @@ observation before deciding the next action. See [computer-use](docs/computer-us
 Native observations use AX first in `auto` mode. Image budgets default to a
 1280 px long side and 1,000,000 pixels; they only shrink images that exceed a
 limit. Override each limit with `--max-dimension` and `--max-pixels`.
+
+Cua Driver 0.47.24 supplies faster AX reads and batched text input. `yk` batch
+and persistent exec steps also skip the driver's per-action window-report
+wait while keeping its background watch and focus protection; use local
+conditions and final observations to verify the effect. Native AX results
+retain search-field identity, and batch/exec selectors accept `subrole`.
+An actionable AX projection can answer positive checks without a screenshot
+while still reporting `complete: false`. See the
+[execution contract](docs/computer-use.md#output-contract).
+
 `yk computer-use zoom --observation UUID --region X,Y,W,H [--session ID] [--out-dir DIR]`
 crops the stored original without a desktop read. Map zoom points back through
 the returned effective `region` and use the parent observation id for actions.

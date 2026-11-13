@@ -5,9 +5,40 @@ description: Inspect browser and Electron UI through DOM/CDP first; use native m
 
 # Computer-use
 
-Use this skill when a task needs a browser page or a visible macOS app. Keep
-the decision loop short: inspect the current state, do a deterministic action
-or small batch, then use the returned state to choose the next action.
+Use this skill when a task needs a browser page or a visible macOS app.
+Default to code mode for multi-step work: inspect once, execute the next
+coherent segment locally, and return the result needed for the next decision.
+
+## Default to code mode
+
+When the host provides a code-mode tool (such as `functions.exec`), use one
+invocation for a sequence of tool calls whose next steps can be decided from
+structured results. Keep sequential `await`s, bounded condition waits,
+assertions, and simple branches inside that invocation. A condition such as
+"continue when this field exists" does not need another model turn. Avoid
+one model round trip per click, field, wait, or status read.
+
+Choose the execution surface for the target:
+
+- Browser/Electron: orchestrate the available browser/CDP tool in code mode
+  on the explicit target. Follow its supported API; use the bundled helper
+  when no browser tool is available.
+- Native macOS: reuse one persistent session and prefer `yk computer-use exec`
+  for a multi-step segment. Use `batch` for a fixed action list; use a single
+  `act` when only one action is needed. Read the
+  [native exec example](references/native-orchestration.md#prefer-exec-for-multi-step-flows)
+  before writing the first native flow.
+
+Execute UI actions in order; do not parallelize input on the same target.
+Check each result before dependent actions. Read fresh DOM/AX state inside
+the code when needed to resolve a selector, renew a token, or check an
+expected condition. Keep output to a compact result, relevant receipts, and
+the state needed for the next decision; avoid logging every intermediate tree.
+
+Return to the model when the next step needs interpretation of a new image,
+an ambiguous target, an unexpected state without a defined branch, or
+uncertain delivery. Stop before actions outside the user's authorization.
+Do not guess later coordinates or hide failures to keep a segment running.
 
 ## Shared desktop input
 
@@ -61,13 +92,13 @@ Run the read-only check first when the runtime is new:
 yk computer-use doctor
 ```
 
-Then use one target window at a time:
+Discover and bind one target window:
 
 ```sh
 yk computer-use apps --name Safari
 yk computer-use windows --pid PID
-yk computer-use observe --pid PID --window WINDOW --mode auto
-yk computer-use act --pid PID --window WINDOW --click-text "Search" --format observation
+yk computer-use session open --pid PID --window WINDOW
+yk computer-use observe --session SESSION --mode auto
 ```
 
 `perceive` remains available for strict snapshot output: `yk computer-use perceive --pid PID --window WINDOW --shot`. Use it when a legacy consumer needs the flat snapshot.
@@ -75,8 +106,8 @@ yk computer-use act --pid PID --window WINDOW --click-text "Search" --format obs
 `observe` is the normal native inspection command. Prefer AX selectors and
 fresh element tokens. Use `mode both` only when a screenshot is needed. Use a
 persistent `session` to preserve the driver, tokens, and state across calls.
-Use `batch` or `exec` within that session to combine already-decided steps and
-local waits; stop at every new judgment. Read the returned observation and
+Use `exec` within that session for actions, local observations, and condition
+waits until a model decision is needed. Read the returned observation and
 verify the effect. For writable AX fields, use `setValue`; when keyboard events
 are needed, address `type`/`key` to a fresh token or evidence-bound point.
 
@@ -106,9 +137,9 @@ step to an operation the user already requested.
 
 Reuse the current persistent native session and the observation returned by
 an action while valid; do not open another session or run another full
-observation for the same known state. Batch already-decided actions and
-condition waits locally, stopping when a new judgment or uncertain result
-requires inspection. Prefer focused DOM/AX summaries; retain default image
+observation for the same known state. Continue deterministic checks and
+branches in code mode; stop when interpretation or uncertain delivery
+requires a model decision. Prefer focused DOM/AX summaries; retain default image
 limits and zoom a small region before requesting a larger image. Image size
 flags do not increase AX tree completeness.
 
