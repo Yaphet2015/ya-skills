@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/Yaphet2015/ya-skills/compare/v2.3.0...v2.4.0) (2026-11-13)
+
+
+### Features
+
+* **computer-use:** upgrade Cua driver and executor ([cca9056](https://github.com/Yaphet2015/ya-skills/commit/cca9056a311841afe0c9d84700f67b8d6c537f77))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
