@@ -42,7 +42,7 @@ brew install ya-skills
 
 yk list                       # 浏览目录
 yk install video-transcript   # 把一个 Skill 安装到当前仓库
-yk pbench capture --source codex --yes   # 运行一个领域命令
+yk pbench capture --source codex --session-id SESSION --yes   # 运行一个领域命令
 ```
 
 ## ✨ 特性
@@ -62,7 +62,7 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **design-grill** | 在写代码前压测想法、设计、计划、架构、PRD 或实现方案，并维护一份 `DESIGN-GRILL.md` 决策总结。 | `yk install design-grill` |
 | **ui-parity** | 对齐现有 UI，明确允许差异，分别验证旧版回归与改后界面的一致性，并提供实际渲染和交互证据。 | `yk install ui-parity` |
 | **video-transcript** | 把视频 URL 或本地媒体/字幕文件转成文稿——优先用字幕，缺失时回退到 Whisper ASR。 | `yk install video-transcript` |
-| **pbench**（已弃用） | 把真实的 Codex 或 Claude 工作流失误捕获为本地、私有基准用例，再通过已注册 runner 重放，不做云同步，也不会上传到公开榜单。 | `yk install pbench` |
+| **pbench** | 把 Codex 或 Claude 的真实失败保存为私有 Harbor case，用本地 Docker 运行和评分。 | `yk install pbench` |
 | **produce** | 轻量流程：subagents 使用 brainstorming、grill-with-docs 规划 → 独立挑战 → 每部分实现后 simplify → 测试。规划代理与 Main 讨论技术选择，遵循 SOLID、DRY、KISS、YAGNI、SSOT；体验行为选择由 Main 咨询用户。需要宿主已安装这些 Skill。 | `yk install produce` |
 | **bankai** | 显式启动或恢复任意 Git 仓库的任务，保存执行证据并支持中断恢复。自带完整执行器和恢复脚本；显式启动时登记当前仓库。 | `yk install bankai` |
 | **stage** | 只读查看任务、会话和审查状态；自动附带同级目录中确认属于同项目的仓库。 | `yk install stage` |
@@ -77,8 +77,6 @@ yk pbench capture --source codex --yes   # 运行一个领域命令
 | **show-pr** | 显式调用的 PR 报告入口，自动安装 show-me，使用实际 Git 范围与验证证据；HTML 需要独立安装 archify。旧 graph.json 工具会提示迁移方式。 | `yk install show-pr` |
 | **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |
 | **ultra-simplify** | 自主执行全库大简化冲刺：总 LOC 至少降 40%、拆巨型文件、统一重复助手函数、削平 if 嵌套链，完成后交付 PR。 | `yk install ultra-simplify` |
-
-> `pbench-runner` 是内部资产，会由 `yk pbench run --manual`（或兼容的 `start` 命令）自动安装，无需从目录手动安装。
 
 随时用 `yk list` 浏览完整目录。
 
@@ -115,7 +113,7 @@ yk list
 yk install video-transcript
 
 # 3. 运行一个领域命令
-yk pbench capture --source codex --yes
+yk pbench capture --source codex --session-id SESSION --yes
 ```
 
 ## 安装
@@ -165,52 +163,16 @@ bun run build:binary:macos-arm64    # 产出编译好的 dist/yk 二进制
 
 ### PBench
 
-> **Deprecated（已弃用）。** PBench 不再推荐用于新工作流。
+把 Codex 或 Claude 会话保存成私有 Harbor case，用本地 Docker 重建环境。校验 verifier 时，可以复用历史试跑产物或已有的 Git commit。
 
-`yk pbench` 通过已注册 capture source 捕获真实的 Codex 或 Claude 工作流失误，再通过已注册 runner 重放已定稿用例。用它来判断模型、Skill、规则包或 harness 改动是否*真的*改善了*你自己的*工作流。
-
-PBench 默认按隐私优先设计：case、原始 transcript、评估说明、私有校验器和运行报告都留在你的本地 workspace。它不会把 case 上传到托管 benchmark 服务，不会做云同步，也不会发布到公开排行榜。被测 agent 只能看到脱敏后的 public replay capsule。
-
-> 📖 完整文档：**[PBench 中文文档](./docs/pbench.zh-CN.md)** · **[PBench (English)](./docs/pbench.md)**
-
-日常工作流只有两个动作：**捕获糟糕的会话**，之后再**触发基准 runner**。其余要么是一次性初始化，要么是 harness 内部细节。
-
-```mermaid
-flowchart TD
-  setup["一次性初始化<br/>workspace-init + project-link"]:::support
-  capture["1. 捕获失败会话<br/>yk pbench capture --source codex<br/>或 pbench skill 识别出不匹配"]
-  authoring["Harness 编写闸门<br/>validate + finalize<br/>证据或校验器不完整则大声失败"]:::internal
-  trigger["2. 触发基准<br/>yk pbench run --case <case> --agent codex<br/>或 yk pbench run --manual"]
-  capsule["Runner 只暴露公开输入<br/>.pbench/public + case.public.json"]:::internal
-  validate["一次性私有校验<br/>私有校验器始终在 agent 视野之外"]:::internal
-  results["私有运行产物<br/><workspace>/runs/<run-id>/"]
-
-  setup -.-> capture
-  capture --> authoring --> trigger --> capsule --> validate --> results
-
-  classDef support fill:#eef6ff,stroke:#6b8bb8,color:#111,stroke-dasharray: 4 3
-  classDef internal fill:#f7f7f7,stroke:#777,color:#111,stroke-dasharray: 4 3
+```sh
+yk pbench capture --source codex --session-id SESSION --yes
+yk pbench validate --case CASE --fail run:FAILED_TRIAL --pass run:SUCCESSFUL_TRIAL
+yk pbench run --case CASE --agent codex --model openai/MODEL --attempts 5
+yk pbench report --case CASE --format json
 ```
 
-<details>
-<summary><b>命令参考</b></summary>
-
-- `yk pbench workspace-init <path>` —— 初始化一个本地 pbench 工作区。
-- `yk pbench project-link --workspace <path>` —— 把当前项目链接到某个工作区。
-- `yk pbench capture --source <source> [--yes] [--input <jsonl>] [--session-id <id>]` —— 通过已注册 source（`codex` 或 `claude`）捕获 session，写入私有 authoring checklist，并打印一个 next action。`--input` 只向选中的 source 提供 transcript，不启用任意 source。
-- `yk pbench validate --transaction <path> --strict` —— 严格校验某个事务。
-- `yk pbench finalize --transaction <path>` —— 把一个已通过严格校验的事务定稿进工作区。
-- `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` —— 为 agent 导出一个仅含公开内容的重放胶囊。只复制脱敏后的 `public/` 文件和 `case.public.json`；绝不导出私有评估文档、校验器、原始转录或仅用于捕获的源路径。
-- `yk pbench run --case <case-dir-or-case-id> --agent <agent> [--workspace <path>] [--profile <name>]` —— 通过已注册 runner 运行 finalized case。当前内置 runner 为 `codex` 和 `claude`。
-- `yk pbench run --case <case-dir-or-case-id> --manual [--workspace <path>] [--profile <name>]` —— 为不能 headless 启动的 agent 准备 manual benchmark worktree，并安装内部 `pbench-runner` asset。
-- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` —— manual preparation path 的兼容命令。
-- `yk pbench finish --run <run-id>` —— 为 manual run 执行一次性私有校验，只打印 run id 和状态。
-- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` —— 默认渲染 Markdown 比较报告；自动化请使用 `yk pbench report --format json`。
-- `yk pbench audit [--case <case-dir-or-case-id>] [--workspace <path>]` —— 不运行私有校验器，检查用例质量。带 `--case` 时审核单个用例；不带时审核工作区中所有已定稿用例。会报告用例形状非法、编写警告，以及公开重放引用了私有评估路径的情况。
-
-用 `yk install pbench` 安装 operator workflow。`yk pbench run --manual` 会自动把内部 `pbench-runner` asset 安装到准备好的 benchmark worktree。
-
-</details>
+编写 case、配置 Docker 和选择样本见 [PBench 中文文档](./docs/pbench.zh-CN.md)。
 
 ### Video Transcript
 

@@ -185,13 +185,7 @@ describe("pbench capture and replay flow", () => {
       const validator = await readFile(join(result.caseDir, "private", "validators", "check-completion.mjs"), "utf8");
       const checklist = await readFile(result.authoringChecklistPath, "utf8");
 
-      expect(result.initialValidation.ok).toBe(false);
-      expect(result.initialValidation.warnings).not.toContain("private/failure.md still contains TODO");
-      expect(result.initialValidation.warnings).not.toContain("private/success.md still contains TODO");
-      expect(result.initialValidation.warnings).not.toContain("private/verification.md still contains TODO");
-      expect(result.initialValidation.warnings).toContain(
-        "private/validators/check-completion.mjs needs completion logic from session correction evidence"
-      );
+      expect(result.errors).toContain("Complete harbor/tests/test.sh.");
       expect(failure).toContain("done.txt was never created");
       expect(success).toContain("Make tests pass by creating done.txt");
       expect(success).toContain("done.txt was never created");
@@ -199,13 +193,8 @@ describe("pbench capture and replay flow", () => {
       expect(validator).toContain("PBENCH_AUTHORING_REQUIRED");
       expect(`${failure}\n${success}\n${verification}`).not.toContain("TODO");
       expect(result.authoringChecklistPath).toBe(join(result.caseDir, "private", "authoring-checklist.md"));
-      expect(checklist).toContain("- Prompt present: yes");
-      expect(checklist).toContain("- Failure evidence present: yes");
-      expect(checklist).toContain("- Replayable verification found: no");
-      expect(checklist).toContain("- Generated validator: needs manual authoring");
+      expect(checklist).toContain("harbor/tests/test.sh");
       expect(result.state).toBe("needs-authoring");
-      expect(result.nextAction).toBe(`Read ${result.authoringChecklistPath}`);
-      expect(result.next).toContain(`Review ${result.caseDir}`);
     } finally {
       process.chdir(originalCwd);
     }
@@ -247,10 +236,7 @@ describe("pbench capture and replay flow", () => {
       yes: true,
       title: "Suggestion diff still broken"
     });
-    const warnings = (await createPbenchCommands()
-      .find((command) => command.action === "validate")
-      ?.run(["--case", tx.caseDir])) as string;
-    const validation = JSON.parse(warnings);
+    const validation = await validateCaseBundle(tx.caseDir);
     const failure = await readFile(join(tx.caseDir, "private", "failure.md"), "utf8");
     const success = await readFile(join(tx.caseDir, "private", "success.md"), "utf8");
     const verification = await readFile(join(tx.caseDir, "private", "verification.md"), "utf8");
@@ -297,15 +283,8 @@ describe("pbench capture and replay flow", () => {
         ?.run(["--source", "codex", "--workspace", workspaceRoot, "--input", sessionJsonl, "--yes"]);
       const result = JSON.parse(String(output));
 
-      expect(result.initialValidation.warnings).toContain("public/prompt.md is empty");
-      expect(result.initialValidation.warnings).toContain("public/command-observations.md has no command-like tool calls");
-      expect(result.initialValidation.warnings).toContain(
-        "private/failure-draft.md has no later user correction or command failure evidence"
-      );
-      expect(result.initialValidation.warnings).toContain("private/failure.md needs failure evidence from session history");
-      expect(result.initialValidation.warnings).toContain(
-        "private/validators/check-completion.mjs needs completion logic from session correction evidence"
-      );
+      expect(result.errors).toContain("Complete harbor/instruction.md.");
+      expect(result.state).toBe("needs-authoring");
     } finally {
       process.chdir(originalCwd);
     }
@@ -442,9 +421,7 @@ describe("pbench capture and replay flow", () => {
 
     expect(validator).toContain("PBENCH_AUTHORING_REQUIRED");
     expect(verification).toContain("The captured verification cwd cannot be replayed safely");
-    expect(result.initialValidation.warnings).toContain(
-      "private/verification.md has unsafe verification cwd; implement validator manually"
-    );
+    expect(result.errors).toContain("Complete harbor/tests/test.sh.");
   });
 
   test("captures a Codex session, strict-validates the baseline failure, then finalizes the case", async () => {
@@ -709,8 +686,8 @@ describe("pbench capture and replay flow", () => {
       ?.run(["--source", "claude", "--workspace", workspaceRoot, "--input", transcript, "--yes"]);
     const result = JSON.parse(String(output));
     const manifest = JSON.parse(await readFile(join(result.caseDir, "case.json"), "utf8"));
-    const prompt = await readFile(join(result.caseDir, "public", "prompt.md"), "utf8");
-    const observations = await readFile(join(result.caseDir, "public", "command-observations.md"), "utf8");
+    const prompt = await readFile(join(result.caseDir, "harbor", "instruction.md"), "utf8");
+    const observations = await readFile(join(result.caseDir, "private", "replay-evidence", "command-observations.md"), "utf8");
     const privateDocuments = await Promise.all(
       ["failure.md", "success.md", "verification.md"].map((name) =>
         readFile(join(result.caseDir, "private", name), "utf8")
@@ -725,8 +702,7 @@ describe("pbench capture and replay flow", () => {
     expect(observations).toContain("exitCode: 1");
     expect(privateDocuments.join("\n")).toContain("coding-agent session history");
     expect(privateDocuments.join("\n")).not.toContain("Codex session history");
-    expect(result.state).toBe("ready-to-finalize");
-    expect(result.nextAction).toBe(`yk pbench finalize --transaction ${result.transactionPath}`);
+    expect(result.state).toBe("needs-authoring");
     await expect(
       readFile(join(result.caseDir, "private", "artifacts", "raw", "claude-session.jsonl"), "utf8")
     ).resolves.toContain("claude-test");

@@ -1,290 +1,128 @@
 import type { FunctionCommand } from "@ya-skills/core";
-import { homedir } from "node:os";
+import { cp, mkdir, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { ValidationResult } from "./authoring.js";
-import { normalizeRunProfile } from "./shared.js";
+import { createHarborWorkflow, harborTransaction } from "./harbor-workflow.js";
+import { createHarborReport, renderHarborReport } from "./harbor-report.js";
+import {
+  absolutePath, initWorkspace, linkProject, resolveCaseDirInput, resolveReportCaseFilter, resolveWorkspaceRoot
+} from "./workspace.js";
+import { pathExists } from "./shared.js";
+import { exportReplayCapsule } from "./authoring.js";
+import { assertNoAgentVisiblePrivateReferences } from "./replay-boundary.js";
 
-type AuthoringCommandDependencies = Pick<
-  typeof import("./authoring.js"),
-  | "absolutePath"
-  | "exportReplayCapsule"
-  | "finalizeTransaction"
-  | "initWorkspace"
-  | "linkProject"
-  | "resolveCaseDirInput"
-  | "resolveReportCaseFilter"
-  | "resolveWorkspaceRoot"
-  | "strictValidateTransaction"
-  | "validateAuthoringDraft"
-  | "validateCaseBundle"
->;
-
-export type PbenchCommandDependencies = AuthoringCommandDependencies & {
-  captureSession: ReturnType<typeof import("./authoring.js").createAuthoring>["captureSession"];
-  auditPbenchCase: ReturnType<typeof import("./reporting.js").createPbenchAudit>["auditCase"];
-  auditPbenchWorkspace: ReturnType<typeof import("./reporting.js").createPbenchAudit>["auditWorkspace"];
-  replay: ReturnType<typeof import("./replay.js").createReplay>;
-  createPbenchReport: typeof import("./reporting.js").createPbenchReport;
-  renderPbenchReportMarkdown: typeof import("./reporting.js").renderPbenchReportMarkdown;
-};
-
-type ParsedArgs = { options: Record<string, string | boolean>; positionals: string[] };
 export type PbenchCommandOptions = { home?: string };
+type Args = { options: Record<string, string | boolean>; positionals: string[] };
 
-export function createCommands(dependencies: PbenchCommandDependencies, options: PbenchCommandOptions = {}): FunctionCommand[] {
-  return [
-    {
-      domain: "pbench",
-      action: "capture",
-      description: "Create a persistent pbench authoring transaction from a coding-agent session.",
-      usage: [
-        "yk pbench capture [--source codex|claude] [--input JSONL] [--session-id ID] [--title TITLE] [--workspace PATH] [--yes]"
-      ],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const source = getString(parsed, "source") ?? "codex";
-        const yes = getBoolean(parsed, "yes");
-        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options, yes);
-        const result = await dependencies.captureSession({
-          cwd: process.cwd(),
-          workspaceRoot,
-          input: getString(parsed, "input"),
-          sessionId: getString(parsed, "session-id"),
-          source,
-          yes,
-          title: getString(parsed, "title"),
-          home: options.home
-        });
-        const initialValidation = await dependencies.validateAuthoringDraft(result.caseDir);
-        return printJson({
-          ...result,
-          initialValidation,
-          state: initialValidation.ok ? "ready-to-finalize" : "needs-authoring",
-          nextAction: initialValidation.ok
-            ? `yk pbench finalize --transaction ${result.transactionPath}`
-            : `Read ${result.authoringChecklistPath}`,
-          next: [
-            `Review ${result.caseDir}`,
-            `yk pbench validate --transaction ${result.transactionPath} --strict`,
-            `yk pbench finalize --transaction ${result.transactionPath}`
-          ]
-        });
-      }
-    },
-    {
-      domain: "pbench",
-      action: "validate",
-      description: "Validate a pbench transaction or case bundle.",
-      usage: ["yk pbench validate (--transaction PATH | --case PATH) [--strict] [--workspace PATH]"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const transaction = getString(parsed, "transaction");
-        const caseDir = getString(parsed, "case");
-        let result: ValidationResult;
-        if (transaction) {
-          result = getBoolean(parsed, "strict")
-            ? await dependencies.strictValidateTransaction(transaction)
-            : await dependencies.validateCaseBundle(join(dependencies.absolutePath(transaction), "case"), { strict: false });
-        } else if (caseDir) {
-          result = await dependencies.validateCaseBundle(caseDir, {
-            strict: getBoolean(parsed, "strict"),
-            workspaceRoot: getString(parsed, "workspace")
-          });
-        } else {
-          throw new Error("Pass --transaction <path> or --case <path>.");
-        }
-        return printJson(result);
-      }
-    },
-    {
-      domain: "pbench",
-      action: "export-replay",
-      description: "Export a public-only pbench replay capsule for an agent.",
-      usage: ["yk pbench export-replay --case CASE --out DIR [--workspace PATH] [--force]"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const caseInput = requireString(parsed, "case", "yk pbench export-replay requires --case <case-dir-or-case-id>");
-        const out = requireString(parsed, "out", "yk pbench export-replay requires --out <dir>");
-        const caseDir = await dependencies.resolveCaseDirInput({
-          caseInput,
-          cwd: process.cwd(),
-          home: options.home,
-          workspace: getString(parsed, "workspace")
-        });
-        return printJson(
-          await dependencies.exportReplayCapsule({
-            caseDir,
-            outDir: dependencies.absolutePath(out, process.cwd(), options.home ?? homedir()),
-            force: getBoolean(parsed, "force")
-          })
-        );
-      }
-    },
-    {
-      domain: "pbench",
-      action: "run",
-      description: "Run a pbench case through a harness-managed agent and private validator.",
-      usage: [
-        "yk pbench run --case CASE --agent AGENT [--workspace PATH] [--profile NAME]",
-        "yk pbench run --case CASE --manual [--workspace PATH] [--profile NAME] [--contaminated]"
-      ],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const caseInput = requireString(parsed, "case", "yk pbench run requires --case <case-dir-or-case-id>");
-        const manual = getBoolean(parsed, "manual");
-        const requestedAgent = getString(parsed, "agent");
-        if (manual && requestedAgent) {
-          throw new Error("yk pbench run --manual and --agent cannot be used together.");
-        }
-        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
-        const caseDir = await resolveCommandCase(dependencies, options, caseInput, workspaceRoot);
-        const profile = normalizeRunProfile(getString(parsed, "profile"));
-        if (manual) {
-          return printJson(
-            await dependencies.replay.startManualRun({
-              caseDir,
-              workspaceRoot,
-              home: options.home,
-              profile,
-              contaminated: getBoolean(parsed, "contaminated")
-            })
-          );
-        }
-        return printJson(
-          await dependencies.replay.runCase({
-            caseDir,
-            workspaceRoot,
-            home: options.home,
-            agent: requestedAgent ?? "codex",
-            profile
-          })
-        );
-      }
-    },
-    {
-      domain: "pbench",
-      action: "start",
-      description: "Prepare a pbench case for a skill-mediated benchmark run.",
-      usage: ["yk pbench start --case CASE [--workspace PATH] [--profile NAME] [--contaminated]"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const caseInput = requireString(parsed, "case", "yk pbench start requires --case <case-dir-or-case-id>");
-        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
-        const caseDir = await resolveCommandCase(dependencies, options, caseInput, workspaceRoot);
-        return printJson(
-          await dependencies.replay.startManualRun({
-            caseDir,
-            workspaceRoot,
-            home: options.home,
-            profile: normalizeRunProfile(getString(parsed, "profile")),
-            contaminated: getBoolean(parsed, "contaminated")
-          })
-        );
-      }
-    },
-    {
-      domain: "pbench",
-      action: "finish",
-      description: "Finish a skill-mediated pbench run with private validation.",
-      usage: ["yk pbench finish --run RUN-ID"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const runId = requireString(parsed, "run", "yk pbench finish requires --run <run-id>");
-        return printJson(await dependencies.replay.finishRun({ runId, home: options.home }));
-      }
-    },
-    {
-      domain: "pbench",
-      action: "finalize",
-      description: "Finalize a strict-validated pbench transaction.",
-      usage: ["yk pbench finalize --transaction PATH"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const transaction = requireString(parsed, "transaction", "yk pbench finalize requires --transaction <path>");
-        return printJson(await dependencies.finalizeTransaction(transaction));
-      }
-    },
-    {
-      domain: "pbench",
-      action: "report",
-      description: "Aggregate pbench run artifacts into a benchmark report.",
-      usage: [
-        "yk pbench report [--case CASE] [--workspace PATH] [--profile NAME] [--format markdown|json] [--include-untrusted]"
-      ],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
-        const report = await dependencies.createPbenchReport({
-          workspaceRoot,
-          caseFilter: await dependencies.resolveReportCaseFilter({
-            caseInput: getString(parsed, "case"),
-            cwd: process.cwd(),
-            home: options.home
-          }),
-          profileFilter: getString(parsed, "profile") ? normalizeRunProfile(getString(parsed, "profile")) : undefined,
-          includeUntrusted: getBoolean(parsed, "include-untrusted")
-        });
-        const format = getString(parsed, "format") ?? "markdown";
-        if (format === "markdown") {
-          return dependencies.renderPbenchReportMarkdown(report);
-        }
-        if (format !== "json") {
-          throw new Error(`Unsupported pbench report format: ${format}`);
-        }
-        return printJson(report);
-      }
-    },
-    {
-      domain: "pbench",
-      action: "audit",
-      description: "Audit pbench case quality without running private validators.",
-      usage: ["yk pbench audit [--case CASE] [--workspace PATH]"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const caseInput = getString(parsed, "case");
-        if (caseInput) {
-          const caseDir = await dependencies.resolveCaseDirInput({
-            caseInput,
-            cwd: process.cwd(),
-            home: options.home,
-            workspace: getString(parsed, "workspace")
-          });
-          return printJson(await dependencies.auditPbenchCase(caseDir));
-        }
-        const workspaceRoot = await resolveCommandWorkspace(dependencies, parsed, options);
-        return printJson(await dependencies.auditPbenchWorkspace(workspaceRoot));
-      }
-    },
-    {
-      domain: "pbench",
-      action: "workspace-init",
-      description: "Initialize a pbench workspace.",
-      usage: ["yk pbench workspace-init PATH"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const path = parsed.positionals[0];
-        if (!path) {
-          throw new Error("yk pbench workspace-init requires <path>");
-        }
-        return printJson(await dependencies.initWorkspace(path));
-      }
-    },
-    {
-      domain: "pbench",
-      action: "project-link",
-      description: "Link the current project to a pbench workspace.",
-      usage: ["yk pbench project-link --workspace PATH"],
-      run: async (args) => {
-        const parsed = parseArgs(args);
-        const workspace = requireString(parsed, "workspace", "yk pbench project-link requires --workspace <path>");
-        return printJson({ linkPath: await dependencies.linkProject(process.cwd(), workspace) });
-      }
+export function createCommands(workflow: ReturnType<typeof createHarborWorkflow>, { home }: PbenchCommandOptions = {}): FunctionCommand[] {
+  const workspace = (args: Args, createDefault?: boolean) => resolveWorkspaceRoot({
+    workspace: optional(args, "workspace"), home, createDefault
+  });
+
+  const casePath = (args: Args, root?: string) => resolveCaseDirInput({
+    caseInput: required(args, "case"), cwd: process.cwd(), home, workspace: root ?? optional(args, "workspace")
+  });
+
+  async function location(args: Args) {
+    const transaction = optional(args, "transaction");
+    if (transaction) {
+      if (optional(args, "case")) throw new Error("Use --case or --transaction.");
+      return harborTransaction(absolutePath(transaction, process.cwd(), home));
     }
+    const workspaceRoot = await workspace(args);
+    return { caseDir: await casePath(args, workspaceRoot), workspaceRoot };
+  }
+
+  function command(action: string, description: string, usage: string, run: (args: Args) => Promise<unknown>): FunctionCommand {
+    return {
+      domain: "pbench", action, description, usage: [`yk pbench ${action} ${usage}`],
+      run: async (argv) => {
+        const result = await run(parseArgs(argv));
+        return typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      }
+    };
+  }
+
+  return [
+    command("capture", "Capture session evidence and save a Harbor task.", "[--source codex|claude] [--input JSONL] [--session-id ID] [--task DIR] [--baseline-only] [--workspace PATH] [--yes]", async (args) => {
+      const yes = args.options.yes === true;
+      const template = optional(args, "task");
+      return workflow.capture({
+        source: optional(args, "source") ?? "codex",
+        cwd: process.cwd(), home, yes,
+        workspaceRoot: await workspace(args, yes),
+        input: optional(args, "input"),
+        sessionId: optional(args, "session-id"),
+        title: optional(args, "title"),
+        task: template ? absolutePath(template, process.cwd(), home) : undefined,
+        baselineOnly: args.options["baseline-only"] === true
+      });
+    }),
+    command("validate", "Check task readiness or score known failing and passing samples.", "(--case CASE | --transaction PATH) [--strict] [--fail SAMPLE] [--pass SAMPLE] [--workspace PATH]", async (args) => {
+      const fail = optional(args, "fail");
+      const pass = optional(args, "pass");
+      const transaction = optional(args, "transaction");
+      if (args.options.strict === true || fail || pass) return workflow.validate(await location(args), { fail, pass });
+      return workflow.inspect(transaction ? (await location(args)).caseDir : await casePath(args));
+    }),
+    command("finalize", "Save the current Harbor environment as a local image archive.", "(--case CASE | --transaction PATH) [--workspace PATH]", async (args) => {
+      const transaction = optional(args, "transaction");
+      return workflow.save(transaction ? (await location(args)).caseDir : await casePath(args));
+    }),
+    command("export-replay", "Export only the Harbor task instruction.", "--case CASE --out DIR [--workspace PATH] [--force]", async (args) => {
+      const caseDir = await casePath(args);
+      const input = join(caseDir, "harbor", "instruction.md");
+      const outDir = absolutePath(required(args, "out"), process.cwd(), home);
+      if (!(await pathExists(input))) return exportReplayCapsule({ caseDir, outDir, force: args.options.force === true });
+      assertNoAgentVisiblePrivateReferences([{ label: "instruction.md", text: await readFile(input, "utf8") }], [caseDir]);
+      await mkdir(outDir, { recursive: true });
+      const output = join(outDir, "instruction.md");
+      await cp(input, output, { force: args.options.force === true, errorOnExist: true });
+      return { outDir, exported: ["instruction.md"] };
+    }),
+    command("run", "Run a saved pbench task in Harbor Docker sandboxes.", "--case CASE --model MODEL [--agent codex|claude] [--attempts N] [--profile NAME] [--skill DIR] [--env NAME,NAME] [--workspace PATH]", async (args) => {
+      if (args.options.manual) throw new Error("PBench uses Harbor trials. Supply --agent and --model.");
+      const model = required(args, "model");
+      const attempts = Number(optional(args, "attempts") ?? 1);
+      if (!Number.isSafeInteger(attempts) || attempts < 1) throw new Error("--attempts must be a positive integer.");
+      return workflow.run(await location(args), {
+        agent: optional(args, "agent") ?? "codex", model, attempts, profile: optional(args, "profile"),
+        skill: optional(args, "skill"),
+        envNames: optional(args, "env")?.split(",").map((name) => name.trim()) ?? []
+      });
+    }),
+    command("report", "Compare Harbor scores, configurations and trial artifacts.", "[--case CASE] [--profile NAME] [--format markdown|json] [--workspace PATH]", async (args) => {
+      const format = optional(args, "format") ?? "markdown";
+      if (format !== "markdown" && format !== "json") throw new Error("Choose markdown or json for --format.");
+      const report = await createHarborReport({
+        workspaceRoot: await workspace(args),
+        caseFilter: await resolveReportCaseFilter({ caseInput: optional(args, "case"), cwd: process.cwd(), home }),
+        profileFilter: optional(args, "profile")
+      });
+      return format === "markdown" ? renderHarborReport(report) : report;
+    }),
+    command("audit", "Review saved tasks and verifier status without running them.", "[--case CASE] [--workspace PATH]", async (args) => {
+      if (optional(args, "case")) return workflow.inspect(await casePath(args));
+      const root = join(await workspace(args), "cases");
+      const cases = [];
+      for (const entry of await readdir(root, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name.startsWith("case_")) {
+          cases.push({ caseId: entry.name, ...await workflow.inspect(join(root, entry.name)) });
+        }
+      }
+      return { cases };
+    }),
+    command("workspace-init", "Initialize a local pbench workspace.", "PATH", async (args) => {
+      if (!args.positionals[0]) throw new Error("yk pbench workspace-init requires PATH.");
+      return initWorkspace(args.positionals[0]);
+    }),
+    command("project-link", "Link the current project to a pbench workspace.", "--workspace PATH", async (args) => ({
+      linkPath: await linkProject(process.cwd(), required(args, "workspace"))
+    }))
   ];
 }
 
-function parseArgs(args: string[]): ParsedArgs {
-  const options: Record<string, string | boolean> = {};
+function parseArgs(args: string[]): Args {
+  const options: Args["options"] = Object.create(null);
   const positionals: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -296,59 +134,22 @@ function parseArgs(args: string[]): ParsedArgs {
     const next = args[index + 1];
     if (!next || next.startsWith("--")) {
       options[key] = true;
-      continue;
+    } else {
+      options[key] = next;
+      index += 1;
     }
-    options[key] = next;
-    index += 1;
   }
   return { options, positionals };
 }
 
-function getString(parsed: ParsedArgs, key: string): string | undefined {
-  const value = parsed.options[key];
+function optional(args: Args, key: string): string | undefined {
+  const value = args.options[key];
+  if (value === true) throw new Error(`Supply a value for --${key}.`);
   return typeof value === "string" ? value : undefined;
 }
 
-function requireString(parsed: ParsedArgs, key: string, message: string): string {
-  const value = getString(parsed, key);
-  if (!value) {
-    throw new Error(message);
-  }
+function required(args: Args, key: string): string {
+  const value = optional(args, key);
+  if (!value) throw new Error(`Supply --${key}.`);
   return value;
-}
-
-function getBoolean(parsed: ParsedArgs, key: string): boolean {
-  return parsed.options[key] === true;
-}
-
-async function resolveCommandWorkspace(
-  dependencies: PbenchCommandDependencies,
-  parsed: ParsedArgs,
-  options: PbenchCommandOptions,
-  createDefault?: boolean
-): Promise<string> {
-  return dependencies.resolveWorkspaceRoot({
-    workspace: getString(parsed, "workspace"),
-    cwd: process.cwd(),
-    home: options.home,
-    ...(createDefault === undefined ? {} : { createDefault })
-  });
-}
-
-async function resolveCommandCase(
-  dependencies: PbenchCommandDependencies,
-  options: PbenchCommandOptions,
-  caseInput: string,
-  workspaceRoot: string
-): Promise<string> {
-  return dependencies.resolveCaseDirInput({
-    caseInput,
-    cwd: process.cwd(),
-    home: options.home,
-    workspace: workspaceRoot
-  });
-}
-
-function printJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
 }

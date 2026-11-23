@@ -42,7 +42,7 @@ brew install ya-skills
 
 yk list                       # browse the catalog
 yk install video-transcript   # install a skill into this repo
-yk pbench capture --source codex --yes   # run a domain command
+yk pbench capture --source codex --session-id SESSION --yes   # run a domain command
 ```
 
 ## ✨ Features
@@ -61,7 +61,7 @@ yk pbench capture --source codex --yes   # run a domain command
 | **a-share-data** | Fetch Chinese A-share quotes, K-lines, financial indicators, cash flow, and announcements from public data sources with provenance and no fabricated fields. | `yk install a-share-data` |
 | **design-grill** | Stress-test an idea, design, plan, architecture, PRD, or implementation approach before coding, with a running `DESIGN-GRILL.md` decision summary. | `yk install design-grill` |
 | **video-transcript** | Turn a video URL or local media/caption file into a transcript — captions first, Whisper ASR fallback. | `yk install video-transcript` |
-| **pbench** (deprecated) | Capture real Codex or Claude workflow misses as local, private benchmark cases, then replay finalized cases through registered runners without cloud sync or leaderboard upload. | `yk install pbench` |
+| **pbench** | Capture Codex or Claude workflow misses as local Harbor tasks and evaluate them in Docker. | `yk install pbench` |
 | **repro** | Generate manual acceptance steps from a diff: correct expectations, before-change behavior with evidence, and reversible mock setup when needed. Supports `/repro baseline` and `/repro again`. | `yk install repro` |
 | **ui-parity** | Align existing UI surfaces with explicit allowed differences, baseline regression checks, and rendered state and interaction comparisons. | `yk install ui-parity` |
 | **eli5** | Explain like the reader knows nothing about the topic, using an HTML artifact with big pictures and few words. | `yk install eli5` |
@@ -79,8 +79,6 @@ yk pbench capture --source codex --yes   # run a domain command
 | **svg-icons** | Generate family-consistent 24-grid SVG icons from a JSON drawing language (max two inks, composed marks like folder-plus-pencil). Invoke with `/svg-icons`. | `yk install svg-icons` |
 | **ultra-cr** | Assign independent reviewers by risk, verify related findings in batches, and publish confirmed defects. A bundled Python 3.9+ helper manages artifact paths and resumable progress. Branch reviews compare against the target merge-base (`--base=REF` overrides the target). Works with the host agent’s delegation tools. | `yk install ultra-cr` |
 | **ultra-simplify** | Run an autonomous whole-codebase simplification sprint: LOC down 40%+ overall, god files split, helpers unified, if-chains flattened — then deliver PRs. | `yk install ultra-simplify` |
-
-> `pbench-runner` is an internal asset installed automatically by `yk pbench run --manual` (or the compatible `start` command) — you don't install it from the catalog.
 
 The former show-me HTML generator, schema, examples and assets are preserved in
 [archive/show-me-html](archive/show-me-html/README.md). New HTML reports use independently installed Archify;
@@ -151,7 +149,7 @@ yk list
 yk install video-transcript
 
 # 3. Run a domain command
-yk pbench capture --source codex --yes
+yk pbench capture --source codex --session-id SESSION --yes
 ```
 
 ## Installation
@@ -203,7 +201,7 @@ Global options:
 - `yk uninstall -g <skill...>` — remove selected skills from existing user-level targets. `--global` is also supported.
 - `yk <domain> <action> [...args]` — run an underlying function (e.g. `yk pbench capture`).
 
-**Help is layered** — `yk -h` lists every registered function domain (`demo`, `pbench`, `computer-use`, `computer-e2e`), `yk <domain> -h` lists that domain's actions, and `yk <domain> <action> -h` prints the command's real flags (e.g. `yk computer-use act -h` shows the six one-action forms; `yk pbench run -h` shows the `--agent` and `--manual` paths).
+**Help is layered** — `yk -h` lists every registered function domain (`demo`, `pbench`, `computer-use`, `computer-e2e`), `yk <domain> -h` lists that domain's actions, and `yk <domain> <action> -h` prints the command's real flags (e.g. `yk computer-use act -h` shows the six one-action forms; `yk pbench run -h` shows the `--model` and `--attempts` options).
 
 **Install target detection** — `yk install` uses the current working repository by default. With `-g` or `--global`, it uses the user's home directory. Within the selected root:
 
@@ -217,52 +215,16 @@ Global options:
 
 ### PBench
 
-> **Deprecated.** PBench is no longer recommended for new workflows.
+Capture a Codex or Claude session as a local Harbor task. Docker preserves the agent and verifier environments. To validate the verifier, reuse recorded trial artifacts or known Git commits.
 
-`yk pbench` captures real Codex or Claude workflow misses through a registered capture source, then replays finalized cases through a registered runner. Use it to answer whether a model, skill, rules package, or harness change actually improves *your* workflow.
-
-PBench is privacy-first by design: cases, raw transcripts, evaluator notes, private validators, and run reports stay in your local workspace. It does not upload cases to a hosted benchmark service, sync them to the cloud, or publish them to a public leaderboard. Benchmarked agents only receive the sanitized public replay capsule.
-
-> 📖 Full documentation: **[PBench (English)](./docs/pbench.md)** · **[PBench 中文文档](./docs/pbench.zh-CN.md)**
-
-The daily workflow is just two actions: **capture the bad session**, then **trigger a benchmark runner** later. Everything else is one-time setup or harness internals.
-
-```mermaid
-flowchart TD
-  setup["One-time setup<br/>workspace-init + project-link"]:::support
-  capture["1. Capture failed session<br/>yk pbench capture --source codex<br/>or the pbench skill recognizes the mismatch"]
-  authoring["Harness authoring gate<br/>validate + finalize<br/>fails loud if evidence or validators are incomplete"]:::internal
-  trigger["2. Trigger benchmark<br/>yk pbench run --case <case> --agent codex<br/>or yk pbench run --manual"]
-  capsule["Runner exposes only public input<br/>.pbench/public + case.public.json"]:::internal
-  validate["One-shot private validation<br/>private validators stay outside agent view"]:::internal
-  results["Private run artifacts<br/><workspace>/runs/<run-id>/"]
-
-  setup -.-> capture
-  capture --> authoring --> trigger --> capsule --> validate --> results
-
-  classDef support fill:#eef6ff,stroke:#6b8bb8,color:#111,stroke-dasharray: 4 3
-  classDef internal fill:#f7f7f7,stroke:#777,color:#111,stroke-dasharray: 4 3
+```sh
+yk pbench capture --source codex --session-id SESSION --yes
+yk pbench validate --case CASE --fail run:FAILED_TRIAL --pass run:SUCCESSFUL_TRIAL
+yk pbench run --case CASE --agent codex --model openai/MODEL --attempts 5
+yk pbench report --case CASE --format json
 ```
 
-<details>
-<summary><b>Command reference</b></summary>
-
-- `yk pbench workspace-init <path>` — initialize a local pbench workspace.
-- `yk pbench project-link --workspace <path>` — link the current project to a workspace.
-- `yk pbench capture --source <source> [--yes] [--input <jsonl>] [--session-id <id>]` — capture through a registered source (`codex` or `claude`), write a private authoring checklist, and print one next action. `--input` supplies a transcript to that selected source; it does not enable arbitrary sources.
-- `yk pbench validate --transaction <path> --strict` — strict-validate a transaction.
-- `yk pbench finalize --transaction <path>` — finalize a strict-validated transaction into the workspace.
-- `yk pbench export-replay --case <case-dir-or-case-id> --out <dir> [--workspace <path>] [--force]` — export a public-only replay capsule for an agent. Copies only sanitized `public/` files plus `case.public.json`; never exports private evaluator docs, validators, raw transcripts, or capture-only source paths.
-- `yk pbench run --case <case-dir-or-case-id> --agent <agent> [--workspace <path>] [--profile <name>]` — run a finalized case through a registered runner. Current built-ins are `codex` and `claude`.
-- `yk pbench run --case <case-dir-or-case-id> --manual [--workspace <path>] [--profile <name>]` — prepare a manual benchmark worktree with the internal `pbench-runner` asset for an agent that cannot be launched headlessly.
-- `yk pbench start --case <case-dir-or-case-id> [--workspace <path>] [--profile <name>]` — compatibility command for the manual preparation path.
-- `yk pbench finish --run <run-id>` — perform one-shot private validation for a manual run and print only the run id and status.
-- `yk pbench report [--workspace <path>] [--case <case-dir-or-case-id>] [--profile <name>] [--format json|markdown]` — render a Markdown comparison report by default. Use `yk pbench report --format json` for automation.
-- `yk pbench audit [--case <case-dir-or-case-id>] [--workspace <path>]` — check case quality without running private validators. With `--case`, audits one case; without `--case`, audits all finalized cases in the workspace. Reports invalid case shape, authoring warnings, and public replay references to private evaluator paths.
-
-Install the operator workflow with `yk install pbench`. `yk pbench run --manual` installs the internal `pbench-runner` asset into each prepared benchmark worktree automatically.
-
-</details>
+See [PBench documentation](./docs/pbench.md) for authoring, Docker setup, and sample formats.
 
 ### Video Transcript
 

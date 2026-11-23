@@ -175,25 +175,14 @@ test("yk uninstall --global removes from every existing user-level target", asyn
 });
 
 test("pbench documentation matches registered cross-agent workflows", async () => {
-  const [readme, english, chinese, platformDesign] = await Promise.all([
-    readFile(resolve("README.md"), "utf8"),
-    readFile(resolve("docs", "pbench.md"), "utf8"),
-    readFile(resolve("docs", "pbench.zh-CN.md"), "utf8"),
-    readFile(resolve("docs", "superpowers", "specs", "2026-06-24-pbench-platform-agnostic-design.md"), "utf8")
-  ]);
-
-  for (const document of [readme, english, chinese]) {
-    expect(document).toContain("codex");
-    expect(document).toContain("claude");
-    expect(document).toContain("run --manual");
+  const documents = await Promise.all(["README.md", "docs/pbench.md", "docs/pbench.zh-CN.md"].map((path) => readFile(resolve(path), "utf8")));
+  for (const document of documents) {
+    expect(document).toContain("Harbor");
+    expect(document).toContain("--model");
+    expect(document).toContain("--fail run:");
+    expect(document).toContain("--pass run:");
     expect(document).toContain("--format json");
   }
-  expect(english).toContain("registered capture source");
-  expect(chinese).toContain("已注册的 capture source");
-  expect(english).not.toContain("Other sources require `--input");
-  expect(chinese).not.toContain("其他 source 需要 `--input");
-  expect(platformDesign).toContain("Status: Implemented");
-  expect(platformDesign).toContain("internal canonical asset");
 });
 
 test("yk prints subcommand and function help without side effects", async () => {
@@ -249,7 +238,8 @@ test("yk <domain> <action> -h documents the real flags each command accepts", as
   expect(pbenchRun.exitCode).toBe(0);
   expect(pbenchRun.stdout).toContain("--case");
   expect(pbenchRun.stdout).toContain("--agent");
-  expect(pbenchRun.stdout).toContain("--manual");
+  expect(pbenchRun.stdout).toContain("--model");
+  expect(pbenchRun.stdout).toContain("--attempts");
 });
 
 test("commands without declared usage keep the generic [...args] fallback", async () => {

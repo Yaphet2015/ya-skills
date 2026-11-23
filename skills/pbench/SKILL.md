@@ -1,31 +1,13 @@
 ---
 name: pbench
-description: Deprecated. PBench capture/replay. Use when a coding-agent outcome is wrong, or the user asks to capture, run, or compare runs.
+description: Capture failed coding-agent sessions as local Harbor tasks, validate verifiers, and run or compare benchmarks.
 ---
 
 # PBench
 
-> **Deprecated.** This skill is no longer recommended for new workflows.
+1. Ask for user approval to capture the failure before repair. Select the registered source, `codex` or `claude`.
+2. Run `yk pbench capture --source SOURCE --session-id SESSION --yes` from the subject repository. Use `--input FILE` when you have the transcript path.
+3. Repair the user's task. If the case needs authoring, read its `private/authoring-checklist.md`, review the starting state and add checks of the final state. Save the task with `yk pbench finalize --case CASE`.
+4. Prefer known outcomes already on disk. Run `yk pbench validate --case CASE --fail run:FAILED_ID --pass run:SUCCESS_ID`. Use `trial:PATH` for a local Harbor trial or `git:COMMIT` for a recorded repository state. Leave the verifier pending if a sample is missing.
 
-## Outcome mismatch
-
-1. Stop claiming completion.
-2. Ask for user approval to snapshot the failure **before repair**.
-3. Select the registered source that produced the transcript: `codex` or `claude`. Run `yk pbench capture --source <registered-source> --yes` from the subject repository. If the transcript source is not registered, stop and report that direct capture is unsupported.
-4. Repair the user task.
-5. Read the generated `private/authoring-checklist.md` and follow the single printed recovery or finalization action.
-
-The snapshot records dirty tracked and untracked state as unresolved private candidates. Do not silently treat those edits as replay input.
-
-## Explicit benchmark operation
-
-- Headless: `yk pbench run --case <case> --agent <agent> --profile <label>`.
-- Manual: `yk pbench run --case <case> --manual --profile <label>`.
-- Compare: `yk pbench report --profile <label>`.
-
-Current built-in runners are `codex` and `claude`. Use stable profile labels for comparisons.
-
-## Invariants
-
-- Private material never enters replay input or benchmark-agent context.
-- Finalization must pass fresh strict validation of the exact case bundle.
+Run a saved case with `yk pbench run --case CASE --agent AGENT --model MODEL`. Compare with `yk pbench report --case CASE`. Keep original transcripts, reference solutions and grader code out of agent inputs.

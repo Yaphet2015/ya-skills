@@ -1,7 +1,6 @@
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { asObject, commandVersion, findSessionFileByName, isErrorRecord, parseJsonlLines } from "./shared.js";
-import type { AgentRunner, JsonObject, NormalizedSession, SessionSource } from "./types.js";
+import { asObject, findSessionFileByName, isErrorRecord, parseJsonlLines } from "./shared.js";
+import type { JsonObject, NormalizedSession, SessionSource } from "./types.js";
 
 export function createClaudeSessionSource(): SessionSource {
   return {
@@ -9,27 +8,6 @@ export function createClaudeSessionSource(): SessionSource {
     sourceKind: "claude-session",
     locate: locateClaudeSession,
     extract: extractClaudeSession
-  };
-}
-
-export function createClaudeAgentRunner(): AgentRunner {
-  return {
-    id: "claude",
-    defaultIsolation: "none",
-    launch: ({ worktree, prompt, env, timeoutMs }) => {
-      const result = spawnSync(
-        "claude",
-        ["-p", "--output-format", "stream-json", "--input-format", "text", "--dangerously-skip-permissions"],
-        { cwd: worktree, input: prompt, encoding: "utf8", env, timeout: timeoutMs }
-      );
-      return {
-        exitCode: result.status ?? (result.signal ? 124 : null),
-        stdout: result.stdout ?? "",
-        stderr: result.stderr ?? ""
-      };
-    },
-    parseSummary: parseClaudeStreamJsonSummary,
-    versionProbe: (env) => commandVersion("claude", env)
   };
 }
 
@@ -179,31 +157,4 @@ function claudeToolResultText(result: JsonObject): string {
 function claudeToolResultExitCode(result: JsonObject): number | null {
   const match = claudeToolResultText(result).match(/exit\s*code\s*[:=]?\s*(-?\d+)/i);
   return match ? Number(match[1]) : null;
-}
-
-function parseClaudeStreamJsonSummary(stdoutText: string) {
-  let lastMessage: string | null = null;
-  let tokenUsage: JsonObject | null = null;
-  let cost: number | null = null;
-  for (const line of stdoutText.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      const event = JSON.parse(line) as JsonObject;
-      const message = asObject(event.message);
-      const usage = asObject(event.usage) ?? asObject(message?.usage);
-      if (usage) tokenUsage = usage;
-      if (event.type === "result") {
-        if (typeof event.result === "string") lastMessage = event.result;
-        if (typeof event.total_cost_usd === "number") cost = event.total_cost_usd;
-      } else if (event.type === "assistant" && message && Array.isArray(message.content)) {
-        for (const block of message.content) {
-          const textBlock = asObject(block);
-          if (textBlock?.type === "text" && typeof textBlock.text === "string") lastMessage = textBlock.text;
-        }
-      }
-    } catch {
-      // Raw output remains available to the caller.
-    }
-  }
-  return { lastMessage, tokenUsage, cost };
 }

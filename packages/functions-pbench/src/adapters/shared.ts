@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { asObject } from "../shared.js";
@@ -40,18 +39,6 @@ export function isErrorRecord(record: JsonObject): boolean {
   );
 }
 
-export function commandVersion(command: string, env: NodeJS.ProcessEnv): string | null {
-  try {
-    return execFileSync(command, ["--version"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 5_000,
-      env
-    }).trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function findSessionFileByName(root: string, sessionId: string): Promise<string | null> {
   const rootInfo = await stat(root).catch(() => null);

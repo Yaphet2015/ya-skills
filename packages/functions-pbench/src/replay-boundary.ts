@@ -78,7 +78,7 @@ function forbiddenAgentVisibleHits(text: string, forbiddenPaths: string[]): stri
   return [...new Set(hits)];
 }
 
-function assertNoAgentVisiblePrivateReferences(
+export function assertNoAgentVisiblePrivateReferences(
   surfaces: AgentVisibleSurface[],
   forbiddenPaths: string[]
 ): void {

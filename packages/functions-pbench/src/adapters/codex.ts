@@ -1,7 +1,6 @@
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { asObject, commandVersion, findSessionFileByName, isErrorRecord, parseJsonlLines, valueToText } from "./shared.js";
-import type { AgentRunner, JsonObject, NormalizedSession, SessionSource } from "./types.js";
+import { asObject, findSessionFileByName, isErrorRecord, parseJsonlLines, valueToText } from "./shared.js";
+import type { JsonObject, NormalizedSession, SessionSource } from "./types.js";
 
 export function createCodexSessionSource(): SessionSource {
   return {
@@ -9,27 +8,6 @@ export function createCodexSessionSource(): SessionSource {
     sourceKind: "codex-session",
     locate: locateCodexSession,
     extract: (rawText) => extractCodexSession(parseJsonlLines(rawText))
-  };
-}
-
-export function createCodexAgentRunner(): AgentRunner {
-  return {
-    id: "codex",
-    defaultIsolation: "workspace-write",
-    launch: ({ worktree, prompt, env, timeoutMs }) => {
-      const result = spawnSync(
-        "codex",
-        ["--ask-for-approval", "never", "exec", "--json", "--ephemeral", "--cd", worktree, "--sandbox", "workspace-write", "-"],
-        { cwd: worktree, input: prompt, encoding: "utf8", env, timeout: timeoutMs }
-      );
-      return {
-        exitCode: result.status ?? (result.signal ? 124 : null),
-        stdout: result.stdout ?? "",
-        stderr: result.stderr ?? ""
-      };
-    },
-    parseSummary: parseCodexJsonlSummary,
-    versionProbe: (env) => commandVersion("codex", env)
   };
 }
 
@@ -197,23 +175,4 @@ function collectTouchedPaths(record: JsonObject, touched: Set<string>): void {
 function isApprovalSandboxRecord(record: JsonObject): boolean {
   const serialized = JSON.stringify(record).toLowerCase();
   return serialized.includes("approval") || serialized.includes("sandbox");
-}
-
-function parseCodexJsonlSummary(stdoutText: string) {
-  let lastMessage: string | null = null;
-  let tokenUsage: JsonObject | null = null;
-  for (const line of stdoutText.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      const record = JSON.parse(line) as JsonObject;
-      const payload = asObject(record.payload);
-      const usage = asObject(record.usage) ?? asObject(payload?.usage);
-      if (usage) tokenUsage = usage;
-      const text = valueToText(record.content ?? payload?.content);
-      if (text) lastMessage = text;
-    } catch {
-      // Raw output remains available to the caller.
-    }
-  }
-  return { lastMessage, tokenUsage };
 }

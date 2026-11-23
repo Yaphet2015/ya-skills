@@ -17,28 +17,3 @@ export type SessionSource = {
   locate(options: { cwd: string; sessionId?: string; home: string }): Promise<string>;
   extract(rawText: string): NormalizedSession;
 };
-
-export type AgentRunResult = {
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-};
-
-export type AgentRunSummary = {
-  lastMessage: string | null;
-  tokenUsage: JsonObject | null;
-  cost?: number | null;
-};
-
-export type AgentRunner = {
-  id: string;
-  defaultIsolation: "none" | "workspace-write";
-  launch(options: {
-    worktree: string;
-    prompt: string;
-    env: NodeJS.ProcessEnv;
-    timeoutMs: number;
-  }): AgentRunResult;
-  parseSummary(stdout: string): AgentRunSummary;
-  versionProbe(env: NodeJS.ProcessEnv): string | null;
-};

@@ -1,14 +1,12 @@
 import { expect } from "bun:test";
-import { chmod, cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   captureCodexSession,
   createPbenchCommands,
-  finalizeTransaction,
-  initWorkspace,
-  strictValidateTransaction
+  initWorkspace
 } from "@ya-skills/functions-pbench";
 
 export function createPbenchFixtures() {
@@ -177,174 +175,10 @@ export function createPbenchFixtures() {
     return { repo, home, workspaceRoot, tx };
   }
 
-  async function finalizedRunnableCase(
-    options: RunnableCaseOptions = {}
-  ): Promise<{ repo: string; home: string; workspaceRoot: string; casePath: string; caseId: string }> {
-    const prepared = await runnableTransaction(options);
-    const validation = await strictValidateTransaction(prepared.tx.transactionPath);
-    expect(validation.ok).toBe(true);
-    const finalized = await finalizeTransaction(prepared.tx.transactionPath);
-    return {
-      repo: prepared.repo,
-      home: prepared.home,
-      workspaceRoot: prepared.workspaceRoot,
-      casePath: finalized.casePath,
-      caseId: finalized.caseId
-    };
-  }
-
-  async function writeRunArtifact(
-    workspaceRoot: string,
-    run: {
-      runId: string;
-      caseId: string;
-      profile?: string;
-      status: string;
-      agentMode?: string;
-      agentVersion?: string | null;
-      manualIntervention?: boolean;
-      isolation?: string;
-      integrity?: "enforced" | "instruction-only" | "unknown" | "contaminated";
-      terminal?: boolean;
-      validatorExecuted?: boolean;
-      contaminated?: boolean;
-      durationMs?: number;
-      tokenUsage?: Record<string, number>;
-      createdAt?: string;
-      updatedAt?: string;
-    }
-  ): Promise<string> {
-    const artifactDir = join(workspaceRoot, "runs", run.runId);
-    await mkdir(artifactDir, { recursive: true });
-    await writeFile(
-      join(artifactDir, "run.json"),
-      `${JSON.stringify(
-        {
-          schemaVersion: 1,
-          artifactDir,
-          workspaceRoot,
-          terminal: true,
-          agentMode: "codex",
-          agentVersion: "codex-test 0.0.0",
-          manualIntervention: false,
-          isolation: "workspace-write",
-          integrity: "enforced",
-          validatorExecuted: true,
-          createdAt: "2026-06-12T00:00:00Z",
-          updatedAt: "2026-06-12T00:00:00Z",
-          ...run
-        },
-        null,
-        2
-      )}\n`
-    );
-    return artifactDir;
-  }
-
   function pbenchCommand(action: string, home?: string) {
     const command = createPbenchCommands({ home }).find((item) => item.action === action);
     expect(command).toBeDefined();
     return command!;
-  }
-
-  async function writeFakeCodex(options: {
-    exitCode?: number;
-    stdout?: string;
-    stderr?: string;
-    body?: string;
-  } = {}): Promise<{ binDir: string; commandPath: string }> {
-    // Test doubles must satisfy runner environment version probes on CI, where real agents are absent.
-    const binDir = await temp("fake-codex-bin");
-    const commandPath = join(binDir, "codex");
-    await writeFile(
-      commandPath,
-      [
-        "#!/usr/bin/env node",
-        "import { readFileSync, writeFileSync } from 'node:fs';",
-        "import { join } from 'node:path';",
-        "",
-        "if (process.argv.includes('--version')) {",
-        "  process.stdout.write('codex-test 0.0.0\\n');",
-        "  process.exit(0);",
-        "}",
-        "let stdin = '';",
-        "process.stdin.setEncoding('utf8');",
-        "process.stdin.on('data', (chunk) => { stdin += chunk; });",
-        "process.stdin.on('end', () => {",
-        "  const cdIndex = process.argv.indexOf('--cd');",
-        "  const root = cdIndex >= 0 ? process.argv[cdIndex + 1] : process.cwd();",
-        "  writeFileSync(join(root, '.pbench', 'fake-codex-argv.json'), JSON.stringify(process.argv.slice(2), null, 2));",
-        "  const execIndex = process.argv.indexOf('exec');",
-        "  const approvalIndex = process.argv.indexOf('--ask-for-approval');",
-        "  if (execIndex >= 0 && approvalIndex > execIndex) {",
-        "    process.stderr.write(\"unexpected argument '--ask-for-approval' found\\n\");",
-        "    process.exit(2);",
-        "  }",
-        "  writeFileSync(join(root, '.pbench', 'fake-codex-stdin.txt'), stdin);",
-        "  const visibleEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('PB_') || key === 'PBENCH_TEST_SECRET'));",
-        "  writeFileSync(join(root, '.pbench', 'fake-codex-env.json'), JSON.stringify({",
-        "    cwd: process.cwd(),",
-        "    env: visibleEnv",
-        "  }, null, 2));",
-        "  writeFileSync(join(root, '.pbench', 'fake-codex-visible.txt'), [",
-        "    stdin,",
-        "    readFileSync(join(root, '.pbench', 'case.public.json'), 'utf8'),",
-        "    readFileSync(join(root, '.pbench', 'run.json'), 'utf8'),",
-        "    readFileSync(join(root, '.pbench', 'public', 'context.md'), 'utf8'),",
-        "    readFileSync(join(root, '.pbench', 'public', 'replay.md'), 'utf8')",
-        "  ].join('\\n---\\n'));",
-        options.body ?? "  writeFileSync(join(root, 'done.txt'), 'done\\n');",
-        `  if (${JSON.stringify(options.stdout ?? '{"type":"message","role":"assistant","content":"done"}\\n')}) process.stdout.write(${JSON.stringify(options.stdout ?? '{"type":"message","role":"assistant","content":"done"}\\n')});`,
-        `  if (${JSON.stringify(options.stderr ?? "")}) process.stderr.write(${JSON.stringify(options.stderr ?? "")});`,
-        `  process.exit(${options.exitCode ?? 0});`,
-        "});",
-        ""
-      ].join("\n")
-    );
-    await chmod(commandPath, 0o755);
-    return { binDir, commandPath };
-  }
-
-  async function writeFakeClaude(options: { exitCode?: number; cost?: number; body?: string } = {}): Promise<{ binDir: string; commandPath: string }> {
-    // Test doubles must satisfy runner environment version probes on CI, where real agents are absent.
-    const binDir = await temp("fake-claude-bin");
-    const commandPath = join(binDir, "claude");
-    const assistantLine = JSON.stringify({
-      type: "assistant",
-      message: { role: "assistant", content: [{ type: "text", text: "done" }] }
-    });
-    const resultLine = JSON.stringify({
-      type: "result",
-      result: "done",
-      usage: { input_tokens: 11, output_tokens: 7 },
-      total_cost_usd: options.cost ?? 0.0012
-    });
-    await writeFile(
-      commandPath,
-      [
-        "#!/usr/bin/env node",
-        "import { writeFileSync } from 'node:fs';",
-        "import { join } from 'node:path';",
-        "if (process.argv.includes('--version')) {",
-        "  process.stdout.write('claude-test 0.0.0\\n');",
-        "  process.exit(0);",
-        "}",
-        "let stdin = '';",
-        "process.stdin.setEncoding('utf8');",
-        "process.stdin.on('data', (chunk) => { stdin += chunk; });",
-        "process.stdin.on('end', () => {",
-        "  const root = process.cwd();",
-        "  writeFileSync(join(root, '.pbench', 'fake-claude-stdin.txt'), stdin);",
-        options.body ?? "  writeFileSync(join(root, 'done.txt'), 'done\\n');",
-        `  process.stdout.write(${JSON.stringify(assistantLine)} + "\\n");`,
-        `  process.stdout.write(${JSON.stringify(resultLine)} + "\\n");`,
-        `  process.exit(${options.exitCode ?? 0});`,
-        "});",
-        ""
-      ].join("\n")
-    );
-    await chmod(commandPath, 0o755);
-    return { binDir, commandPath };
   }
 
   function expectNoAgentVisiblePrivateReferences(text: string): void {
@@ -589,11 +423,7 @@ export function createPbenchFixtures() {
     makeRepo,
     makeRepoWithFailingTest,
     runnableTransaction,
-    finalizedRunnableCase,
-    writeRunArtifact,
     pbenchCommand,
-    writeFakeCodex,
-    writeFakeClaude,
     expectNoAgentVisiblePrivateReferences,
     writeCodexSession,
     writeModernCodexSession,
