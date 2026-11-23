@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/Yaphet2015/ya-skills/compare/v2.4.0...v2.5.0) (2026-11-23)
+
+
+### Features
+
+* **pbench:** move benchmark capture and replay to Harbor ([10aa42e](https://github.com/Yaphet2015/ya-skills/commit/10aa42e66d6daae0e95d1daa3ef0afd64982c712))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
