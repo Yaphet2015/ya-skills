@@ -47,10 +47,8 @@ function sh(label: string, cmd: string, args: string[]): void {
   }
 }
 
-// 0. Regenerate installed API declarations from source so packaged Skills
-// cannot drift from the runtime contracts.
+// 0. Regenerate the installed computer-use API declarations from source.
 sh("generate computer-use api types", "bun", ["scripts/generate-computer-use-api.ts"]);
-sh("generate e2e api types", "bun", ["scripts/generate-computer-e2e-api.ts"]);
 
 // 1. Compile yk with the pinned flags (kept in sync with package.json).
 sh(
@@ -111,11 +109,7 @@ const REQUIRED_SKILLS = [
   join(outRoot, "skills", "computer-use", "SKILL.md"),
   join(outRoot, "skills", "computer-use", "skill.json"),
   join(outRoot, "skills", "computer-use", "references", "api.d.ts"),
-  join(outRoot, "skills", "computer-use", "examples", "search.js"),
-  join(outRoot, "skills", "computer-e2e", "SKILL.md"),
-  join(outRoot, "skills", "computer-e2e", "skill.json"),
-  join(outRoot, "skills", "computer-e2e", "references", "api.d.ts"),
-  join(outRoot, "skills", "computer-e2e", "examples", "pure.e2e.ts")
+  join(outRoot, "skills", "computer-use", "examples", "search.js")
 ];
 for (const mustExist of [join(outRoot, "yk"), ...REQUIRED_SKILLS]) {
   if (!existsSync(mustExist)) {

@@ -23,7 +23,6 @@ test("Bankai installs independently and Stage reuses its runnable helper", async
     expect(result.installed.map((skill) => skill.name)).toEqual(["bankai"]);
     const stage = await installSkills({ catalog, skillNames: ["stage"], projectDir: root });
     expect(stage.installed.map((skill) => skill.name)).toEqual(["bankai", "stage"]);
-    expect(await Bun.file(join(root, ".agents/skills/ultra-produce/SKILL.md")).exists()).toBe(false);
     const helper = join(root, ".agents/skills/bankai/scripts/pipeline.py");
     const help = Bun.spawnSync(["python3", "-B", helper, "--help"]);
     expect(help.exitCode).toBe(0);

@@ -139,14 +139,6 @@ test("root catalog exposes the eli10 skill", async () => {
   expect(eli10?.functions).toEqual([]);
 });
 
-test("root catalog exposes the validator skill", async () => {
-  const catalog = await loadCatalog(resolve("skills"));
-  const validator = catalog.byName.get("validator");
-
-  expect(validator).toBeDefined();
-  expect(validator?.functions).toEqual([]);
-});
-
 test("root catalog exposes the a-share-data skill", async () => {
   const catalog = await loadCatalog(resolve("skills"));
   const aShareData = catalog.byName.get("a-share-data");
@@ -245,35 +237,4 @@ test("root catalog exposes the computer-use skill with its command functions", a
   expect(skill).not.toContain("cowork_app");
   expect(skill).toContain("background");
   expect(skill).toContain("--activate");
-});
-
-test("root catalog exposes the computer-e2e skill, installable with all references", async () => {
-  const catalog = await loadCatalog(resolve("skills"));
-  const skill = catalog.byName.get("computer-e2e");
-  expect(skill?.dependsOn).toEqual(["computer-use"]);
-  expect(skill?.functions.map((f) => f.action)).toEqual(["run", "history", "report"]);
-
-  // Install into a throwaway project and verify the full local surface.
-  const project = await mkdtemp(join(tmpdir(), "yk-catalog-e2e-"));
-  const result = await installSkills({ catalog, projectDir: project, skillNames: ["computer-e2e"] });
-  expect(result.installed.map((s) => s.name).sort()).toEqual(["computer-e2e", "computer-use"]);
-
-  const installed = join(project, ".agents", "skills");
-  const doc = await readFile(join(installed, "computer-e2e", "SKILL.md"), "utf8");
-  const api = await readFile(join(installed, "computer-e2e", "references", "api.d.ts"), "utf8");
-  const example = await readFile(join(installed, "computer-e2e", "examples", "pure.e2e.ts"), "utf8");
-  expect(doc).toContain("yk computer-e2e run");
-  expect(doc).not.toContain("/Users/");
-  expect(api).not.toContain("@ya-skills/");
-  expect(api).not.toContain("@trycua/");
-  expect(api).toContain("interface Suite");
-  expect(api).toContain("interface CaseContext");
-  expect(example).toContain("apiVersion: 1");
-
-  // No runtime dependencies ride along, and every local reference exists.
-  expect(await Bun.file(join(project, "node_modules")).exists()).toBe(false);
-  for (const match of doc.matchAll(/\]\(([^)]+\.md|[^)]+\.d\.ts|[^)]+\.ts)\)/g)) {
-    const target = match[1]!.replace(/^\.?\//, "");
-    expect(await Bun.file(join(installed, "computer-e2e", target)).exists()).toBe(true);
-  }
 });

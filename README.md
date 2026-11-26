@@ -69,13 +69,8 @@ yk pbench capture --source codex --session-id SESSION --yes   # run a domain com
 | **produce** | Lightweight subagent planning with `brainstorming` and `grill-with-docs` → independent challenge → implementation with `simplify` per part → testing. Planners discuss technical choices with Main using SOLID, DRY, KISS, YAGNI and SSOT; Main consults the user on UX choices. Requires these skills installed in the host. | `yk install produce` |
 | **bankai** | Explicitly start or resume tasks in any Git repository with persistent evidence and interruption recovery. Includes its own engine and recovery scripts; Explicit task start registers only the current repository. | `yk install bankai` |
 | **stage** | Read-only task, session and review status; automatically includes same-project sibling repositories when present. | `yk install stage` |
-| **ultra-produce** (deprecated) | Coordinate native Planner, Builder and Verifier subagents through planning, independent challenges, implementation, review and testing. Main handles all spawning; full results and fresh-session recovery use local files. Keeps stage hooks, scoped task cards, corrections, evidence acceptance and local commits. Internal artifacts live in `~/.ya-skills/ultra-produce/logs/<run-id>`; Plans and reports in `reports/<declared-project>/<branch>/<run-id>`. Requires native subagent support and the named workflow skills. | `yk install ultra-produce` |
-| **plan-jury** | Manually invoke `/plan-jury` to have Sol, Grok, and GLM review a development plan, design, or a go/no-go / option tradeoff. It never triggers implicitly. | `yk install plan-jury` |
-| **validator** (deprecated) | Manually invoke `/validator` after a Plan is complete to establish an independent, evidence-based Completion Standard. It never verifies implementation or triggers implicitly. | `yk install validator` |
 | **computer-use** | Route browser pages through DOM/CDP with an explicit target; prefer code mode for multi-step flows and persistent-session exec for native macOS AX actions, with evidence-bound input and clear delivery receipts. macOS arm64 only. | `yk install computer-use` |
-| **computer-e2e** | Deterministic desktop replay: project-local `*.e2e.ts` suites run by the same yk with recorded history and reports — no consumer npm install, no Node/Vitest/SDK. Requires computer-use. | `yk install computer-e2e` |
 | **show-me** | Explain topics and code changes with concise Markdown, sketches and evidence. HTML reports use an independently installed Archify skill located through the host skill list. Preserves working-tree evidence, report archives and host preview delivery. Youkai HTML preview supports 30 MiB. | `yk install show-me` |
-| **show-pr** | Explicit-only PR report entrypoint. Installs show-me and uses the actual Git range and verification evidence; HTML requires separately installed Archify. Legacy graph.json tools report the migration. | `yk install show-pr` |
 | **svg-icons** | Generate family-consistent 24-grid SVG icons from a JSON drawing language (max two inks, composed marks like folder-plus-pencil). Invoke with `/svg-icons`. | `yk install svg-icons` |
 | **ultra-cr** | Assign independent reviewers by risk, verify related findings in batches, and publish confirmed defects. A bundled Python 3.9+ helper manages artifact paths and resumable progress. Branch reviews compare against the target merge-base (`--base=REF` overrides the target). Works with the host agent’s delegation tools. | `yk install ultra-cr` |
 | **ultra-simplify** | Run an autonomous whole-codebase simplification sprint: LOC down 40%+ overall, god files split, helpers unified, if-chains flattened — then deliver PRs. | `yk install ultra-simplify` |
@@ -179,7 +174,7 @@ On macOS arm64, after `bun install`:
 
 ```sh
 npm run dev:link       # package this checkout and link it as the global yk
-# Use yk list / yk install ultra-produce in the project you want to test.
+# Use yk list / yk install computer-use in the project you want to test.
 npm run dev:clean      # restore the previous yk link and remove the local build
 ```
 
@@ -259,7 +254,7 @@ This is a Bun workspace monorepo:
 - `packages/functions-computer-use` — the `yk computer-use <action>` commands (thin orchestration over the shared runtime; macOS arm64 only).
 - `packages/computer-runtime` — the shared desktop primitives both computer-use and computer-e2e run on (owns the Cua SDK dependency, budgets, cleanup, privacy, and target leases).
 - `packages/computer-session` — private persistent-session host/driver workers, shared worker lifecycle, request recovery, and trusted JavaScript exec. New hosted exec commits store the result and JSON state together; legacy state remains readable.
-- `packages/functions-computer-e2e` — the `yk computer-e2e <run|history|report>` commands: suite validation, sequential worker supervision, run records.
+- `packages/functions-computer-e2e` — the [`yk computer-e2e <run|history|report>` commands](docs/computer-e2e.md): suite validation, sequential worker supervision, run records.
 - `skills/` — the local skill catalog installed by `yk install`.
 
 ## Release

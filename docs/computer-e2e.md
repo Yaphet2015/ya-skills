@@ -9,8 +9,6 @@ LLM is involved in replay.
 ## Commands
 
 ```sh
-yk install computer-e2e            # also installs computer-use (dependency)
-
 yk computer-e2e run <file.e2e.ts...> [--param k=v]... \
   [--out-dir DIR] [--timeout-ms N] [--require-version V]
 yk computer-e2e history [--out-dir DIR] [--limit N]
@@ -34,8 +32,9 @@ yk computer-e2e report <run-dir>
 
 ## Suite contract (apiVersion 1)
 
-See the installed `references/api.d.ts` (generated from source; regenerate
-with `bun scripts/generate-computer-e2e-api.ts`) and `examples/pure.e2e.ts`.
+See the [API types](computer-e2e/api.d.ts) and [example suite](computer-e2e/pure.e2e.ts).
+Copy the API types into your project for editor support. Regenerate the types
+from this repository with `bun scripts/generate-computer-e2e-api.ts`.
 Shape: one default-exported `Suite` — `beforeAll`/`afterAll`, sequential
 `tests: [{ id, name, timeoutMs?, skip?, run(ctx) }]`. `ctx` provides
 `computer` (apps/windows/snapshot/click/type/key/scroll/waitFor), `signal`,
@@ -54,7 +53,7 @@ and `node:` builtins work; the file's own directory needs no node_modules.
 - If the parent yk is SIGKILLed, a worker config file (containing `params`)
   can remain inside the run directory (0700); delete stale run dirs you do
   not trust.
-- Packaged loop: install → run (external TS, relative imports) → history →
+- Packaged loop: run (external TS, relative imports) → history →
   report through the compiled yk under `PATH=/usr/bin:/bin` — covered by
   `YK_RELEASE_TESTS=1 bun test tests/computer-e2e-release.test.ts` on
   release runners.

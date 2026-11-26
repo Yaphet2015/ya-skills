@@ -38,12 +38,14 @@ async function runYk(
   return { stdout, stderr, exitCode };
 }
 
-test("yk list discovers plan-jury in the root catalog", async () => {
+test("yk list omits retired skills from the root catalog", async () => {
   const result = await runYk(["list"]);
 
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
-  expect(result.stdout).toMatch(/^plan-jury\s/m);
+  for (const skill of ["validator", "ultra-produce", "computer-e2e", "show-pr", "plan-jury"]) {
+    expect(result.stdout).not.toMatch(new RegExp(`^${skill}\\s`, "m"));
+  }
 });
 
 test("yk list prints each skill on one aligned line so names stay scannable", async () => {

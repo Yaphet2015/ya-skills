@@ -1,8 +1,6 @@
 #!/usr/bin/env bun
-// Generates skills/computer-e2e/references/api.d.ts from the workspace type
-// sources so the installed Skill carries exactly the consumer surface — no
-// hand-maintained copy that can drift. Dev tooling only: consumers never run
-// this and never need typescript installed.
+// Generates the documented suite API from the workspace type sources.
+// Consumers can copy the declaration file into their projects for editor support.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -14,7 +12,7 @@ const RUNTIME_TYPES = join(root, "packages/computer-runtime/src/types.ts");
 const E2E_TYPES = join(root, "packages/functions-computer-e2e/src/types.ts");
 const CONTEXT_TYPES = join(root, "packages/functions-computer-e2e/src/context.ts");
 const outArg = process.argv.indexOf("--out");
-const OUT = outArg !== -1 ? resolve(process.argv[outArg + 1]!) : join(root, "skills/computer-e2e/references/api.d.ts");
+const OUT = outArg !== -1 ? resolve(process.argv[outArg + 1]!) : join(root, "docs/computer-e2e/api.d.ts");
 
 // The consumer surface: everything a .e2e.ts file can reference.
 const RUNTIME_SURFACE = [

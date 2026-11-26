@@ -66,15 +66,10 @@ yk pbench capture --source codex --session-id SESSION --yes   # 运行一个领�
 | **produce** | 轻量流程：subagents 使用 brainstorming、grill-with-docs 规划 → 独立挑战 → 每部分实现后 simplify → 测试。规划代理与 Main 讨论技术选择，遵循 SOLID、DRY、KISS、YAGNI、SSOT；体验行为选择由 Main 咨询用户。需要宿主已安装这些 Skill。 | `yk install produce` |
 | **bankai** | 显式启动或恢复任意 Git 仓库的任务，保存执行证据并支持中断恢复。自带完整执行器和恢复脚本；显式启动时登记当前仓库。 | `yk install bankai` |
 | **stage** | 只读查看任务、会话和审查状态；自动附带同级目录中确认属于同项目的仓库。 | `yk install stage` |
-| **ultra-produce**（已弃用） | 通过原生 Planner、Builder 和 Verifier 子代理完成规划、实现和验证，使用文件交接、阶段 Hook 和本地提交。 | `yk install ultra-produce` |
 | **computer-use** | 通过后台优先的 AX 感知与操作驱动任意 macOS 桌面应用——检查应用状态、复现 UI 问题、操作可见窗口。仅 macOS arm64。 | `yk install computer-use` |
-| **computer-e2e** | 确定性桌面回放：项目本地 `*.e2e.ts` 套件由同一个 yk 执行，带执行历史与报告——使用方零 npm 安装、零 Node/Vitest/SDK 依赖。依赖 computer-use。 | `yk install computer-e2e` |
 | **eli5** | 当读者完全不懂这个主题来解释：用 HTML artifact，大图、少字。 | `yk install eli5` |
 | **eli10** | 用原始颗粒度解释诊断、根因或架构：每句话都落到读者已知的事实上，不落地术语。遇到「为什么会这样」或用户反馈「看不懂 / 太费劲」时触发。 | `yk install eli10` |
-| **plan-jury** | 手动调用 `/plan-jury`，让 Sol、Grok 和 GLM 评审开发计划、设计，或方案取舍（做不做 / 选哪条）。它不会被隐式触发。 | `yk install plan-jury` |
-| **validator**（已弃用） | 在 Plan 完成后手动调用 `/validator`，独立建立基于证据的 Completion Standard；不验证实现，也不会被隐式触发。 | `yk install validator` |
 | **show-me** | 用简短 Markdown、草图和证据解释问题与代码改动。需要 HTML 时，从宿主技能清单找到独立安装的 archify。保留未提交改动、测试证据、报告归档和预览交付。Youkai HTML 预览上限为 30 MiB。 | `yk install show-me` |
-| **show-pr** | 显式调用的 PR 报告入口，自动安装 show-me，使用实际 Git 范围与验证证据；HTML 需要独立安装 archify。旧 graph.json 工具会提示迁移方式。 | `yk install show-pr` |
 | **svg-icons** | 用 JSON 图纸语言生成统一规范的 24 网格 SVG 图标（最多两支墨，可拼文件夹+笔这类角标）。用 `/svg-icons` 调用。 | `yk install svg-icons` |
 | **ultra-simplify** | 自主执行全库大简化冲刺：总 LOC 至少降 40%、拆巨型文件、统一重复助手函数、削平 if 嵌套链，完成后交付 PR。 | `yk install ultra-simplify` |
 
@@ -206,7 +201,7 @@ bun run smoke            # 快速端到端冒烟测试
 - `packages/functions-pbench` —— 独立的 `yk pbench <action>` 命令包。
 - `packages/computer-runtime` —— computer-use 与 computer-e2e 共享的桌面会话层（持有 Cua SDK 依赖、预算、清理与隐私规则）。
 - `packages/functions-computer-use` —— `yk computer-use <action>` 命令包（在共享运行时之上做薄编排；仅 macOS arm64）。
-- `packages/functions-computer-e2e` —— `yk computer-e2e <run|history|report>` 命令包：套件校验、顺序 worker 监督与执行记录。
+- `packages/functions-computer-e2e` —— [`yk computer-e2e <run|history|report>` 命令包](docs/computer-e2e.md)：套件校验、顺序 worker 监督与执行记录。
 - `skills/` —— 由 `yk install` 安装的本地 skill 目录。
 
 ## 发布

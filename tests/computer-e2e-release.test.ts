@@ -8,9 +8,8 @@ import { createObservationStore, projectObservation } from "../packages/computer
 import { makeNativeObservation, syntheticPngBuffer } from "./helpers/computer-fixtures.js";
 import packageJson from "../package.json" with { type: "json" };
 
-// The packaged closed loop, desktop-free: install the skill from the
-// packaged catalog, run external suites with the compiled yk under a
-// PATH that has no node/npm/bun, and read back history + report.
+// The packaged closed loop runs external suites with the compiled yk under
+// a PATH that has no node/npm/bun, then reads back history and reports.
 // YK_RELEASE_TESTS=1 (release runners): missing artifacts FAIL here.
 // Default local runs: skip unless dist/release exists.
 
@@ -56,23 +55,18 @@ describe("packaged computer-e2e closed loop (no desktop, no node/npm/bun on PATH
 
   maybe("release artifacts must exist when YK_RELEASE_TESTS=1", () => {
     expect(required ? existsSync(yk) : true).toBe(true);
-    expect(existsSync(join(outDir, "skills", "computer-e2e", "references", "api.d.ts"))).toBe(true);
     expect(existsSync(join(outDir, "runtime", "computer-use", "node_modules", "@trycua", "cua-driver", "dist", "index.js"))).toBe(true);
   });
 
-  maybe("install + run + history + report through the compiled yk", () => {
+  maybe("run + history + report through the compiled yk", () => {
     const consumer = consumerDir("loop");
     try {
-      const install = runYk(consumer, ["install", "computer-e2e"]);
-      expect(install.code).toBe(0);
-      expect(install.stdout).toContain("computer-e2e");
-      expect(existsSync(join(consumer, ".agents/skills/computer-e2e/references/api.d.ts"))).toBe(true);
-      expect(existsSync(join(consumer, "node_modules"))).toBe(false);
-
-      // The packaged example suite: one pass + one declared skip -> exit 2.
-      const example = join(consumer, ".agents/skills/computer-e2e/examples/pure.e2e.ts");
+      // The documented example has one passing case and one declared skip.
+      const example = join(consumer, "pure.e2e.ts");
+      copyFileSync(resolve("docs/computer-e2e/pure.e2e.ts"), example);
       const run = runYk(consumer, ["computer-e2e", "run", example]);
       expect(run.code).toBe(2);
+      expect(existsSync(join(consumer, "node_modules"))).toBe(false);
       const summary = JSON.parse(run.stdout) as {
         runId: string;
         counts: Record<string, number>;

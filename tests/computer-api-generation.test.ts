@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 // success is not API validity. The compile check uses the repo's tsc with
 // skipLibCheck=false on a fixture that imports and uses the new types.
 
-const apiPath = resolve("skills/computer-e2e/references/api.d.ts");
+const apiPath = resolve("docs/computer-e2e/api.d.ts");
 
 describe("api.d.ts generation (agentic surface)", () => {
   test("regenerating produces exactly the committed reference (no drift, no workspace mutation)", () => {

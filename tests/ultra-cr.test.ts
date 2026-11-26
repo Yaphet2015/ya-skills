@@ -15,14 +15,14 @@ async function markdownFiles(root: string): Promise<string[]> {
   return files;
 }
 
-test("pipeline installation includes portable ultra-cr assets in both skill targets", async () => {
+test("ultra-cr installation includes portable assets in both skill targets", async () => {
   const root = await mkdtemp(join(tmpdir(), "ultra-cr-install-"));
   try {
     await mkdir(join(root, ".agents/skills"), { recursive: true });
     await mkdir(join(root, ".claude/skills"), { recursive: true });
     const catalog = await loadCatalog(resolve("skills"));
-    const result = await installSkills({ catalog, projectDir: root, skillNames: ["ultra-produce"] });
-    expect(result.installed.map((skill) => skill.name).sort()).toEqual(["ultra-cr", "ultra-produce"]);
+    const result = await installSkills({ catalog, projectDir: root, skillNames: ["ultra-cr"] });
+    expect(result.installed.map((skill) => skill.name)).toEqual(["ultra-cr"]);
     for (const target of [".agents", ".claude"]) {
       const skillRoot = join(root, target, "skills/ultra-cr");
       for (const resource of [
