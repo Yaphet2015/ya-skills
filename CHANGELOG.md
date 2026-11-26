@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/Yaphet2015/ya-skills/compare/v2.5.1...v2.6.0) (2026-11-26)
+
+
+### Features
+
+* **skills:** retire five catalog skills ([87d73f1](https://github.com/Yaphet2015/ya-skills/commit/87d73f12b8bc4aeea38139a6348150bb7edb1a66))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
