@@ -107,7 +107,7 @@ Native observations use AX first in `auto` mode. Image budgets default to a
 1280 px long side and 1,000,000 pixels; they only shrink images that exceed a
 limit. Override each limit with `--max-dimension` and `--max-pixels`.
 
-Cua Driver 0.47.24 supplies faster AX reads and batched text input. `yk` batch
+Cua Driver 0.62.1 supplies faster AX reads and batched text input. `yk` batch
 and persistent exec steps also skip the driver's per-action window-report
 wait while keeping its background watch and focus protection; use local
 conditions and final observations to verify the effect. Native AX results
