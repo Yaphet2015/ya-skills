@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.1](https://github.com/Yaphet2015/ya-skills/compare/v2.5.0...v2.5.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **computer-use:** upgrade Cua Driver to 0.62.1 ([ffc2b11](https://github.com/Yaphet2015/ya-skills/commit/ffc2b11af48355d53bd1b81b5d39e7153e200925))
+
 ## [0.26.2](https://github.com/Yaphet2015/ya-skills/compare/v0.26.1...v0.26.2) (2026-09-28)
 
 
